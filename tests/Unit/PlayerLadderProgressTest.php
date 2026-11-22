@@ -142,6 +142,54 @@ final class PlayerLadderProgressTest extends TestCase
         $this->assertSame($sorted, $names);
     }
 
+    public function testAwardsIdsListTheRowsBehindEachTile(): void
+    {
+        $response = $this->player->GetLadderProgress([
+            'MundaneId' => 0,
+            'Awards' => [
+                ['AwardsId' => 101, 'AwardId' => 25, 'IsLadder' => 1, 'Rank' => 1, 'Name' => 'Order of the Dragon'],
+                ['AwardsId' => 102, 'AwardId' => 25, 'IsLadder' => 1, 'Rank' => 2, 'Name' => 'Order of the Dragon'],
+                ['AwardsId' => 103, 'AwardId' => 26, 'IsLadder' => 1, 'Rank' => 1, 'Name' => 'Order of the Garber',
+                    'Note' => 'For the Dragonmaster entry'],
+                ['AwardsId' => 104, 'AwardId' => 21, 'IsLadder' => 1, 'Rank' => 1, 'Name' => 'Order of the Rose'],
+                ['AwardsId' => 105, 'AwardId' => 5, 'IsLadder' => 0, 'Rank' => 0, 'Name' => 'Master Dragon', 'IsTitle' => 1],
+                ['AwardsId' => 106, 'AwardId' => 94, 'IsLadder' => 0, 'Rank' => 0, 'Name' => 'Custom Award'],
+            ],
+        ]);
+
+        $tiles = $response['Detail'];
+        $this->assertSame([101, 102, 105], $this->tileByAwardId($tiles, 25)['AwardsIds']);
+        $this->assertSame([103], $this->tileByAwardId($tiles, 26)['AwardsIds']);
+        $this->assertSame([104], $this->tileByAwardId($tiles, 21)['AwardsIds']);
+    }
+
+    public function testAwardsIdsOnSyntheticMasterTile(): void
+    {
+        $response = $this->player->GetLadderProgress([
+            'MundaneId' => 0,
+            'Awards' => [
+                ['AwardsId' => 201, 'AwardId' => 1, 'IsLadder' => 0, 'Rank' => 0, 'Name' => 'Master Rose', 'IsTitle' => 1],
+            ],
+        ]);
+
+        $this->assertSame([201], $this->tileByAwardId($response['Detail'], 21)['AwardsIds']);
+    }
+
+    public function testCustomAwardLadderDoesNotPullInNonLadderCustomAwards(): void
+    {
+        // Kingdom-original ladders share catalog award_id 94 with every other
+        // custom award, so the tile must list its own rows, not "award 94".
+        $response = $this->player->GetLadderProgress([
+            'MundaneId' => 0,
+            'Awards' => [
+                ['AwardsId' => 301, 'AwardId' => 94, 'IsLadder' => 1, 'Rank' => 3, 'Name' => 'Order of the Marksman'],
+                ['AwardsId' => 302, 'AwardId' => 94, 'IsLadder' => 0, 'Rank' => 0, 'Name' => 'Best Garb 2024'],
+            ],
+        ]);
+
+        $this->assertSame([301], $this->tileByAwardId($response['Detail'], 94)['AwardsIds']);
+    }
+
     /**
      * @param list<array<string, mixed>> $tiles
      * @return array<string, mixed>

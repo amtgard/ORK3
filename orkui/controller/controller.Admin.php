@@ -1953,6 +1953,55 @@ class Controller_Admin extends Controller
     }
 
     /**
+     * Park Activity: last attendance and trailing sign-in totals for every park
+     * in a kingdom. Global admins may pick any kingdom or all of them; kingdom
+     * officers with edit rights see their own kingdom. Ported from the jsork
+     * "Freehold Activity" page so it no longer runs one API call per park.
+     */
+    public function parkactivity()
+    {
+        $this->template = 'Admin_parkactivity.tpl';
+        $this->load_model('Admin');
+        $this->load_model('AdminDashboard');
+        $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $is_admin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+
+        $kingdom_id = valid_id($this->request->KingdomId ?? 0) ? (int)$this->request->KingdomId : 0;
+        if (!$kingdom_id && !$is_admin && valid_id($this->session->kingdom_id ?? 0)) {
+            $kingdom_id = (int)$this->session->kingdom_id;
+        }
+        if (!$is_admin && !($kingdom_id && $this->admin_can_edit_kingdom_reports($_uid, $kingdom_id))) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        $months = (int)($this->request->Months ?? 24);
+        if (!in_array($months, array(12, 24, 36, 60), true)) {
+            $months = 24;
+        }
+        $include_retired = !empty($this->request->IncludeRetired);
+
+        $this->data['page_title'] = 'Park Activity';
+        if ($kingdom_id) {
+            $this->kingdom_route($kingdom_id);
+        } else {
+            unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
+        }
+
+        $result = $this->Admin->get_park_activity($kingdom_id, $months, $include_retired);
+        $this->data['Parks']          = $result['Parks'] ?? [];
+        $this->data['ReportDate']     = $result['ReportDate'] ?? date('Y-m-d');
+        $this->data['WindowStart']    = $result['WindowStart'] ?? '';
+        $this->data['Months']         = $months;
+        $this->data['IncludeRetired'] = $include_retired;
+        $this->data['KingdomId']      = $kingdom_id;
+        $this->data['IsAdmin']        = $is_admin;
+        $this->data['Kingdoms']       = $is_admin
+            ? $this->AdminDashboard->list_all_kingdom_names()
+            : array($kingdom_id => $this->Kingdom->get_kingdom_name($kingdom_id));
+    }
+
+    /**
      * Legacy menu target from Tournament worksheets. No admin tournament editor
      * exists here — send callers to the live Tournament UI instead of 500'ing.
      */

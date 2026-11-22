@@ -1,0 +1,886 @@
+/*
+ * Event Schedule Board (evb-*): every day of an event side by side on one time
+ * axis. Geometry (block top/height/left/width, day weights) is set inline by
+ * evb-view.js at 1.2px per minute, so an hour is 72px.
+ *
+ * Chrome uses the --ork-* variables, which carry both themes. Block fills are a
+ * category's bold colour with white text in both themes.
+ */
+/* The board's focus and selection ring. On :root, not .evb: the popover, dialogs
+   and the type/select layers sit outside #evb-root. */
+:root { --evb-ring: #4299e1; }
+html[data-theme="dark"] { --evb-ring: #63b3ed; }
+.evb { margin-bottom: 16px; }
+
+/* ---- Legend ---- */
+.evb-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.evb-legend-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border: 1px solid var(--ork-border); border-radius: 999px;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    font-size: 12px; font-weight: 600; line-height: 1.3; cursor: pointer;
+}
+.evb-legend-chip:hover { border-color: var(--ork-text-muted); }
+.evb-legend-chip[aria-pressed="true"] {
+    border-color: var(--ork-text); background: var(--ork-bg-secondary);
+    box-shadow: inset 0 0 0 1px var(--ork-text);
+}
+.evb-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+/* Dark theme: --ork-bg-secondary equals the chip's --ork-card-bg there, so the
+   pressed chip takes a lighter fill; a thin light ring keeps dark swatches
+   (Court's brown) visible on the dark chip. */
+html[data-theme="dark"] .evb-legend-chip[aria-pressed="true"] {
+    background: #4a5568; border-color: #e2e8f0; box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+html[data-theme="dark"] .evb-legend-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55); }
+
+/* ---- Frame: one scroller, sticky day heads and sticky hour gutter ---- */
+.evb-scroller {
+    overflow: auto; max-height: 80vh;
+    border: 1px solid var(--ork-border); border-radius: 8px;
+    background: var(--ork-card-bg);
+}
+.evb-board { display: flex; width: max-content; min-width: 100%; }
+.evb-head {
+    position: sticky; top: 0; z-index: 3;
+    height: 34px; box-sizing: border-box; padding: 9px 8px;
+    font-size: 12px; font-weight: 700; line-height: 16px; color: var(--ork-text);
+    background: var(--ork-bg-secondary); border-bottom: 1px solid var(--ork-border);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.evb-gutter {
+    flex: 0 0 48px; position: sticky; left: 0; z-index: 4;
+    background: var(--ork-card-bg); border-right: 1px solid var(--ork-border);
+}
+.evb-gutter .evb-head { z-index: 5; }
+.evb-gutter-body { position: relative; }
+.evb-tick {
+    position: absolute; right: 6px; margin-top: 2px;
+    font-size: 10px; font-weight: 700; line-height: 1; color: var(--ork-text-muted);
+}
+.evb-day { flex-shrink: 1; flex-basis: 0; border-left: 1px solid var(--ork-border); }
+.evb-gutter + .evb-day { border-left: none; }
+.evb-day-body {
+    position: relative;
+    background-image: repeating-linear-gradient(to bottom,
+        var(--ork-border) 0, var(--ork-border) 1px, transparent 1px, transparent 72px);
+}
+
+/* ---- Blocks ---- */
+.evb-block {
+    position: absolute; box-sizing: border-box; overflow: hidden;
+    padding: 3px 6px; border-radius: 5px;
+    background: var(--evb-fill); color: #fff;
+    font-size: 10px; line-height: 13px; cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.evb-block:hover { z-index: 1; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.28); }
+.evb-block:focus-visible { outline: 2px solid var(--ork-text); outline-offset: 2px; z-index: 1; }
+.evb-block-title {
+    font-size: 12px; font-weight: 650; line-height: 15px; color: #fff;
+    display: -webkit-box; -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--evb-lines, 1); line-clamp: var(--evb-lines, 1);
+    overflow: hidden; overflow-wrap: anywhere;
+}
+.evb-block-meta { font-size: 10px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evb-block-loc i { font-size: 9px; }
+.evb-block-menu { font-size: 9px; margin-left: 2px; }
+/* A secondary category is a stripe on the right edge. */
+.evb-block-striped { padding-right: 10px; box-shadow: inset -4px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.18); }
+/* An item running past the board day (or in from the one before) loses that edge's rounding. */
+.evb-block-continues { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.evb-block-continued { border-top-left-radius: 0; border-top-right-radius: 0; }
+.evb-dim { opacity: 0.25; }
+
+html[data-theme="dark"] .evb-block { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+html[data-theme="dark"] .evb-block-striped { box-shadow: inset -4px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.5); }
+
+/* An ongoing item (Troll, Tavern: EvBoardCore.isOngoing) is a 22px rail at the
+   day's left edge; its title runs down it, cut with an ellipsis. Left, width,
+   top and height are set inline by evb-view.js. */
+/* A long rail scrolls past the top of the board's frame (.evb-scroller), so its
+   title sticks to the top of the rail's visible part: below the sticky day heads
+   (34px, HEAD_PX in evb-view.js) and the rail's 5px padding. overflow: clip clips
+   like hidden without making the rail a scroll container, which would hold the
+   title. --evb-rail-vis (evb-view.js) is the rail's visible height, so the title
+   ends in an ellipsis where the visible part does. */
+.evb-block.evb-block-rail { padding: 5px 0; border-radius: 4px; overflow: clip; }
+.evb-block-rail.evb-block-striped { padding-right: 0; box-shadow: inset -3px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.18); }
+html[data-theme="dark"] .evb-block-rail.evb-block-striped { box-shadow: inset -3px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.5); }
+.evb-block-rail .evb-block-title {
+    display: block; box-sizing: border-box; width: 100%;
+    height: max-content; max-height: min(100%, calc(var(--evb-rail-vis, 100vh) - 10px));
+    position: sticky; top: 39px;
+    writing-mode: vertical-rl; line-height: 22px; text-align: start;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    -webkit-line-clamp: none; line-clamp: none;
+}
+.evb-block-rail.evb-block-striped .evb-block-title { width: calc(100% - 3px); line-height: 19px; }
+/* Its focus ring sits close, so a neighbouring rail does not hide it. */
+.evb-block-rail:focus-visible { outline-offset: 1px; }
+/* The conflict badge (Edit mode) sits at the rail's top, the title below it; both
+   stick, the badge first, so the title never covers it or leaves it behind. */
+.evb-has-conflict.evb-block-rail { display: flex; flex-direction: column; }
+.evb-has-conflict.evb-block-rail .evb-block-title {
+    flex: none; padding-right: 0; padding-top: 3px; top: 56px;
+    max-height: min(calc(100% - 17px), calc(var(--evb-rail-vis, 100vh) - 27px));
+}
+#evb-root .evb-block.evb-block-rail > .evb-conflict,
+#evb-root .evb-block.evb-block-rail.evb-block-striped > .evb-conflict {
+    position: sticky; top: 40px; right: auto; order: -1; flex: none; margin: 1px 0 0 3px;
+}
+
+/* ---- Day pills (.ev-grid-day-pill* in Eventnew_index.tpl) and day choice ---- */
+.evb-day-pills { margin-bottom: 10px; }
+.evb-day.evb-day-off { display: none; }
+
+/* ---- Now line ---- */
+.evb-now {
+    position: absolute; left: 0; right: 0; z-index: 1; height: 0;
+    border-top: 2px solid var(--ork-red-danger); pointer-events: none;
+}
+.evb-now::before {
+    content: ""; position: absolute; left: -4px; top: -5px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--ork-red-danger);
+}
+html[data-theme="dark"] .evb-now { border-top-color: #fc8181; }
+html[data-theme="dark"] .evb-now::before { background: #fc8181; }
+
+/* ---- "Now and next" (div.evb-nownext, built by evb-view.js above both views) ----
+   Two labelled groups of buttons; each opens the item's popover. Hidden in Edit mode. */
+.evb-nownext {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; padding: 8px 10px;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    border: 1px solid var(--ork-border); border-radius: 8px;
+}
+.evb-nownext[hidden], #ev-tab-schedule.evb-edit-mode .evb-nownext { display: none; }
+.evb-nownext-group { display: flex; align-items: flex-start; gap: 8px; min-width: 0; max-width: 100%; }
+.evb-nownext-label {
+    flex-shrink: 0; min-width: 34px; padding-top: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ork-text-muted);
+}
+/* "Now" carries the board's now-line red as a dot; the words stay in the text colour. */
+.evb-nownext-now .evb-nownext-label { color: var(--ork-text); }
+.evb-nownext-now .evb-nownext-label::before {
+    content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 5px 1px 0; border-radius: 50%;
+    background: var(--ork-red-danger); vertical-align: middle;
+}
+html[data-theme="dark"] .evb-nownext-now .evb-nownext-label::before { background: #fc8181; }
+.evb-nownext-list { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.evb-nownext-list > li { min-width: 0; max-width: 100%; margin: 0; }
+.evb-nownext .evb-nownext-item {
+    display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; max-width: 100%; min-height: 0;
+    box-sizing: border-box; margin: 0; padding: 4px 10px; text-align: left;
+    border: 1px solid var(--ork-border); border-radius: 999px; box-shadow: none;
+    background: var(--ork-bg-secondary); color: var(--ork-text);
+    font-size: 12px; font-weight: 400; line-height: 1.35; cursor: pointer;
+}
+.evb-nownext .evb-nownext-item:focus-visible { outline: 2px solid var(--ork-text); outline-offset: 2px; }
+.evb-nownext-title { font-weight: 700; overflow-wrap: anywhere; }
+.evb-nownext-when { color: var(--ork-text-muted); white-space: nowrap; }
+.evb-nownext-loc { color: var(--ork-text-muted); overflow-wrap: anywhere; }
+.evb-nownext-loc i { font-size: 10px; }
+.evb-nownext-more { align-self: center; font-size: 12px; color: var(--ork-text-muted); }
+/* Dark: --ork-bg-secondary is the card's own fill there. */
+html[data-theme="dark"] .evb-nownext .evb-nownext-item,
+html[data-theme="dark"] .evb-nownext .evb-nownext-item:hover,
+html[data-theme="dark"] .evb-popover .evb-popover-edit,
+html[data-theme="dark"] .evb-popover .evb-popover-edit:hover,
+html[data-theme="dark"] .evb-empty-actions .evb-past-btn:hover:not(:disabled) { background: #4a5568; }
+html[data-theme="dark"] .evb-nownext .evb-nownext-when,
+html[data-theme="dark"] .evb-nownext .evb-nownext-loc { color: #e2e8f0; }
+
+/* ---- Details popover (appended to <body>, positioned by evb-view.js) ---- */
+.evb-popover {
+    position: fixed; z-index: var(--z-dropdown, 300);
+    width: 320px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto;
+    box-sizing: border-box; padding: 12px 14px;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+    font-size: 13px; line-height: 1.45;
+}
+.evb-popover:focus { outline: none; }
+.evb-popover:focus-visible { outline: 2px solid var(--ork-text); outline-offset: 2px; }
+.evb-popover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.evb-popover-cats { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.evb-popover-cat {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 700; color: var(--ork-text-muted);
+}
+.evb-popover .evb-popover-close {
+    margin: -6px -8px 0 0; padding: 2px 8px; min-height: 0;
+    background: none; border: none; box-shadow: none; cursor: pointer;
+    font-size: 20px; line-height: 1; color: var(--ork-text-muted);
+}
+.evb-popover .evb-popover-close:hover { color: var(--ork-text); background: none; }
+.evb-popover-title { margin: 4px 0 8px; font-size: 15px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.evb-popover-row { display: flex; gap: 8px; margin-top: 4px; overflow-wrap: anywhere; }
+.evb-popover-row > i { width: 14px; flex-shrink: 0; margin-top: 3px; font-size: 12px; text-align: center; color: var(--ork-text-muted); }
+.evb-popover-desc {
+    margin-top: 8px; white-space: pre-line; overflow-wrap: anywhere;
+}
+.evb-popover a { color: var(--ork-link); text-decoration: underline; }
+.evb-popover a:hover { text-decoration: none; }
+.evb-popover-meal { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ork-border); }
+.evb-popover-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+.evb-popover .evb-popover-edit {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 0;
+    padding: 5px 12px; border: 1px solid var(--ork-border); border-radius: 999px;
+    background: var(--ork-bg-secondary); color: var(--ork-text); box-shadow: none;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.evb-sr {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ---- "Share as image" (toolbar; the button reuses .ev-sched-copy-btn) ---- */
+.evb-share { position: relative; display: none; }
+#ev-tab-schedule.evb-board-mode .evb-share { display: inline-block; }
+.evb-share-menu, .evb-more-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-dropdown, 300);
+    min-width: 190px; padding: 4px; box-sizing: border-box;
+    background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+}
+.evb-share-menu[hidden], .evb-more-menu[hidden] { display: none; }
+.evb-share-menu button, .evb-more-menu button {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 0;
+    padding: 8px 10px; border: none; border-radius: 6px; box-shadow: none;
+    background: none; color: var(--ork-text); text-align: left;
+    font-size: 13px; font-weight: 600; line-height: 1.3; cursor: pointer; white-space: nowrap;
+}
+.evb-share-menu button[hidden] { display: none; }
+.evb-share-menu button:hover, .evb-more-menu button:hover,
+.evb-share-menu button:focus-visible, .evb-more-menu button:focus-visible { background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-share-menu button i, .evb-more-menu button i { width: 14px; font-size: 12px; text-align: center; color: var(--ork-text-muted); }
+/* Share menu: the "Which days" radio group (div.evb-share-days of
+   button[role="radio"], built by evb-image.js). Checked = filled dot icon,
+   bold text and a fill; focus = a ring. Every token swaps in dark mode. */
+.evb-share-days { padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid var(--ork-border); }
+.evb-share-menu .evb-share-days button { font-weight: 400; }
+.evb-share-menu .evb-share-days button[aria-checked="true"] { font-weight: 700; background: var(--ork-bg-secondary); }
+.evb-share-menu .evb-share-days button[aria-checked="true"] i { color: var(--ork-link); }
+.evb-share-menu .evb-share-days button:focus-visible { outline: 2px solid var(--ork-link); outline-offset: -2px; }
+html[data-theme="dark"] .evb-share-menu .evb-share-days button[aria-checked="true"] { background: #4a5568; }
+
+/* In Board view the legend is the only category filter: hide the list's pills. */
+#ev-tab-schedule.evb-board-mode #ev-sched-filters { display: none !important; }
+
+/* ---- Edit mode (evb-edit.js, evb-entry.js) ---- */
+/* "Edit schedule" (toolbar; reuses .ev-sched-copy-btn) shows in both views outside Edit mode. */
+#ev-tab-schedule .evb-edit-btn { display: none; }
+#ev-tab-schedule:not(.evb-edit-mode) .evb-edit-btn { display: inline-flex; }
+.evb-edit-btn[disabled] { opacity: 0.6; cursor: progress; }
+/* While editing, the board is the only view and the empty-state prompt has done its job. */
+#ev-tab-schedule.evb-edit-mode .ev-grid-view-toggle,
+#ev-tab-schedule.evb-edit-mode #ev-schedule-empty,
+/* "Add Schedule Item" (the form) is the button after "Edit schedule" in the toolbar. */
+#ev-tab-schedule.evb-edit-mode .evb-edit-btn ~ .ev-submit-btn { display: none !important; }
+.evb-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.evb-empty-actions .evb-past-btn {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 8px 14px;
+    border: 1px solid var(--ork-input-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.evb-nownext .evb-nownext-item:hover,
+.evb-popover .evb-popover-edit:hover,
+.evb-empty-actions .evb-past-btn:hover:not(:disabled) { border-color: var(--ork-text-muted); background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-empty-actions .evb-past-btn:disabled { opacity: 0.5; cursor: default; }
+.evb-empty-actions .evb-past-btn i { color: var(--ork-text-muted); }
+
+/* Mode bar + quick line + notice: one block that sticks (below the 48px fixed
+   site menu, #newmenu) while the page scrolls. */
+.evb-edit-head {
+    position: sticky; top: 48px; z-index: 6; margin-bottom: 10px;
+    background: var(--ork-card-bg);
+    border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: 0 4px 12px -6px rgba(15, 23, 42, 0.25);
+}
+html[data-theme="dark"] .evb-edit-head { box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.7); }
+/* .ev-tabs clips with overflow:hidden, which would make it the sticky head's
+   scroll container; clip still trims the corners without becoming one. */
+.ev-tabs:has(#ev-tab-schedule.evb-edit-mode) { overflow: clip; }
+.evb-modebar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+    padding: 8px 10px; border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary); border-radius: 8px 8px 0 0;
+}
+.evb-modebar-title { font-size: 13px; font-weight: 700; color: var(--ork-text); white-space: nowrap; }
+.evb-modebar-title i { margin-right: 4px; font-size: 12px; color: var(--ork-text-muted); }
+.evb-save { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ork-text-muted); white-space: nowrap; }
+.evb-save-dot { width: 8px; height: 8px; border-radius: 50%; background: #38a169; flex-shrink: 0; }
+.evb-save[data-state="saving"] .evb-save-dot { background: #d69e2e; animation: evb-pulse 1s ease-in-out infinite; }
+.evb-save[data-state="offline"] .evb-save-dot { background: var(--ork-red-danger); }
+.evb-save[data-state="offline"] .evb-save-state { color: var(--ork-alert-danger-text); font-weight: 600; }
+html[data-theme="dark"] .evb-save-dot { background: #68d391; }
+html[data-theme="dark"] .evb-save[data-state="saving"] .evb-save-dot { background: #f6e05e; }
+html[data-theme="dark"] .evb-save[data-state="offline"] .evb-save-dot { background: #fc8181; }
+html[data-theme="dark"] .evb-save[data-state="offline"] .evb-save-state { color: #feb2b2; }
+@keyframes evb-pulse { 50% { opacity: 0.35; } }
+.evb-modebar .evb-save-retry,
+.evb-notice .evb-notice-restore {
+    min-height: 0; padding: 0; border: none; background: none; box-shadow: none;
+    font-size: 12px; font-weight: 700; color: var(--ork-link); text-decoration: underline; cursor: pointer;
+}
+.evb-modebar .evb-save-retry[hidden] { display: none; }
+.evb-modebar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.evb-modebar .evb-modebar-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 0; height: 30px; padding: 0 10px; box-sizing: border-box;
+    border: 1px solid var(--ork-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    font-size: 12px; font-weight: 600; line-height: 1; cursor: pointer;
+}
+.evb-modebar .evb-modebar-btn:hover:not(:disabled) { border-color: var(--ork-text-muted); background: var(--ork-card-bg); color: var(--ork-text); }
+.evb-modebar .evb-modebar-btn:disabled { opacity: 0.45; cursor: default; }
+.evb-modebar .evb-modebar-btn i { font-size: 11px; }
+.evb-modebar .evb-help { width: 30px; padding: 0; font-size: 14px; font-weight: 700; }
+.evb-modebar .evb-help[aria-expanded="true"] { background: var(--ork-bg-secondary); border-color: var(--ork-text-muted); }
+.evb-modebar .evb-done { height: 30px; padding: 0 16px; line-height: 1; }
+/* ---- Help: a dialog with two tabs (About Schedule Entry, How to Use Real Text) ---- */
+.evb-dialog.evb-help-dialog .evb-help-box { max-width: 880px; }
+/* orkui.css styles every h3/h4 as a boxed heading: plain ones here. */
+.evb-help-dialog .ev-modal-header h3, .evb-help-dialog .evb-help-sec h4 {
+    background: none; border: none; padding: 0; box-shadow: none; text-transform: none; letter-spacing: normal;
+}
+.evb-help-dialog .ev-modal-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: var(--ork-text); }
+.evb-help-tabs {
+    display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--ork-border);
+    overflow-x: auto; flex-shrink: 0;
+}
+.evb-help-tabs .evb-help-tab {
+    margin: 0 0 -1px; padding: 10px 14px; border: none; border-bottom: 2px solid transparent; border-radius: 0;
+    background: none; color: var(--ork-text-muted); font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.evb-help-tabs .evb-help-tab:hover { color: var(--ork-text); background: none; }
+.evb-help-tabs .evb-help-tab[aria-selected="true"] { color: var(--ork-text); border-bottom-color: var(--ork-link, #2b6cb0); }
+.evb-help-tabs .evb-help-tab:focus-visible { outline: 2px solid var(--ork-link, #2b6cb0); outline-offset: -2px; }
+.evb-help-body { font-size: 13px; line-height: 1.5; color: var(--ork-text); text-align: left; }
+.evb-help-panel:focus { outline: none; }
+.evb-help-panel:focus-visible { outline: 2px solid var(--ork-link); outline-offset: -2px; }
+.evb-help-panel[hidden] { display: none; }
+.evb-help-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.evb-help-sec {
+    padding: 12px 14px; border: 1px solid var(--ork-border); border-radius: 8px; background: var(--ork-card-bg);
+}
+.evb-help-grid .evb-help-sec:first-child { grid-row: span 2; }
+.evb-help-examples + .evb-help-examples, .evb-help-panel > .evb-help-sec + .evb-help-sec { margin-top: 12px; }
+.evb-help-body .evb-help-sec h4 {
+    margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--ork-text); line-height: 1.3;
+}
+.evb-help-sec h4 > i { margin-right: 4px; color: var(--ork-text-muted); font-size: 12px; }
+.evb-help-note, .evb-help-lede { margin: 0 0 10px; color: var(--ork-text-muted); font-size: 12.5px; }
+.evb-help-lede { margin-bottom: 14px; font-size: 13px; }
+.evb-help-list { margin: 0; }
+.evb-help-row { display: grid; grid-template-columns: minmax(84px, max-content) 1fr; gap: 10px; padding: 4px 0; }
+.evb-help-row + .evb-help-row { border-top: 1px dashed var(--ork-border); }
+.evb-help-row dt { margin: 0; font-weight: 600; color: var(--ork-text-muted); white-space: nowrap; }
+.evb-help-row dd { margin: 0; min-width: 0; }
+.evb-help-body code, .evb-help-body kbd {
+    display: inline-block; padding: 0 5px; border-radius: 4px;
+    background: var(--ork-bg-secondary); color: var(--ork-text);
+    font: 600 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.evb-help-body kbd { border: 1px solid var(--ork-border); border-bottom-width: 2px; margin-right: 2px; }
+/* An example: what was typed, then the chips it reads as (one row per item). */
+.evb-help-ex { padding: 8px 0; }
+.evb-help-ex + .evb-help-ex { border-top: 1px solid var(--ork-border); }
+.evb-help-in code { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; }
+.evb-help-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.evb-help-arrow { color: var(--ork-text-muted); font-size: 11px; margin-right: 2px; }
+.evb-help-chips .evb-chip-label { white-space: normal; overflow: visible; }
+html[data-theme="dark"] .evb-help-body code, html[data-theme="dark"] .evb-help-body kbd { background: #4a5568; }
+@media (max-width: 700px) {
+    .evb-help-grid { grid-template-columns: minmax(0, 1fr); }
+    .evb-help-grid .evb-help-sec:first-child { grid-row: auto; }
+    .evb-help-tabs { padding: 0 12px; }
+    .evb-help-tabs .evb-help-tab { padding: 10px 10px; font-size: 13px; }
+    .evb-help-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+
+.evb-quickline { padding: 10px; }
+
+/* ---- The entry widget: input, chips and suggestion list ---- */
+.evb-entry-field { position: relative; }
+.evb-entry .evb-entry-input {
+    display: block; width: 100%; box-sizing: border-box; height: auto; min-height: 0; margin: 0;
+    padding: 10px 12px; border: 1px solid var(--ork-input-border); border-radius: 6px;
+    background: var(--ork-input-bg); color: var(--ork-text); box-shadow: none;
+    font-size: 16px; line-height: 1.35;
+}
+.evb-entry .evb-entry-input::placeholder { color: var(--ork-text-lighter); opacity: 1; }
+.evb-entry .evb-entry-input:focus {
+    outline: none; border-color: var(--evb-ring); background: var(--ork-card-bg);
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+}
+.evb-entry-invalid .evb-entry-input { border-color: var(--ork-red-danger); animation: evb-shake 0.25s; }
+.evb-entry-invalid .evb-entry-input:focus { border-color: var(--ork-red-danger); }
+@keyframes evb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+/* The site's dark input/textarea rule carries an id, so the board entry states need it too; the paste dialog sits outside #theme_container, so its rule does not. */
+html[data-theme="dark"] #theme_container .evb-entry .evb-entry-input:focus { border-color: var(--evb-ring); background-color: var(--ork-card-bg); }
+html[data-theme="dark"] #theme_container .evb-entry-invalid .evb-entry-input, html[data-theme="dark"] #theme_container .evb-entry-invalid .evb-entry-input:focus { border-color: #fc8181; }
+@media (prefers-reduced-motion: reduce) {
+    .evb-entry-invalid .evb-entry-input, .evb-save[data-state="saving"] .evb-save-dot { animation: none; }
+}
+/* The chip row keeps its height when empty, so the board does not jump on the first key. */
+.evb-entry-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px; margin-top: 8px; }
+.evb-chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; box-sizing: border-box;
+    height: 24px; padding: 0 9px; border: 1px solid var(--ork-border); border-radius: 999px;
+    background: var(--ork-bg-secondary); color: var(--ork-text);
+    font-size: 12px; font-weight: 600; line-height: 1;
+}
+.evb-chip > i { font-size: 10px; color: var(--ork-text-muted); flex-shrink: 0; }
+.evb-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evb-chip-description .evb-chip-label { max-width: 220px; }
+.evb-chip-category, .evb-chip-secondary { background: var(--evb-chip-fill); border-color: var(--evb-chip-fill); color: #fff; }
+.evb-chip-category > i, .evb-chip-secondary > i { color: #fff; opacity: 0.85; }
+/* A guess: the same chip, dimmer, with a dotted edge. */
+.evb-chip-guess { opacity: 0.62; border-style: dotted; border-color: var(--ork-text-muted); }
+/* The quick line's refusal note (Enter on a line with no title). */
+.evb-chip-note { border-color: var(--ork-red-danger); color: var(--ork-red-danger); background: transparent; }
+.evb-chip-note > i { color: var(--ork-red-danger); }
+html[data-theme="dark"] #theme_container .evb-chip-note, html[data-theme="dark"] #theme_container .evb-chip-note > i { color: #fc8181; border-color: #fc8181; }
+.evb-chip-category.evb-chip-guess { border-color: var(--ork-text); }
+.evb-chip .evb-chip-x {
+    min-height: 0; margin: 0 -5px 0 1px; padding: 0 3px; border: none; background: none; box-shadow: none;
+    color: inherit; opacity: 0.6; font-size: 15px; line-height: 1; cursor: pointer;
+}
+.evb-chip .evb-chip-x:hover { opacity: 1; background: none; color: inherit; }
+.evb-chip .evb-chip-x:focus-visible { opacity: 1; outline: 2px solid var(--evb-ring); outline-offset: 0; border-radius: 4px; }
+
+.evb-entry-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-dropdown, 300);
+    min-width: 240px; max-width: 100%; box-sizing: border-box; padding: 4px;
+    background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+}
+.evb-entry-menu[hidden] { display: none; }
+.evb-entry-menu-head {
+    padding: 4px 8px 2px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--ork-text-muted);
+}
+.evb-entry-option {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    font-size: 13px; color: var(--ork-text); cursor: pointer;
+}
+.evb-entry-option:hover, .evb-entry-option-active { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .evb-entry-option:hover, html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
+.evb-entry-option-tag { margin-left: auto; font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ork-text-muted); }
+
+/* Leads: '@' suggestions (fixed, so the board's scrolling frame cannot clip them) and chips. */
+.evb-entry-menu.evb-entry-menu-fixed,
+.evb-type-pop .evb-entry-menu.evb-entry-menu-fixed {
+    position: fixed; margin-top: 0; width: max-content; min-width: 260px;
+    max-width: min(380px, calc(100vw - 16px)); max-height: min(320px, 60vh); overflow-y: auto;
+}
+.evb-entry-option-lead { gap: 6px; }
+.evb-entry-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evb-entry-option-muted { font-size: 12px; font-weight: 400; color: var(--ork-text-muted); white-space: nowrap; }
+.evb-entry-option-swatches { display: inline-flex; gap: 3px; margin-left: auto; padding-left: 6px; }
+.evb-entry-option-swatches .evb-legend-swatch { width: 8px; height: 8px; border-radius: 2px; }
+.evb-entry-menu-note { padding: 6px 8px; font-size: 12px; font-style: italic; color: var(--ork-text-muted); }
+.evb-chip-lead .evb-chip-label { max-width: 180px; }
+.evb-chip-auto { border-style: dotted; border-color: var(--ork-text-muted); }
+.evb-chip-suffix { font-size: 10px; font-weight: 400; color: var(--ork-text-muted); }
+
+/* ---- Notices (rejected saves) ---- */
+.evb-notice {
+    display: flex; align-items: flex-start; gap: 8px; margin: 0 10px 10px; padding: 8px 10px;
+    background: var(--ork-alert-danger-bg); color: var(--ork-alert-danger-text);
+    border: 1px solid var(--ork-alert-danger-border); border-radius: 6px;
+    font-size: 13px; line-height: 1.4;
+}
+.evb-notice[hidden] { display: none; }
+.evb-open-failed { margin: 0 0 10px; }
+.evb-notice-rows { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.evb-notice-row + .evb-notice-row { margin-top: 4px; }
+.evb-notice .evb-notice-restore { color: inherit; }
+.evb-notice .evb-notice-close {
+    min-height: 0; padding: 0 4px; border: none; background: none; box-shadow: none;
+    color: inherit; font-size: 18px; line-height: 1; cursor: pointer;
+}
+
+/* A notice that only brings news (a copy added, a preview discarded). */
+.evb-notice.evb-notice-info {
+    background: var(--ork-alert-info-bg, #ebf8ff); color: var(--ork-alert-info-text, #2c5282);
+    border-color: var(--ork-alert-info-border, #bee3f8);
+}
+html[data-theme="dark"] .evb-notice.evb-notice-info { background: rgba(66, 153, 225, 0.14); color: #bee3f8; border-color: rgba(144, 205, 244, 0.4); }
+.evb-help-warn { color: #b7791f; }
+html[data-theme="dark"] .evb-help-warn { color: #f6e05e; }
+
+/* ---- Bulk preview, More menu and the past-event dialog (evb-bulk.js) ---- */
+.evb-more-wrap { position: relative; display: inline-flex; }
+.evb-modebar .evb-more-btn[aria-expanded="true"] { background: var(--ork-bg-secondary); border-color: var(--ork-text-muted); }
+.evb-more-menu { min-width: 230px; }
+/* The bar under the mode bar, sticking with it, while pasted lines show as ghosts. */
+.evb-bulkbar {
+    margin: 0 10px 10px; padding: 8px 10px; border: 1px dashed var(--ork-blue-link); border-radius: 6px;
+    background: rgba(66, 153, 225, 0.08); color: var(--ork-text); font-size: 13px; line-height: 1.4;
+    max-height: 40vh; overflow-y: auto;
+}
+.evb-bulkbar[hidden] { display: none; }
+html[data-theme="dark"] .evb-bulkbar { background: rgba(99, 179, 237, 0.1); }
+.evb-bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.evb-bulk-count { margin-right: auto; font-weight: 700; }
+.evb-bulk-actions { display: inline-flex; gap: 8px; }
+.evb-bulkbar .ev-submit-btn { min-height: 0; height: 30px; padding: 0 14px; line-height: 1; }
+.evb-bulk-btn {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 0; height: 30px; padding: 0 12px;
+    border: 1px solid var(--ork-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text); font-size: 12px; font-weight: 600; line-height: 1; cursor: pointer;
+}
+.evb-bulk-btn:hover:not(:disabled) { border-color: var(--ork-text-muted); background: var(--ork-card-bg); color: var(--ork-text); }
+.evb-bulk-note { margin-top: 6px; font-size: 12px; color: var(--ork-text-secondary, var(--ork-text-muted)); overflow-wrap: anywhere; }
+.evb-bulk-label { font-weight: 700; color: var(--ork-text-muted); }
+.evb-bulk-unread ul { margin: 2px 0 0; padding: 0 0 0 18px; }
+.evb-bulk-unread li { margin: 1px 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+.evb-bulk-leads, .evb-bulk-outside { color: #975a16; }
+html[data-theme="dark"] .evb-bulk-leads, html[data-theme="dark"] .evb-bulk-outside { color: #f6e05e; }
+.evb-bulkbar .evb-bulk-more {
+    min-height: 0; padding: 0; border: none; background: none; box-shadow: none;
+    font-size: 12px; font-weight: 700; color: var(--ork-link); text-decoration: underline; cursor: pointer;
+}
+.evb-bulk-lock { min-height: 24px; margin-top: 8px; font-size: 12px; line-height: 24px; font-style: italic; color: var(--ork-text-muted); }
+.evb-entry-locked .evb-entry-chips { display: none; }
+.evb-entry .evb-entry-input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Dialogs: the page's modal overlay (.ev-modal-overlay), narrower. */
+.evb-dialog .evb-dialog-box { max-width: 520px; }
+.evb-dialog-intro { margin: 0 0 12px; font-size: 13px; color: var(--ork-text-secondary, var(--ork-text-muted)); }
+.evb-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.evb-paste-dialog .evb-paste-text {
+    display: block; width: 100%; box-sizing: border-box; min-height: 160px; margin: 0; padding: 8px 10px; resize: vertical;
+    border: 1px solid var(--ork-input-border); border-radius: 6px; background: var(--ork-input-bg); color: var(--ork-text);
+    font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.evb-paste-dialog .evb-paste-text:focus { outline: none; border-color: var(--evb-ring); box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2); }
+.evb-paste-example { margin-top: 10px; font-size: 12px; }
+.evb-paste-example pre {
+    margin: 4px 0 0; padding: 6px 10px; border-radius: 6px; white-space: pre-wrap;
+    background: var(--ork-bg-secondary); color: var(--ork-text); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.evb-copy-group {
+    margin: 12px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ork-text-muted);
+}
+.evb-copy-group:first-child { margin-top: 0; }
+.evb-copy-sources { margin: 0; padding: 0; list-style: none; }
+.evb-copy-sources li + li { margin-top: 6px; }
+.evb-copy-dialog .evb-copy-source {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 0;
+    padding: 8px 12px; border: 1px solid var(--ork-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text); text-align: left; cursor: pointer;
+}
+.evb-copy-dialog .evb-copy-source:hover:not(:disabled),
+.evb-copy-dialog .evb-copy-source:focus-visible { border-color: var(--ork-blue-link); background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-copy-dialog .evb-copy-source:disabled { opacity: 0.6; cursor: default; }
+.evb-copy-dialog .evb-copy-source[aria-busy="true"] { opacity: 1; border-color: var(--ork-blue-link); }
+.evb-copy-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.evb-copy-meta { font-size: 12px; color: var(--ork-text-muted); }
+.evb-copy-status, .evb-copy-none { margin: 0 0 8px; font-size: 13px; color: var(--ork-text-muted); }
+.evb-copy-error {
+    margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--ork-alert-danger-border); border-radius: 6px;
+    background: var(--ork-alert-danger-bg); color: var(--ork-alert-danger-text); font-size: 13px;
+}
+.evb-copy-error[hidden] { display: none; }
+
+/* A double booking: an amber warning in the block's top-right corner (Edit mode),
+   below the top resize grip's 6px hit area so the grip's whole width still resizes. */
+#evb-root .evb-block > .evb-conflict {
+    position: absolute; top: 6px; right: 3px; z-index: 1;
+    display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+    border-radius: 4px; background: #f6c343; color: #1a202c; font-size: 9px; line-height: 1;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); cursor: inherit;
+}
+#evb-root .evb-block-striped > .evb-conflict { right: 8px; }
+/* Its tip floats outside the block (evb-bulk.js), which clips its own overflow. */
+#evb-root .evb-block > .evb-conflict:hover::after { display: none; }
+#evb-root:not(.evb-editing) .evb-conflict { display: none; }
+.evb-has-conflict .evb-block-title { padding-right: 16px; }
+.evb-conflict-tip {
+    position: fixed; z-index: var(--z-dropdown, 300); max-width: 260px; padding: 6px 10px; border-radius: 4px;
+    background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4; pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); overflow-wrap: anywhere;
+}
+.evb-conflict-tip[hidden] { display: none; }
+html[data-theme="dark"] .evb-conflict-tip { background: #f7fafc; color: #1a202c; }
+
+/* ---- The board in Edit mode ---- */
+/* A block can be picked up (evb-drag.js); its text is not for selecting. */
+.evb-editing .evb-block { cursor: grab; -webkit-user-select: none; user-select: none; }
+/* A ghost is the block as it will look, see-through, with a dashed white inner edge. */
+.evb-block.evb-ghost {
+    opacity: 0.55; z-index: 2; pointer-events: none;
+    outline: 2px dashed rgba(255, 255, 255, 0.95); outline-offset: -4px;
+}
+
+/* ---- Typing on the board (evb-type.js) ---- */
+.evb-editing .evb-day-body { cursor: cell; }
+/* The empty slot under the pointer, as tall as the block a click would open;
+   while dragging it shows the length being chosen. */
+.evb-slot-hover {
+    position: absolute; left: 2px; right: 2px; box-sizing: border-box; pointer-events: none;
+    padding: 2px 6px; border-radius: 5px;
+    background: rgba(66, 153, 225, 0.12); border: 1px dashed rgba(43, 108, 176, 0.7);
+    font-size: 10px; font-weight: 700; line-height: 13px; color: #2b6cb0;
+}
+.evb-slot-hover-drag { background: rgba(66, 153, 225, 0.22); border-style: solid; }
+html[data-theme="dark"] .evb-slot-hover { background: rgba(99, 179, 237, 0.14); border-color: rgba(144, 205, 244, 0.75); color: #90cdf4; }
+html[data-theme="dark"] .evb-slot-hover-drag { background: rgba(99, 179, 237, 0.26); }
+/* The board lays the block being typed out as an invisible placeholder ... */
+.evb-block.evb-placeholder { visibility: hidden; }
+/* ... and the real block sits over it in a layer outside the re-rendered board,
+   under the sticky day heads and hour gutter (z-index 3 and up). */
+.evb-type-layer { position: relative; z-index: 1; height: 0; }
+.evb-type-block[hidden] { display: none; }
+.evb-type-layer .evb-block.evb-block-editing,
+.evb-type-layer .evb-block.evb-block-editing:hover {
+    cursor: text; padding: 3px 6px;
+    box-shadow: inset 0 0 0 2px #fff, 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .evb-type-layer .evb-block.evb-block-editing { box-shadow: inset 0 0 0 2px #fff, 0 3px 10px rgba(0, 0, 0, 0.6); }
+.evb-block-editing .evb-entry .evb-entry-input,
+.evb-block-editing .evb-entry .evb-entry-input:focus {
+    height: 15px; padding: 0; border: none; border-radius: 0; box-shadow: none;
+    background: transparent; color: #fff; caret-color: #fff;
+    font-size: 12px; font-weight: 650; line-height: 15px;
+}
+/* The site's dark input rule (html[data-theme="dark"] #theme_container input[type="text"]) carries an id. */
+html[data-theme="dark"] #theme_container .evb-block-editing .evb-entry .evb-entry-input {
+    background-color: transparent; color: #fff; border: none;
+}
+.evb-block-editing .evb-entry .evb-entry-input::placeholder { color: rgba(255, 255, 255, 0.8); }
+.evb-block-editing .evb-entry-invalid .evb-entry-input { border: none; }
+/* The chips and suggestions float just below the block, over the board. */
+.evb-type-pop {
+    position: absolute; z-index: var(--z-dropdown, 300);
+    width: max-content; min-width: 240px; max-width: min(420px, calc(100vw - 24px)); pointer-events: none;
+}
+.evb-type-pop[hidden] { display: none; }
+.evb-type-pop > * { pointer-events: auto; }
+.evb-type-pop .evb-entry-chips { min-height: 0; margin-top: 0; }
+.evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2); }
+html[data-theme="dark"] .evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.evb-type-pop .evb-entry-menu { position: static; margin-top: 4px; }
+
+/* ---- Selecting blocks (evb-select.js) ---- */
+/* A white inner ring and an outer ring in the focus colour, over its neighbours
+   but under the sticky day heads (z-index 3), so a rail scrolled up beneath a
+   head does not draw its frame over it. */
+.evb-editing .evb-block.evb-selected,
+.evb-editing .evb-block.evb-selected:hover {
+    z-index: 2;
+    box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.28);
+}
+.evb-editing .evb-block.evb-selected.evb-block-striped {
+    box-shadow: inset -4px 0 0 var(--evb-stripe), inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.28);
+}
+html[data-theme="dark"] .evb-editing .evb-block.evb-selected,
+html[data-theme="dark"] .evb-editing .evb-block.evb-selected:hover {
+    box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+html[data-theme="dark"] .evb-editing .evb-block.evb-selected.evb-block-striped {
+    box-shadow: inset -4px 0 0 var(--evb-stripe), inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+.evb-editing .evb-block.evb-selected:focus-visible { outline: none; }
+
+/* The toolbar (one block) or the count badge (several) floats above the
+   board's sticky heads, beside #evb-root. */
+.evb-select-layer { position: relative; z-index: 5; height: 0; }
+.evb-block-toolbar, .evb-sel-badge {
+    position: absolute; display: flex; align-items: center; gap: 2px; padding: 3px;
+    background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+}
+.evb-block-toolbar[hidden], .evb-sel-badge[hidden] { display: none; }
+.evb-sel-count { padding: 0 6px 0 7px; font-size: 12px; font-weight: 650; line-height: 28px; color: var(--ork-text); white-space: nowrap; }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; min-height: 0; margin: 0; padding: 0;
+    border: none; border-radius: 6px; background: transparent; box-shadow: none;
+    color: var(--ork-text-muted); font-size: 13px; line-height: 1; cursor: pointer;
+}
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool[aria-expanded="true"] { background: var(--ork-bg-secondary); color: var(--ork-text); }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool-danger:hover { color: var(--ork-red-danger); }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:focus-visible { outline: 2px solid var(--evb-ring); outline-offset: 0; }
+.evb-tool-swatch { width: 14px; height: 14px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15); }
+html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,
+html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool[aria-expanded="true"] { background: #4a5568; }
+html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool-danger:hover { color: #fc8181; }
+html[data-theme="dark"] .evb-tool-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55); }
+
+/* The category menu: ten swatches, five by two, each showing its number key. */
+.evb-cat-menu {
+    position: absolute; top: calc(100% + 4px); left: 0;
+    display: grid; grid-template-columns: repeat(5, 28px); gap: 4px; padding: 6px;
+    background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+}
+.evb-cat-menu[hidden] { display: none; }
+.evb-cat-menu.evb-cat-menu-up { top: auto; bottom: calc(100% + 4px); }
+.evb-cat-menu button {
+    width: 28px; height: 28px; min-height: 0; margin: 0; padding: 0;
+    border: none; border-radius: 6px; background: var(--evb-fill); box-shadow: none;
+    color: #fff; font-size: 12px; font-weight: 700; line-height: 28px; text-align: center; cursor: pointer;
+}
+.evb-cat-menu button:hover { background: var(--evb-fill); color: #fff; filter: brightness(1.12); }
+.evb-cat-menu button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring); }
+.evb-cat-menu button:focus-visible { outline: 2px solid var(--evb-ring); outline-offset: 1px; }
+
+/* ---- Moving and resizing blocks (evb-drag.js) ---- */
+/* The selected block's grips: 6px hit areas on its top and bottom edges, each
+   with a small notch in the middle. White on the bold fill in both themes. */
+.evb-resize-top, .evb-resize-bottom {
+    position: absolute; left: 0; right: 0; z-index: 1; height: 6px; cursor: ns-resize;
+}
+.evb-resize-top { top: 0; }
+.evb-resize-bottom { bottom: 0; }
+.evb-resize-top::after, .evb-resize-bottom::after {
+    content: ""; position: absolute; left: 50%; width: 16px; height: 3px; margin-left: -8px;
+    border-radius: 2px; background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.evb-resize-top::after { top: 2px; }
+.evb-resize-bottom::after { bottom: 2px; }
+/* Touch never drags. */
+@media (hover: none) {
+    .evb-resize-top, .evb-resize-bottom { display: none; }
+}
+/* While a gesture lasts: the cursor everywhere on the board, the original
+   dimmed in place, the day under the pointer lit, the ghost in full colour. */
+.evb-dragging, .evb-dragging * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+.evb-dragging-resize, .evb-dragging-resize * { cursor: ns-resize !important; }
+.evb-editing .evb-block.evb-drag-source { opacity: 0.4; }
+.evb-day.evb-drop-target .evb-day-body { background-color: rgba(66, 153, 225, 0.07); }
+html[data-theme="dark"] .evb-day.evb-drop-target .evb-day-body { background-color: rgba(99, 179, 237, 0.1); }
+.evb-block.evb-drag-ghost,
+.evb-block.evb-drag-ghost:hover {
+    z-index: 2; pointer-events: none;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.32);
+}
+html[data-theme="dark"] .evb-block.evb-drag-ghost { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7); }
+.evb-block.evb-drag-ghost.evb-block-striped { box-shadow: inset -4px 0 0 var(--evb-stripe), 0 6px 16px rgba(15, 23, 42, 0.32); }
+html[data-theme="dark"] .evb-block.evb-drag-ghost.evb-block-striped { box-shadow: inset -4px 0 0 var(--evb-stripe), 0 6px 16px rgba(0, 0, 0, 0.7); }
+/* The selected block's toolbar (or the badge) steps aside while it is dragged. */
+#evb-root.evb-dragging ~ .evb-select-layer :is(.evb-block-toolbar, .evb-sel-badge) { visibility: hidden; }
+
+/* The fill handle: a 10px square at the bottom right of a single selected
+   block; dragged down it repeats the item (evb-drag.js). Above the bottom grip. */
+.evb-fill-handle {
+    position: absolute; right: -1px; bottom: -1px; z-index: 2; width: 10px; height: 10px; box-sizing: border-box;
+    border: 2px solid #fff; border-radius: 2px; background: var(--evb-ring); cursor: nwse-resize;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .evb-fill-handle { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+/* Its "Drag to repeat" tip is data-evb-tip, floated outside the block by
+   evb-bulk.js (the block clips its own overflow), not the site's [data-tip]. */
+.evb-dragging-fill, .evb-dragging-fill * { cursor: nwse-resize !important; }
+/* The copies a repeat would add: the item's look, faded and dashed. */
+.evb-block.evb-fill-ghost,
+.evb-block.evb-fill-ghost:hover {
+    z-index: 2; pointer-events: none; opacity: 0.6;
+    outline: 2px dashed #2b6cb0; outline-offset: -2px; box-shadow: none;
+}
+html[data-theme="dark"] .evb-block.evb-fill-ghost { outline-color: #90cdf4; }
+@media (hover: none) {
+    .evb-fill-handle { display: none; }
+}
+
+/* The keyboard's slot cursor (evb-keys.js): one 15-minute slot, outlined,
+   under the blocks. */
+.evb-slot-cursor {
+    position: absolute; left: 2px; right: 2px; box-sizing: border-box; pointer-events: none;
+    padding: 0 6px; border: 2px solid #3182ce; border-radius: 4px; background: rgba(66, 153, 225, 0.1);
+    font-size: 10px; font-weight: 700; line-height: 14px; color: #2b6cb0; overflow: hidden;
+}
+html[data-theme="dark"] .evb-slot-cursor { border-color: #90cdf4; background: rgba(99, 179, 237, 0.14); color: #90cdf4; }
+/* Touch screens have no keyboard cursor to show. */
+@media (hover: none) {
+    .evb-slot-cursor { display: none; }
+}
+
+/* Edit mode: each legend chip shows its category's number key. */
+.evb-legend-key { display: none; }
+.evb-editing .evb-legend-key {
+    display: inline-block; min-width: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 4px;
+    background: var(--ork-bg-secondary); color: var(--ork-text-muted);
+    font: 700 10px/14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: center;
+}
+html[data-theme="dark"] .evb-editing .evb-legend-key { background: #4a5568; color: #e2e8f0; }
+
+/* A list row's remove that failed (revised.js evRemoveSchedule). */
+.evb-row-error { margin-top: 4px; font-size: 11px; line-height: 1.3; color: #c53030; white-space: normal; }
+html[data-theme="dark"] .evb-row-error { color: #fc8181; }
+
+/* ---- Phones: one day at a time, the board scrolls inside its own frame ---- */
+@media (max-width: 700px) {
+    .evb-day-pills .evb-day-pill-all { display: none; }
+    .evb-day-pills .ev-grid-day-pill { padding: 8px 14px; min-height: 36px; }
+    .evb-scroller { max-height: 75vh; }
+    .evb-legend-chip { padding: 6px 10px; }
+    /* The toolbar wraps from the left here, so the menu opens rightward. */
+    .evb-share-menu { left: 0; right: auto; }
+    /* Edit mode: the head stays in the flow (stuck, it would cover a third of a
+       phone); title and save state on one row, the buttons on the next. */
+    .evb-edit-head { position: static; }
+    .evb-modebar { padding: 8px; }
+    .evb-modebar-actions { flex: 1 0 100%; margin-left: 0; }
+    .evb-modebar .evb-done { margin-left: auto; }
+    .evb-modebar .evb-modebar-btn, .evb-modebar .evb-done { height: 36px; }
+    .evb-modebar .evb-help { width: 36px; }
+    .evb-more-menu { left: 0; right: auto; }
+    .evb-bulkbar .ev-submit-btn, .evb-bulk-btn { height: 36px; }
+    .evb-quickline { padding: 8px; }
+    .evb-entry-menu { min-width: 0; width: 100%; }
+    .evb-entry-menu.evb-entry-menu-fixed,
+    .evb-type-pop .evb-entry-menu.evb-entry-menu-fixed { min-width: 0; width: calc(100vw - 16px); }
+    .evb-entry-option { padding: 9px 8px; }
+    /* A chip's x at finger size; the negative margins keep the chip's own height. */
+    .evb-entry-chips { row-gap: 10px; }
+    .evb-chip .evb-chip-x {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 28px; min-height: 28px; margin: -3px -9px -3px -2px; padding: 0;
+    }
+    /* The selected block's toolbar and category menu, at finger size. */
+    :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool { width: 36px; height: 36px; }
+    .evb-cat-menu { grid-template-columns: repeat(5, 36px); }
+    .evb-cat-menu button { width: 36px; height: 36px; line-height: 36px; }
+}
+
+/* ---- Staff tab: category leads ----
+   Each element sets --evb-cat to its category's bold colour inline; bold fills
+   carry white text in both themes. */
+.evb-staff-note { clear: both; font-size: 13px; color: var(--ork-text-secondary); }
+.evb-staff-note:not(:empty) { margin-bottom: 10px; }
+.evb-staff-leads { white-space: normal; }
+.evb-staff-none { color: var(--ork-text-muted); }
+.evb-cat-chip {
+    display: inline-block; margin: 1px 4px 1px 0; padding: 2px 8px; border-radius: 999px;
+    background: var(--evb-cat, #616161); color: #fff;
+    font-size: 11px; font-weight: 600; line-height: 1.4; white-space: nowrap;
+}
+.evb-cat-hint { margin: -2px 0 8px; font-size: 12px; color: var(--ork-text-muted); }
+.evb-cat-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.evb-cat-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border: 1px solid var(--ork-border); border-radius: 999px;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    font-size: 12px; font-weight: 600; line-height: 1.3; cursor: pointer;
+}
+.evb-cat-toggle:hover { border-color: var(--evb-cat, var(--ork-text-muted)); }
+.evb-cat-toggle:focus-visible { outline: 2px solid var(--evb-cat, #2b6cb0); outline-offset: 2px; }
+.evb-cat-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; background: var(--evb-cat, #616161); }
+.evb-cat-toggle[aria-pressed="true"] { background: var(--evb-cat, #616161); border-color: var(--evb-cat, #616161); color: #fff; }
+.evb-cat-toggle[aria-pressed="true"] .evb-cat-swatch { background: #fff; }
+/* Dark theme: a thin light ring keeps dark fills (Court's brown) apart from the
+   dark card, and the focus ring stays light enough to see. */
+html[data-theme="dark"] .evb-cat-chip,
+html[data-theme="dark"] .evb-cat-toggle[aria-pressed="true"] { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35); }
+html[data-theme="dark"] .evb-cat-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55); }
+html[data-theme="dark"] .evb-cat-toggle:focus-visible { outline-color: #e2e8f0; }
+@media (max-width: 700px) {
+    .evb-cat-toggle { min-height: 36px; padding: 6px 12px; }
+}

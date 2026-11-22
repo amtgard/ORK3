@@ -45,4 +45,9 @@ class Model_Admin extends Model
         return $this->Report->GetInactiveParks(array('KingdomId' => $kingdom_id));
     }
 
+    public function get_park_activity($kingdom_id = 0, $months = 24, $include_retired = false)
+    {
+        return $this->Report->GetParkActivity(array('KingdomId' => $kingdom_id, 'Months' => $months, 'IncludeRetired' => $include_retired ? 1 : 0));
+    }
+
 }
