@@ -2,8 +2,14 @@
 #
 # ORK3 shared pre-commit hook (versioned; activated via core.hooksPath=.githooks).
 #
-# Does three things:
+# Does four things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
+#   1b. Runs the JS unit tests (npm run test:js) when the commit stages a schedule board
+#      script (orkui/template/revised-frontend/script/event-board/) or a test under tests/js/,
+#      and blocks the commit when they fail. It skips with a note when node is missing or
+#      older than 21 (node --test expands glob patterns only from 21), or node_modules is
+#      absent, and never changes or stages a file. The tests run against the working
+#      tree, so unstaged edits to those files count too.
 #   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar.
 #      --path-mode=intersection makes the fixer honor the excludes in .php-cs-fixer.dist.php
 #      (vendor, tools, import, db-migrations, ...); without it, explicitly-passed paths bypass
@@ -17,7 +23,8 @@
 # and unstaged changes is skipped, so unstaged hunks are never swept into the commit. The
 # rewritten files are re-staged automatically.
 #
-# It never blocks a commit because of formatting (missing tools / errors only warn).
+# It never blocks a commit because of formatting (missing tools / errors only warn); only
+# failing JS unit tests (1b) block one.
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT" || exit 0
@@ -36,6 +43,45 @@ if git diff --cached --name-only | grep -q "$AUTH_FILE"; then
         echo "⚠️  class.Authorization.php was unstaged automatically — it is excluded from all commits."
     fi
 fi
+
+# ---------------------------------------------------------------------------
+# 1b. Run the JS unit tests when a schedule board script or a JS test is staged.
+#     Runs before the formatters, so a blocked commit leaves the index as step 1 left it.
+#     Read-only: it never modifies, formats or stages a file.
+# ---------------------------------------------------------------------------
+run_js_tests() {
+    git diff --cached --name-only \
+        | grep -qE '^(orkui/template/revised-frontend/script/event-board/|tests/js/)' || return 0
+
+    NODE_BIN=$(command -v node 2>/dev/null)
+    if [ -z "$NODE_BIN" ]; then
+        echo "ℹ️  node not found on PATH — skipping the JS unit tests (commit continues)."
+        return 0
+    fi
+    # test:js passes node --test a quoted glob ("tests/js/**/*.test.js"), and node --test
+    # expands glob patterns only from node 21: older, it finds no file and fails.
+    NODE_MAJOR=$("$NODE_BIN" -p 'process.versions.node.split(".")[0]' 2>/dev/null)
+    case "$NODE_MAJOR" in ''|*[!0-9]*) NODE_MAJOR=0 ;; esac
+    if [ "$NODE_MAJOR" -lt 21 ]; then
+        echo "ℹ️  node $("$NODE_BIN" --version 2>/dev/null) is older than 21 (node --test cannot expand the test glob) — skipping the JS unit tests (commit continues)."
+        return 0
+    fi
+    if [ ! -d node_modules ] || ! command -v npm >/dev/null 2>&1; then
+        echo "ℹ️  node_modules or npm missing — run 'npm install'; skipping the JS unit tests (commit continues)."
+        return 0
+    fi
+
+    JS_OUT=$(npm run --silent test:js 2>&1)
+    if [ "$?" -ne 0 ]; then
+        printf '%s\n' "$JS_OUT"
+        echo "❌ JS unit tests failed (npm run test:js) — commit blocked. Fix them, or commit with --no-verify if you must."
+        return 1
+    fi
+    echo "✅ JS unit tests pass."
+    return 0
+}
+
+run_js_tests || exit 1
 
 # Echo only the FULLY-staged files from a newline-delimited list on stdin (drop
 # any with lingering unstaged changes), warning about the partially-staged ones.

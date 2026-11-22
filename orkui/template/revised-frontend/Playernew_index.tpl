@@ -115,6 +115,8 @@
 
 	// Dues for Life flag (needed for badge + alerts)
 	$_duesForLife = is_array($Dues) && count(array_filter($Dues, function($d) { return $d['DuesForLife'] == 1; })) > 0;
+	// Expiring-soon / recently-lapsed classification (class.DuesNotice.php); null outside the window.
+	$_pnDuesNotice = DuesNotice::classify(($Player['LastDuesThrough'] ?? '') ?: ($Player['DuesThrough'] ?? ''), $_duesForLife);
 
 	// Last class used (for attendance modal default)
 	$_lastClassId = 0;
@@ -175,8 +177,12 @@
 		));
 		// Alerts
 		$_maAlerts = [];
-		$_duesThrough = $Player['DuesThrough'] ?? '';
-		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
+		// Dues: DuesThrough is the furthest *active* row so it is '' once dues lapse;
+		// LastDuesThrough is the furthest row of any age. Classify the latter.
+		$_duesThrough = ($Player['LastDuesThrough'] ?? '') ?: ($Player['DuesThrough'] ?? '');
+		if ($_pnDuesNotice !== null)
+			$_maAlerts[] = ['type'=>$_pnDuesNotice['State'] === 'lapsed' ? 'danger' : 'warning','icon'=>$_pnDuesNotice['State'] === 'lapsed' ? 'fa-exclamation-circle' : 'fa-receipt','msg'=>htmlspecialchars(DuesNotice::message($_pnDuesNotice)) . ' See your Prime Minister to renew.'];
+		elseif (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-exclamation-circle','msg'=>'Your dues have lapsed.'];
 		if (empty($Player['Waivered']))
 			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
@@ -1200,7 +1206,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
 				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
-					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
+					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid<?php if ($_pnDuesNotice !== null && $_pnDuesNotice['State'] === 'expiring'): ?><span class="pn-badge-sub"><?= $_pnDuesNotice['Days'] === 0 ? 'ends today' : ($_pnDuesNotice['Days'] . ' day' . ($_pnDuesNotice['Days'] === 1 ? '' : 's') . ' left') ?></span><?php endif; ?></span>
 				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Expired</span>
 				<?php else: ?>
@@ -2251,7 +2257,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<?php foreach ($LadderProgress as $lp): ?>
 								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+								<div class="pn-ladder-item" role="button" tabindex="0" aria-pressed="false" aria-controls="pn-awards-table"
+								     title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>"
+								     data-ladname="<?= htmlspecialchars($lp['Name']) ?>"
+								     data-awards-ids="<?= htmlspecialchars(implode(',', array_map('intval', $lp['AwardsIds'] ?? []))) ?>">
 									<div class="pn-ladder-header">
 										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
 										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
@@ -2279,6 +2288,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
+				<div class="pn-award-filter" id="pn-award-filter" hidden>
+					<span>Showing <strong class="pn-award-filter-name"></strong></span>
+					<button type="button" class="pn-award-filter-clear" aria-label="Show all awards"><i class="fas fa-times"></i> Show all</button>
+				</div>
 				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
@@ -2294,7 +2307,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					</thead>
 					<tbody>
 						<?php foreach ($filteredAwards as $detail): ?>
-							<tr>
+							<tr data-awards-id="<?= (int)$detail['AwardsId'] ?>">
 								<td class="pn-col-nowrap">
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 									<?= htmlspecialchars($displayName) ?>

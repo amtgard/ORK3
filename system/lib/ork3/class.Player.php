@@ -1592,6 +1592,7 @@ class Player extends Ork3
 
         $ladderMap = Award::GetLadderMasterMap();
         $heldAwardIds = [];
+        $heldAwardsIds = []; // AwardId => list of award row ids (AwardsId)
         foreach ($awards as $a) {
             if (!is_array($a)) {
                 continue;
@@ -1599,6 +1600,10 @@ class Player extends Ork3
             $aid = (int)($a['AwardId'] ?? 0);
             if ($aid > 0) {
                 $heldAwardIds[$aid] = true;
+                $rowId = (int)($a['AwardsId'] ?? 0);
+                if ($rowId > 0) {
+                    $heldAwardsIds[$aid][] = $rowId;
+                }
             }
         }
 
@@ -1638,6 +1643,7 @@ class Player extends Ork3
             }
 
             $rankKey = $rank;
+            $rowId = (int)($a['AwardsId'] ?? 0);
             if (!isset($progress[$aid])) {
                 $progress[$aid] = [
                     'Name' => $displayName,
@@ -1646,8 +1652,12 @@ class Player extends Ork3
                     'RankSet' => $rank > 0 ? [$rankKey => true] : [],
                     'UnrankedCount' => $rank === 0 ? 1 : 0,
                     'HasMaster' => $hasMaster,
+                    'AwardsIds' => $rowId > 0 ? [$rowId] : [],
                 ];
             } else {
+                if ($rowId > 0) {
+                    $progress[$aid]['AwardsIds'][] = $rowId;
+                }
                 if ($rank > $progress[$aid]['Rank']) {
                     $progress[$aid]['Rank'] = $rank;
                 }
@@ -1698,8 +1708,18 @@ class Player extends Ork3
 
         $tiles = [];
         foreach ($progress as $aid => $lp) {
+            // The award rows a tile click filters the awards table to: the rows the
+            // tile counted plus any Master rows (shown when a kingdom lists the
+            // Master as an award rather than a title).
+            $awardsIds = $lp['AwardsIds'] ?? [];
+            foreach ((array)($ladderMap[$aid]['MasterAwardIds'] ?? []) as $masterId) {
+                foreach ($heldAwardsIds[(int)$masterId] ?? [] as $masterAwardsId) {
+                    $awardsIds[] = $masterAwardsId;
+                }
+            }
             $tiles[] = [
                 'AwardId' => (int)$aid,
+                'AwardsIds' => $awardsIds,
                 'Name' => $lp['Name'],
                 'Short' => $lp['Short'],
                 'Rank' => (int)$lp['Rank'],
@@ -5511,6 +5531,35 @@ class Player extends Ork3
         }
 
         return ['BasicFonts' => 0, 'DyslexiaFonts' => 0];
+    }
+
+    /**
+     * Where the player stands on dues, for the expiry notice (class.DuesNotice.php):
+     * the furthest non-revoked dues-until date and whether any non-revoked lifetime
+     * row exists. One indexed query; runs on every page for the logged-in viewer,
+     * so it deliberately does not go through GetDues (two passes plus name lookups).
+     *
+     * @return array{DuesUntil: string, DuesForLife: int}  DuesUntil '' when no dues on file
+     */
+    public function GetDuesStanding(int $mundaneId): array
+    {
+        $none = ['DuesUntil' => '', 'DuesForLife' => 0];
+        if (!valid_id($mundaneId)) {
+            return $none;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT MAX(dues_until) AS dues_until, MAX(dues_for_life) AS dues_for_life FROM ' . DB_PREFIX . 'dues'
+            . ' WHERE mundane_id = ' . (int) $mundaneId . ' AND revoked = 0'
+        );
+        if ($rs && $rs->Next()) {
+            return [
+                'DuesUntil'   => (string) ($rs->dues_until ?? ''),
+                'DuesForLife' => (int) $rs->dues_for_life,
+            ];
+        }
+
+        return $none;
     }
 
     /**
