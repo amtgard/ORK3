@@ -485,8 +485,20 @@
     /* Bradley-Terry strength in rank order (#35): the server already sorted
        the options; unranked ones (too few matchups, never matched) come last
        with a null bar, their win % still in the tooltip. */
+    /* A big pairwise set (hundreds of options) would draw a chart thousands
+       of pixels tall. The server sends options strongest first, so the chart
+       shows the top PW_CHART_ROWS and a "Show more…" button opens the rest;
+       paper always gets every row. */
+    var PW_CHART_ROWS = 25;
+
+    function pwTruncated(q) {
+        var n = ((q.agg && q.agg.options) || []).length;
+        return n > PW_CHART_ROWS && !state.pwAll[q.question_id] && !state.printing;
+    }
+
     function specPairwise(q, theme) {
         var opts = ((q.agg && q.agg.options) || []).slice();
+        if (pwTruncated(q)) { opts = opts.slice(0, PW_CHART_ROWS); }
         var cfg = baseCfg(theme, 'bar');
         cfg.chart.height = barHeight(opts.length, 1);
         cfg.xAxis.categories = opts.map(function (o) { return o.label; });
@@ -960,6 +972,19 @@
        (orderFixed.pre). */
     var PW_SORTKEY_COL = 8;
 
+    /* The chart's "Show more…" / "Show fewer" toggle (empty for a short set). */
+    function pwMoreHtml(q) {
+        var n = ((q.agg && q.agg.options) || []).length;
+        if (n <= PW_CHART_ROWS || (q.agg && q.agg.suppressed)) { return ''; }
+        return '<button type="button" class="sv-btn svr-pw-more" data-pw-qid="' + q.question_id + '"' +
+            ' aria-controls="svr-chart-' + q.question_id + '" aria-expanded="' + (state.pwAll[q.question_id] ? 'true' : 'false') + '">' +
+            pwMoreLabel(q.question_id, n) + '</button>';
+    }
+
+    function pwMoreLabel(qid, n) {
+        return state.pwAll[qid] ? 'Show fewer' : 'Show more… (' + thousands(n - PW_CHART_ROWS) + ' more)';
+    }
+
     function pairwiseTableHtml(q) {
         var opts = (q.agg && q.agg.options) || [];
         var html = '<div class="svr-pw-tablewrap"><table class="display svr-pw-table" style="width:100%" ' +
@@ -1086,6 +1111,7 @@
            with the question it belongs to instead of a generic label. */
         html += '<div class="svr-chart' + (q.type === 'matrix' || q.type === 'ranking' || q.type === 'pairwise' ? ' svr-chart-tall' : '') +
             '" id="svr-chart-' + qid + '" data-qid="' + qid + '" aria-labelledby="svr-title-' + qid + '"></div>';
+        if (q.type === 'pairwise' && !hasCrosstab(q)) { html += pwMoreHtml(q); }
         html += calloutsFor(q);
         if (q.type === 'pairwise') { html += pairwiseTableHtml(q); }
 
@@ -1122,6 +1148,8 @@
         abort         : null,
         appliedFilters: null,     /* the ONLY filter set load(), the rows table and the export read (#27) */
         xtMode        : {},       /* question_id → 'pct' | 'count' (#29) */
+        pwAll         : {},       /* question_id → true: pairwise chart shows every option */
+        printing      : false,    /* beforeprint → afterprint: charts draw in full */
         summaryMode   : false,    /* Summary for sharing (#5) */
         pageRows      : [],       /* rows of the current table page, for the response panel (#36) */
         pageTotal     : 0,
@@ -2339,6 +2367,22 @@
             var more = e.target.closest ? e.target.closest('.svr-showmore') : null;
             if (more) { expandTextList(more, true); return; }
 
+            /* Pairwise chart: show every option, or back to the top rows. */
+            var pw = e.target.closest ? e.target.closest('.svr-pw-more') : null;
+            if (pw) {
+                var pwq = parseInt(pw.getAttribute('data-pw-qid'), 10);
+                var pwN = (((payloadQuestion(pwq) || {}).agg || {}).options || []).length;
+                state.pwAll[pwq] = !state.pwAll[pwq];
+                pw.setAttribute('aria-expanded', state.pwAll[pwq] ? 'true' : 'false');
+                pw.textContent = pwMoreLabel(pwq, pwN);
+                rebuildOne(pwq);
+                if (!state.pwAll[pwq]) {
+                    var card = $('svr-chart-' + pwq);
+                    if (card && card.scrollIntoView) { card.scrollIntoView({ block: 'nearest' }); }
+                }
+                return;
+            }
+
             /* Cross-tab percent / count toggle. */
             var xt = e.target.closest ? e.target.closest('.svr-xt-btn') : null;
             if (xt) {
@@ -2400,12 +2444,14 @@
         }
 
         window.addEventListener('beforeprint', function () {
+            state.printing = true;
             expandForPrint();
             if (svIsDark()) { printingLight = true; }
             buildAllCharts();
         });
 
         window.addEventListener('afterprint', function () {
+            state.printing = false;
             restoreAfterPrint();
             if (printingLight) { printingLight = false; }
             buildCharts();

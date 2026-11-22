@@ -543,7 +543,8 @@
 
 .svr-textlist li:last-child { margin-bottom: 0; }
 
-.svr-showmore { margin-top: 8px; }
+.svr-showmore,
+.svr-pw-more { margin-top: 8px; }
 
 
 /* ── Rows table ──────────────────────────────────────────── */
@@ -842,6 +843,7 @@ html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
     .rp-sidebar,
     .rp-header-actions,
     .svr-showmore,
+    .svr-pw-more,
     .svr-panel,
     .svr-csrf,
     .svr-xt-toggle,
@@ -919,7 +921,8 @@ html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
     .svr-nomatch-reset,
     .svr-filters-toggle,
     .svr-panel-nav .sv-btn,
-    .svr-showmore { min-height: 44px; }
+    .svr-showmore,
+    .svr-pw-more { min-height: 44px; }
     .svr-xt-btn { min-height: 44px; padding: 8px 12px; }
     .svr-date-clear { min-height: 44px; padding: 0 8px; }
     /* iOS zooms into any control under 16px on focus. */
