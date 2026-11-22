@@ -181,42 +181,39 @@ $_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [
 					<i class="fas fa-table"></i> Column Guide
 				</div>
 				<div class="rp-filter-card-body">
+<?php /* Keep these in the same order, under the same conditions, as the table header below. */ ?>
+<?php if (!isset($this->__session->kingdom_id)) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Kingdom</span>
+						<span class="rp-col-guide-desc">The player's kingdom; links to its page.</span>
+					</div>
+<?php endif; ?>
+<?php if (!isset($this->__session->park_id)) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Park</span>
+						<span class="rp-col-guide-desc">The player's home park; links to its page.</span>
+					</div>
+<?php endif; ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Persona</span>
 						<span class="rp-col-guide-desc">Player's in-game name; links to their profile.</span>
 					</div>
+<?php if ($_canRemoveAny) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Actions</span>
+						<span class="rp-col-guide-desc">Lift the suspension, where you have authority to do so.</span>
+					</div>
+<?php endif; ?>
+<?php if (!empty($CanViewMundane)) : ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Mundane</span>
 						<span class="rp-col-guide-desc">Player's real name, visible only to authorized users. Shows "Restricted" when hidden.</span>
 					</div>
+<?php endif; ?>
+<?php if (!$is_suspended) : ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Waivered</span>
 						<span class="rp-col-guide-desc">Whether a signed waiver is on file for this player.</span>
-					</div>
-					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Last Sign-in</span>
-						<span class="rp-col-guide-desc">Date of the player's most recent attendance record.</span>
-					</div>
-					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Suspended Until</span>
-						<span class="rp-col-guide-desc">Date through which the player is suspended. Blank if not currently suspended.</span>
-					</div>
-<?php if ($is_suspended) : ?>
-					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Propagates</span>
-						<span class="rp-col-guide-desc">Whether the suspension applies across all Kingdoms.</span>
-					</div>
-					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Suspended At</span>
-						<span class="rp-col-guide-desc">Date the suspension was recorded in the system.</span>
-					</div>
-					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Suspended By</span>
-						<span class="rp-col-guide-desc">The player responsible for the suspension — may differ from the admin who entered the record.</span>
-					</div>
-					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Comments</span>
-						<span class="rp-col-guide-desc">Reason or notes attached to the suspension.</span>
 					</div>
 <?php endif; ?>
 <?php if ($is_duespaid) : ?>
@@ -227,6 +224,34 @@ $_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Dues Through</span>
 						<span class="rp-col-guide-desc">Date through which the dues record is valid.</span>
+					</div>
+<?php endif; ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Last Sign-in</span>
+						<span class="rp-col-guide-desc">Date of the player's most recent attendance record.</span>
+					</div>
+<?php if ($is_suspended) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Suspended At</span>
+						<span class="rp-col-guide-desc">Date the suspension was recorded in the system.</span>
+					</div>
+<?php endif; ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Suspended Until</span>
+						<span class="rp-col-guide-desc">Date through which the player is suspended. Blank if not currently suspended.</span>
+					</div>
+<?php if ($is_suspended) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Propagates</span>
+						<span class="rp-col-guide-desc">Whether the suspension applies across all Kingdoms.</span>
+					</div>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Suspended By</span>
+						<span class="rp-col-guide-desc">The player responsible for the suspension — may differ from the admin who entered the record.</span>
+					</div>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Comments</span>
+						<span class="rp-col-guide-desc">Reason or notes attached to the suspension.</span>
 					</div>
 <?php endif; ?>
 				</div>
