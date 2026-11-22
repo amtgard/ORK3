@@ -681,7 +681,7 @@ class SurveyResponse
         if (defined('SURVEY_EDIT_SECRET') && '' !== (string) constant('SURVEY_EDIT_SECRET')) {
             return (string) constant('SURVEY_EDIT_SECRET');
         }
-        return hash('sha256', 'ork-survey-edit-secret|' . (defined('DB_PASSWORD') ? (string) constant('DB_PASSWORD') : ''));
+        return hash('sha256', 'ork-survey-edit:' . (defined('DB_PASSWORD') ? (string) constant('DB_PASSWORD') : ''));
     }
 
     /** A random RFC 4122 version 4 UUID, lower-case. */
