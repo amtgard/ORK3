@@ -192,6 +192,15 @@
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		}
+		if ($isOwnProfile && !empty($SurveyAvailable)) {
+			// Open surveys the player can answer; the card itself sits at the foot
+			// of the sidebar so it does not outrank their own data.
+			$_svN = count($SurveyAvailable);
+			$_svC = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); }));
+			$_svMsg = $_svN === 1 ? 'A survey is waiting for you' : "{$_svN} surveys are waiting for you";
+			if ($_svC > 0) { $_svMsg .= $_svC === $_svN ? ($_svN === 1 ? ', and it earns bonus credit' : ', and they earn bonus credit') : ", {$_svC} of them earn" . ($_svC === 1 ? 's' : '') . " bonus credit"; }
+			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>$_svMsg . '.','actionLabel'=>$_svN === 1 ? 'Take it.' : 'View surveys.','actionOnclick'=>"document.getElementById('pna-surveys-body').scrollIntoView({behavior:'smooth',block:'start'});return false;"];
+		}
 		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
 ?>
@@ -313,7 +322,28 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-feed-label a{color:#2d3748;text-decoration:none}
 .pna-feed-label a:hover{text-decoration:underline}
 .pna-feed-sub{flex-shrink:0;color:var(--ork-text-muted);font-size:11px}
+/* Survey rows carry a full kingdom name in .pna-feed-sub, which the other feeds
+   never do; on one baseline row that un-shrinkable subtitle crushes the title
+   (the only flexible child) to 0-28px. Stack them instead. */
+.pna-survey-row{flex-direction:column;align-items:stretch;gap:2px}
+.pna-survey-row .pna-feed-label{flex:0 0 auto;white-space:normal;overflow:visible;text-overflow:clip}
+.pna-survey-meta{display:flex;align-items:center;gap:8px;min-height:44px}
+.pna-survey-meta .pna-feed-sub{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+/* The close date is the only token in the subtitle that drives a decision, so
+   it never ellipsizes: the scope name (which the player already knows) is the
+   one allowed to truncate at 320px. */
+.pna-survey-meta .pna-survey-scope{flex:0 1 auto}
+.pna-survey-meta .pna-survey-close{flex:0 0 auto;overflow:visible;text-overflow:clip}
+/* The generic .pna-feed-sub is display:none under 420px; the survey row is the
+   mobile entry point for the module and its scope + close date is the whole
+   subtitle, so it stays visible (two-class rule wins the cascade). */
+.pna-survey-cta{margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;font-size:12px;color:var(--ork-link);text-decoration:none}
+.pna-survey-cta:hover{text-decoration:underline}
 .pna-feed-rank{display:inline-block;background:#e9d8fd;color:#553c9a;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;vertical-align:middle}
+/* The row is a column flex box, so the chip sits on its own line under the
+   title and must not stretch to the full width. Hover surface + border
+   tokens both swap in dark mode, so the pill edge shows on either card. */
+.pna-survey-credit{display:inline-flex;align-self:flex-start;align-items:center;gap:4px;padding:1px 8px;border:1px solid var(--ork-border);border-radius:8px;font-size:11px;font-weight:600;background:var(--ork-surface-hover);color:var(--ork-text-secondary)}
 .pna-feed-more{font-size:11px;color:var(--ork-text-muted);padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
@@ -1662,6 +1692,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<?php endforeach; ?>
 						</div>
 						<?php endif; ?>
+
+						<!-- Available Surveys: last in the column so it never pushes the
+						     player's own data down; the alerts strip above points here. -->
+						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* shared card, see _survey_available_card.tpl */
+							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
+							include __DIR__ . '/_survey_available_card.tpl';
+						endif; ?></div>
 
 					</div><!-- /.pna-sidebar -->
 
@@ -7793,6 +7830,8 @@ $(function() {
 
 			// ---- My Amtgard sections (own profile only) ----
 			if (!PnConfig.isOwnProfile) return;
+
+			// Available Surveys: rendered server-side into #pna-surveys-body (no fetch).
 
 			// Class Progress
 			var cpBody = document.getElementById('pna-class-progress-body');
