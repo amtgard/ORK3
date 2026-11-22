@@ -460,7 +460,9 @@ class SurveyResponse
     /**
      * How many players the survey's audience rules currently admit: the
      * set-based mirror of eligibility() without the schedule/status and "already
-     * completed" checks. Used for the results page's response rate.
+     * completed" checks. Used for the results page's response rate. A survey
+     * with no audience rule at all is counted as if it had a 12-month recent
+     * sign-in rule, so the rate is measured against players still playing.
      *
      * @param array<string, mixed> $surveyRow raw ork_survey row
      */
@@ -515,6 +517,19 @@ class SurveyResponse
         }
 
         $recentMonths = (int) ($surveyRow['audience_recent_months'] ?? 0);
+        // No audience rule narrows the survey, so every player ever homed in
+        // the scope "qualifies" — decades of lapsed accounts that sink the
+        // response rate to <0.1%. (Active-only is on by default and barely
+        // narrows anything, so it does not count as a rule here.) With no
+        // event, recent-attendance or tenure rule, count the players with a
+        // sign-in inside the scope (park / kingdom + principalities /
+        // anywhere for Amtgard-wide) in the past year: the same rule as a
+        // 12-month recent-attendance audience. The count only — eligibility()
+        // is unchanged, so anyone in scope can still answer.
+        if ($recentMonths <= 0 && $eventId <= 0
+                && (int) ($surveyRow['audience_min_tenure_months'] ?? 0) <= 0) {
+            $recentMonths = 12;
+        }
         if ($recentMonths > 0) {
             $where[] = 'EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'attendance ar
                                 WHERE ar.mundane_id = m.mundane_id
