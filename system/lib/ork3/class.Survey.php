@@ -66,6 +66,7 @@ class Survey
         'ShowBanner'               => ['show_banner', 'bool'],
         'ShowProgress'             => ['show_progress', 'bool'],
         'AllowResume'              => ['allow_resume', 'bool'],
+        'AllowEdit'                => ['allow_edit', 'bool'],
         'AccentColor'              => ['accent_color', 'color'],
     ];
 
@@ -1072,6 +1073,12 @@ class Survey
             $this->purgeDrafts($surveyId);
         }
 
+        // Turning editing off ends every respondent's way back in, so the
+        // response-to-player link kept for it goes now (update-answers design).
+        if (array_key_exists('AllowEdit', $fields) && !$this->truthy($fields['AllowEdit'])) {
+            (new SurveyResponse())->sweepEditKeys($surveyId);
+        }
+
         // The survey's bonus-credit category is named after it ("Survey Bonus -
         // {title}"), so a renamed survey renames its credit.
         if ($sets && array_key_exists('Title', $fields)) {
@@ -1227,6 +1234,9 @@ class Survey
             // answers are unreachable — and they are identified and stored
             // BEFORE the consent screen, so they must not outlive the survey.
             $this->purgeDrafts($surveyId);
+            // Likewise the edit link from each response to its player: it
+            // exists only so a respondent can change answers while open.
+            (new SurveyResponse())->sweepEditKeys($surveyId);
         } else {
             $this->purgeStaleDrafts($surveyId);
         }
@@ -1297,13 +1307,13 @@ class Survey
              (scope_type, scope_id, title, slug, description, welcome_md, thanks_md, status,
               open_at, close_at, audience_kingdom_ids, audience_active_only, audience_min_tenure_months,
               audience_recent_months, audience_event_calendardetail_id,
-              data_gate_enabled, results_share, results_share_timing, show_banner, show_progress, allow_resume, accent_color,
+              data_gate_enabled, results_share, results_share_timing, show_banner, show_progress, allow_resume, allow_edit, accent_color,
               created_by, updated_by, created_at, updated_at)
              SELECT scope_type, scope_id, \'' . $this->esc($title) . '\', \'' . $this->esc($slug) . '\',
                     description, welcome_md, thanks_md, \'draft\',
                     NULL, NULL, audience_kingdom_ids, audience_active_only, audience_min_tenure_months,
                     audience_recent_months, NULL,
-                    data_gate_enabled, results_share, results_share_timing, 1, show_progress, allow_resume, accent_color,
+                    data_gate_enabled, results_share, results_share_timing, 1, show_progress, allow_resume, allow_edit, accent_color,
                     ' . (int) $uid . ', ' . (int) $uid . ', ' . self::nowSql() . ', ' . self::nowSql() . '
              FROM ' . DB_PREFIX . 'survey WHERE survey_id = ' . $surveyId
         );

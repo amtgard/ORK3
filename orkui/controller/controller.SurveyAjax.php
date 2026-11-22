@@ -53,7 +53,7 @@ class Controller_SurveyAjax extends Controller
         'Title', 'Description', 'WelcomeMd', 'WelcomeImageId', 'ThanksMd', 'ThanksImageId',
         'OpenAt', 'CloseAt', 'AudienceActiveOnly', 'AudienceMinTenureMonths',
         'AudienceRecentMonths', 'AudienceEventCalendardetailId',
-        'DataGateEnabled', 'ResultsShare', 'ResultsShareTiming', 'ShowBanner', 'ShowProgress', 'AllowResume', 'AccentColor',
+        'DataGateEnabled', 'ResultsShare', 'ResultsShareTiming', 'ShowBanner', 'ShowProgress', 'AllowResume', 'AllowEdit', 'AccentColor',
     ];
 
     public function __construct($call = null, $id = null)

@@ -537,6 +537,9 @@ class SurveyReport
      */
     public function resultsFor(int $surveyId, $filters, array $access): array
     {
+        // A date-based close has no status change to hang the edit-link wipe
+        // on, so the results read does it (update-answers design: lazy sweep).
+        (new SurveyResponse())->sweepEditKeys((int)$surveyId);
         if (($access['level'] ?? null) !== 'manage') {
             // Fail closed: an empty lens would read like a manager's (no
             // kingdom/park restriction, test rows and dates allowed, nothing
@@ -2226,6 +2229,7 @@ class SurveyReport
     public function csvStream(int $surveyId, array $filters, callable $emit, int $actorId = 0): void
     {
         $surveyId = (int)$surveyId;
+        (new SurveyResponse())->sweepEditKeys($surveyId);   // lazy date-close sweep, as resultsFor()
         $f = self::clientFilters($filters);   // manager path: lens-only keys dropped
         // Audit every export that can carry identity or demographics (#6); an
         // anonymous-only export carries neither.
