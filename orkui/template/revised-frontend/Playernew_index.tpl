@@ -448,10 +448,14 @@ html[data-theme="dark"] .pn-acct-field input[type="url"],
 html[data-theme="dark"] .pn-acct-field input[type="password"],
 html[data-theme="dark"] .pn-acct-field select,
 html[data-theme="dark"] .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-/* Light mode sets the cards off the white panel with --ork-bg-inset, which
-   is the panel colour in dark mode; --ork-bg-tertiary is dark mode's one-step-up
+/* Profile cards (My Amtgard dashboard, About tab sidebar + My Story quote):
+   light mode sets them off the white panel with --ork-bg-inset, which is the
+   panel colour in dark mode; --ork-bg-tertiary is dark mode's one-step-up
    layer (the same token every other nested dark surface uses). */
-html[data-theme="dark"] .pna-card { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-card,
+html[data-theme="dark"] .pn-belt-card,
+html[data-theme="dark"] .pn-cms-card { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-tertiary); } /* keeps its accent left border */
 html[data-theme="dark"] .pna-card-title { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-tenure-years { color: var(--ork-link); }
 html[data-theme="dark"] .pna-tenure-label,
@@ -875,11 +879,10 @@ html[data-theme="dark"] .pn-about-content h3,
 html[data-theme="dark"] .pn-about-content h4,
 html[data-theme="dark"] .pn-about-content h5,
 html[data-theme="dark"] .pn-about-content h6 { color: var(--ork-text); }
-html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-secondary); color: var(--ork-text-muted); /* --pn-accent flows through from light rule */ }
+html[data-theme="dark"] .pn-about-content blockquote { color: var(--ork-text-muted); /* background: the profile-cards rule; --pn-accent flows through from the light rule */ }
 html[data-theme="dark"] .pn-about-content code { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-about-content pre { background: #1a202c; color: #e2e8f0; }
 html[data-theme="dark"] .pn-about-empty { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pn-belt-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-belt-card-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-belt-group { color: var(--ork-text-muted); border-top-color: var(--ork-border); }
 html[data-theme="dark"] .pn-belt-title { color: var(--ork-text-muted); }
@@ -1017,7 +1020,6 @@ html[data-theme="dark"] .pn-dm-hint i { color: var(--ork-link-bright); }
 html[data-theme="dark"] .pn-dm-hint strong { color: var(--ork-text); }
 
 /* Currently-active milestones summary card */
-html[data-theme="dark"] .pn-cms-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
