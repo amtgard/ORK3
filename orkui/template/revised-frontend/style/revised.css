@@ -696,6 +696,41 @@ html[data-theme="dark"] .pn-ladder-name { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ladder-rank { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-ladder-rank strong { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
+/* Tile click filters the awards table to that ladder's rows */
+.pn-ladder-item[role="button"] { cursor: pointer; }
+.pn-ladder-item[role="button"]:hover { border-color: var(--ork-link-bright); }
+.pn-ladder-item[role="button"]:focus-visible { outline: 2px solid var(--ork-link-bright); outline-offset: 1px; }
+.pn-ladder-item[aria-pressed="true"],
+html[data-theme="dark"] .pn-ladder-item[aria-pressed="true"] {
+    border-color: var(--ork-link);
+    box-shadow: inset 0 0 0 1px var(--ork-link);
+}
+.pn-award-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: var(--ork-text-muted);
+}
+.pn-award-filter[hidden] { display: none; }
+.pn-award-filter strong { color: var(--ork-text); }
+.pn-award-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ork-link);
+    background: var(--ork-bg-inset);
+    border: 1px solid var(--ork-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+.pn-award-filter-clear:hover { border-color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-award-filter-clear { background: var(--ork-bg-secondary); }
 .pn-ladder-bar-track {
     height: 6px;
     background: #e2e8f0;
@@ -979,7 +1014,7 @@ html[data-theme="dark"] .pn-rec-field label { color: var(--ork-text); }
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
 }
-.pn-confirm-message { margin: 0; font-size: 14px; color: var(--ork-text-secondary); }
+.pn-confirm-message { margin: 0; font-size: 14px; color: var(--ork-text-secondary); white-space: pre-line; }
 .pn-modal-footer {
     padding: 14px 20px;
     border-top: 1px solid var(--ork-divider);
@@ -3079,7 +3114,9 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.5);
-    z-index: 1200;
+    /* Above every modal (--z-modal 10100): a confirm raised from inside one, e.g.
+       the schedule form's Delete, was opening behind it at the old 1200. */
+    z-index: var(--z-modal-top, 10200);
     align-items: center;
     justify-content: center;
     padding: 20px;

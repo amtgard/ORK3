@@ -539,8 +539,19 @@
 		<!-- Map Widget -->
 		<?php if (!is_null($parkLat)): ?>
 		<div class="pk-card" style="padding:0;overflow:hidden;border-radius:10px;">
-			<?php // JS-API pin map (not an embed iframe) so touch devices pan with one finger — see .ork-pin-map in revised.js ?>
-			<div class="ork-pin-map" role="region" aria-label="Park location map" data-lat="<?= $parkLat ?>" data-lng="<?= $parkLng ?>" data-zoom="11" style="height:200px"></div>
+			<?php // Embed iframe, not a JS-API map: embeds are free, JS-API map loads
+			      // bill against the Dynamic Maps SKU once past 10,000 a month, and park
+			      // pages alone blew through that in late October 2026. Two-finger
+			      // panning on touch is the price until the nonprofit Maps credit is in place. ?>
+			<iframe
+				src="https://maps.google.com/maps?q=<?= $parkLat ?>,<?= $parkLng ?>&output=embed&z=11"
+				width="100%"
+				height="200"
+				style="border:0;display:block"
+				allowfullscreen=""
+				loading="lazy"
+				referrerpolicy="no-referrer-when-downgrade">
+			</iframe>
 		</div>
 		<?php endif; ?>
 
@@ -582,6 +593,17 @@
 				<?php endif; ?>
 			</ul>
 		</div>
+
+		<?php
+		// Available Surveys: this park's, its kingdom's and Amtgard-wide ones
+		// the viewer is eligible for (SurveyAvailable is empty when logged out).
+		$_svcRows = array_values(array_filter($SurveyAvailable ?? [], function ($s) use ($park_id, $kingdom_id) {
+			$t  = (string) ($s['scope_type'] ?? '');
+			$id = (int) ($s['scope_id'] ?? 0);
+			return $t === 'ork' || ($t === 'kingdom' && $id === (int) $kingdom_id) || ($t === 'park' && $id === (int) $park_id);
+		}));
+		if ($_svcRows) { $_svcWrap = 'pk-card'; $_svcHead = 'pk'; include __DIR__ . '/_survey_available_card.tpl'; }
+		?>
 
 	</aside>
 
@@ -1314,6 +1336,12 @@
 							<li><a href="<?= UIR ?>Scrollery/bulk/park/<?= $park_id ?>">Print Bulk Scrolls</a></li>
 						</ul>
 					</div>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-poll"></i> Surveys</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Survey/index/Park/<?= $park_id ?>">Manage Surveys</a></li>
+						</ul>
+					</div>
 				</div>
 				<?php endif; ?>
 
@@ -1906,6 +1934,7 @@ var PkConfig = {
 	canManage:      <?= !empty($CanManagePark) ? 'true' : 'false' ?>,
 	canAdmin:       <?= !empty($CanAdminPark)  ? 'true' : 'false' ?>,
 	loggedIn:       <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
+	viewerId:       <?= (int)($CurrentUserId ?? 0) ?>,
 	calEvents:      <?= json_encode(array_values($pkCalEvents ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	calParkDays:    <?= json_encode(array_values($pkCalParkDays ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
@@ -2915,7 +2944,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 		</div>
 		<div class="pk-modal-body">
 			<div id="pk-editoff-feedback" class="pk-editoff-feedback" style="display:none"></div>
-			<p class="pk-editoff-hint">Search for a player to assign to each role, or click Vacate to remove the current officer.</p>
+			<p class="pk-editoff-hint">Search for a player to assign to each role; picking someone for an occupied role replaces the current officer when you save, so there is no need to vacate first. <strong>Vacate</strong> empties the role immediately and ends that officer's access, including your own if it is your role.</p>
 			<div id="pk-editoff-rows"></div>
 		</div>
 		<div class="pk-modal-footer">

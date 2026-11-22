@@ -285,6 +285,12 @@ final class EventOccurrenceTest extends TestCase
         $ctx = $this->fixture->createPublishedEvent('dietary');
         $player = $this->fixture->createPlayer('diet-player');
         $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
+        // Nightshades was added after the other allergens and once fell out of the summary query.
+        $this->fixture->insertDietary($player, [
+            'is_anonymous' => 0,
+            'allergen_shellfish' => 1,
+            'allergen_nightshades' => 2,
+        ]);
         $feast = $this->fixture->createGrantorWithoutAuth('c11-feast');
         $this->fixture->insertStaff(
             $ctx['detail_id'],
@@ -326,6 +332,9 @@ final class EventOccurrenceTest extends TestCase
         $this->assertSame(0, $summary['Status']['Status']);
         $this->assertNotEmpty($summary['Items']);
         $this->assertSame($player, $summary['Items'][0]['MundaneId']);
+        $this->assertTrue($summary['Items'][0]['HasPrefs']);
+        $this->assertSame(1, $summary['Items'][0]['AllergenShellfish']);
+        $this->assertSame(2, $summary['Items'][0]['AllergenNightshades']);
     }
 
     public function testDraftOccurrenceHiddenFromAnonymous(): void

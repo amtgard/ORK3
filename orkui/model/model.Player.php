@@ -554,6 +554,12 @@ class Model_Player extends Model
         return $this->_player()->GetWhatsNewSeen($mundane_id, $version);
     }
 
+    /** @return array{DuesUntil: string, DuesForLife: int} */
+    public function get_dues_standing(int $mundane_id): array
+    {
+        return $this->_player()->GetDuesStanding($mundane_id);
+    }
+
     /** @return array{KingdomId: int, ParentKingdomId: int} */
     public function get_home_kingdom(int $mundane_id): array
     {

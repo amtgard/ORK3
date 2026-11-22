@@ -72,3 +72,7 @@ ga-service-account.json
 
 # Signed legal originals stay off the repository.
 docs/licenses/*.pdf
+assets/survey/*
+!assets/survey/.gitkeep
+# PHPUnit's survey image folder (config.test.php) — created by tests/bootstrap.php
+assets/survey-test/

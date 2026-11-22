@@ -87,6 +87,26 @@ final class PlayerProfileFixture
         ];
     }
 
+    /** A dues row for the player; revoked rows and lifetime rows are both reachable. */
+    public function insertDues(int $mundaneId, int $parkId, int $kingdomId, string $duesUntil, int $forLife = 0, int $revoked = 0): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'dues (mundane_id, kingdom_id, park_id, created_on, created_by, dues_from, terms, dues_until, dues_for_life, revoked)'
+            . ' VALUES (:mid, :kid, :pid, CURDATE(), :mid, :from, 6, :until, :dfl, :revoked)'
+        );
+        $stmt->execute([
+            ':mid' => $mundaneId,
+            ':kid' => $kingdomId,
+            ':pid' => $parkId,
+            ':from' => date('Y-m-d', strtotime($duesUntil . ' -6 months')),
+            ':until' => $duesUntil,
+            ':dfl' => $forLife,
+            ':revoked' => $revoked,
+        ]);
+
+        return (int) $this->pdo->lastInsertId();
+    }
+
     public function insertNote(int $mundaneId, string $body = 'Imported note'): int
     {
         $stmt = $this->pdo->prepare(
@@ -221,6 +241,7 @@ final class PlayerProfileFixture
         foreach ($this->mundaneIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'dues WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $id);
         }
     }

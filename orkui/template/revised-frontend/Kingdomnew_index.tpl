@@ -322,6 +322,16 @@
 			</ul>
 		</div>
 
+		<?php
+		// Available Surveys: this kingdom's and Amtgard-wide ones the viewer is
+		// eligible for (SurveyAvailable is empty for a logged-out visitor).
+		$_svcRows = array_values(array_filter($SurveyAvailable ?? [], function ($s) use ($kingdom_id) {
+			$t = (string) ($s['scope_type'] ?? '');
+			return $t === 'ork' || ($t === 'kingdom' && (int) ($s['scope_id'] ?? 0) === (int) $kingdom_id);
+		}));
+		if ($_svcRows) { $_svcWrap = 'kn-card'; $_svcHead = 'kn'; include __DIR__ . '/_survey_available_card.tpl'; }
+		?>
+
 	</div>
 
 	<!-- ========== MAIN CONTENT (Tabbed) ========== -->
@@ -942,6 +952,12 @@
 						<li><a href="<?= UIR ?>Scrollery/bulk/kingdom/<?= $kingdom_id ?>">Print Bulk Scrolls</a></li>
 					</ul>
 				</div>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-poll"></i> Surveys</h5>
+					<ul>
+						<li><a href="<?= UIR ?>Survey/index/Kingdom/<?= $kingdom_id ?>">Manage Surveys</a></li>
+					</ul>
+				</div>
 				<?php endif; ?>
 				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
 				<div class="kn-report-group">
@@ -1360,6 +1376,7 @@ var KnConfig = {
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
+	viewerId:         <?= (int)($CurrentUserId ?? 0) ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1922,7 +1939,7 @@ var KnBannerConfig = {
 		</div>
 		<div class="kn-modal-body">
 			<div id="kn-editoff-feedback" style="display:none"></div>
-			<p class="kn-editoff-hint">Search and select a player for each role. Leave a field empty to skip that role. Use <strong>Vacate</strong> to remove the current holder.</p>
+			<p class="kn-editoff-hint">Search and select a player for each role; picking someone for an occupied role replaces the current holder when you save, so there is no need to vacate first. Leave a field empty to skip that role. <strong>Vacate</strong> empties the role immediately and ends that officer's access, including your own if it is your role.</p>
 			<div id="kn-editoff-rows">
 				<!-- Built by JS from KnConfig.officerList -->
 			</div>

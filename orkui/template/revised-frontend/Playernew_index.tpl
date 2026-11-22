@@ -115,6 +115,8 @@
 
 	// Dues for Life flag (needed for badge + alerts)
 	$_duesForLife = is_array($Dues) && count(array_filter($Dues, function($d) { return $d['DuesForLife'] == 1; })) > 0;
+	// Expiring-soon / recently-lapsed classification (class.DuesNotice.php); null outside the window.
+	$_pnDuesNotice = DuesNotice::classify(($Player['LastDuesThrough'] ?? '') ?: ($Player['DuesThrough'] ?? ''), $_duesForLife);
 
 	// Last class used (for attendance modal default)
 	$_lastClassId = 0;
@@ -175,8 +177,12 @@
 		));
 		// Alerts
 		$_maAlerts = [];
-		$_duesThrough = $Player['DuesThrough'] ?? '';
-		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
+		// Dues: DuesThrough is the furthest *active* row so it is '' once dues lapse;
+		// LastDuesThrough is the furthest row of any age. Classify the latter.
+		$_duesThrough = ($Player['LastDuesThrough'] ?? '') ?: ($Player['DuesThrough'] ?? '');
+		if ($_pnDuesNotice !== null)
+			$_maAlerts[] = ['type'=>$_pnDuesNotice['State'] === 'lapsed' ? 'danger' : 'warning','icon'=>$_pnDuesNotice['State'] === 'lapsed' ? 'fa-exclamation-circle' : 'fa-receipt','msg'=>htmlspecialchars(DuesNotice::message($_pnDuesNotice)) . ' See your Prime Minister to renew.'];
+		elseif (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-exclamation-circle','msg'=>'Your dues have lapsed.'];
 		if (empty($Player['Waivered']))
 			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
@@ -185,6 +191,15 @@
 		elseif ($passwordSoon) {
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
+		}
+		if ($isOwnProfile && !empty($SurveyAvailable)) {
+			// Open surveys the player can answer; the card itself sits at the foot
+			// of the sidebar so it does not outrank their own data.
+			$_svN = count($SurveyAvailable);
+			$_svC = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); }));
+			$_svMsg = $_svN === 1 ? 'A survey is waiting for you' : "{$_svN} surveys are waiting for you";
+			if ($_svC > 0) { $_svMsg .= $_svC === $_svN ? ($_svN === 1 ? ', and it earns bonus credit' : ', and they earn bonus credit') : ", {$_svC} of them earn" . ($_svC === 1 ? 's' : '') . " bonus credit"; }
+			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>$_svMsg . '.','actionLabel'=>$_svN === 1 ? 'Take it.' : 'View surveys.','actionOnclick'=>"document.getElementById('pna-surveys-body').scrollIntoView({behavior:'smooth',block:'start'});return false;"];
 		}
 		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
@@ -307,7 +322,28 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-feed-label a{color:#2d3748;text-decoration:none}
 .pna-feed-label a:hover{text-decoration:underline}
 .pna-feed-sub{flex-shrink:0;color:var(--ork-text-muted);font-size:11px}
+/* Survey rows carry a full kingdom name in .pna-feed-sub, which the other feeds
+   never do; on one baseline row that un-shrinkable subtitle crushes the title
+   (the only flexible child) to 0-28px. Stack them instead. */
+.pna-survey-row{flex-direction:column;align-items:stretch;gap:2px}
+.pna-survey-row .pna-feed-label{flex:0 0 auto;white-space:normal;overflow:visible;text-overflow:clip}
+.pna-survey-meta{display:flex;align-items:center;gap:8px;min-height:44px}
+.pna-survey-meta .pna-feed-sub{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+/* The close date is the only token in the subtitle that drives a decision, so
+   it never ellipsizes: the scope name (which the player already knows) is the
+   one allowed to truncate at 320px. */
+.pna-survey-meta .pna-survey-scope{flex:0 1 auto}
+.pna-survey-meta .pna-survey-close{flex:0 0 auto;overflow:visible;text-overflow:clip}
+/* The generic .pna-feed-sub is display:none under 420px; the survey row is the
+   mobile entry point for the module and its scope + close date is the whole
+   subtitle, so it stays visible (two-class rule wins the cascade). */
+.pna-survey-cta{margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;font-size:12px;color:var(--ork-link);text-decoration:none}
+.pna-survey-cta:hover{text-decoration:underline}
 .pna-feed-rank{display:inline-block;background:#e9d8fd;color:#553c9a;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;vertical-align:middle}
+/* The row is a column flex box, so the chip sits on its own line under the
+   title and must not stretch to the full width. Hover surface + border
+   tokens both swap in dark mode, so the pill edge shows on either card. */
+.pna-survey-credit{display:inline-flex;align-self:flex-start;align-items:center;gap:4px;padding:1px 8px;border:1px solid var(--ork-border);border-radius:8px;font-size:11px;font-weight:600;background:var(--ork-surface-hover);color:var(--ork-text-secondary)}
 .pna-feed-more{font-size:11px;color:var(--ork-text-muted);padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
@@ -1179,7 +1215,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
 				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
-					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
+					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid<?php if ($_pnDuesNotice !== null && $_pnDuesNotice['State'] === 'expiring'): ?><span class="pn-badge-sub"><?= $_pnDuesNotice['Days'] === 0 ? 'ends today' : ($_pnDuesNotice['Days'] . ' day' . ($_pnDuesNotice['Days'] === 1 ? '' : 's') . ' left') ?></span><?php endif; ?></span>
 				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Expired</span>
 				<?php else: ?>
@@ -1656,6 +1692,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<?php endforeach; ?>
 						</div>
 						<?php endif; ?>
+
+						<!-- Available Surveys: last in the column so it never pushes the
+						     player's own data down; the alerts strip above points here. -->
+						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* shared card, see _survey_available_card.tpl */
+							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
+							include __DIR__ . '/_survey_available_card.tpl';
+						endif; ?></div>
 
 					</div><!-- /.pna-sidebar -->
 
@@ -2221,7 +2264,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<?php foreach ($LadderProgress as $lp): ?>
 								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+								<div class="pn-ladder-item" role="button" tabindex="0" aria-pressed="false" aria-controls="pn-awards-table"
+								     title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>"
+								     data-ladname="<?= htmlspecialchars($lp['Name']) ?>"
+								     data-awards-ids="<?= htmlspecialchars(implode(',', array_map('intval', $lp['AwardsIds'] ?? []))) ?>">
 									<div class="pn-ladder-header">
 										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
 										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
@@ -2249,6 +2295,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
+				<div class="pn-award-filter" id="pn-award-filter" hidden>
+					<span>Showing <strong class="pn-award-filter-name"></strong></span>
+					<button type="button" class="pn-award-filter-clear" aria-label="Show all awards"><i class="fas fa-times"></i> Show all</button>
+				</div>
 				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
@@ -2264,7 +2314,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					</thead>
 					<tbody>
 						<?php foreach ($filteredAwards as $detail): ?>
-							<tr>
+							<tr data-awards-id="<?= (int)$detail['AwardsId'] ?>">
 								<td class="pn-col-nowrap">
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 									<?= htmlspecialchars($displayName) ?>
@@ -7904,6 +7954,8 @@ $(function() {
 
 			// ---- My Amtgard sections (own profile only) ----
 			if (!PnConfig.isOwnProfile) return;
+
+			// Available Surveys: rendered server-side into #pna-surveys-body (no fetch).
 
 			// Class Progress
 			var cpBody = document.getElementById('pna-class-progress-body');

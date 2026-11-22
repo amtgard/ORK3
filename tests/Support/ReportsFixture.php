@@ -25,6 +25,9 @@ final class ReportsFixture
     private array $officerIds = [];
 
     /** @var list<int> */
+    private array $eventIds = [];
+
+    /** @var list<int> */
     private array $authIds = [];
 
     /** @var list<int> */
@@ -149,7 +152,7 @@ final class ReportsFixture
         return $id;
     }
 
-    public function insertAttendance(int $mundaneId, int $parkId, int $kingdomId, string $date): int
+    public function insertAttendance(int $mundaneId, int $parkId, int $kingdomId, string $date, int $eventId = 0): int
     {
         $classId = (int) $this->pdo->query(
             'SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id ASC LIMIT 1'
@@ -163,7 +166,7 @@ final class ReportsFixture
             'INSERT INTO ' . DB_PREFIX . 'attendance
              (park_id, kingdom_id, mundane_id, persona, class_id, date, credits, note, flavor, by_whom_id,
               entered_at, entry_method, event_id, event_calendardetail_id, date_year, date_month, date_week3, date_week6)
-             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', 0, 0, ?, ?, ?, 0)'
+             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', ?, 0, ?, ?, ?, 0)'
         );
         $stmt->execute([
             $parkId,
@@ -173,12 +176,42 @@ final class ReportsFixture
             $classId,
             $date,
             $mundaneId,
+            $eventId,
             (int) date('Y', $timestamp),
             (int) date('n', $timestamp),
             (int) date('W', $timestamp),
         ]);
         $id = (int) $this->pdo->lastInsertId();
         $this->attendanceIds[] = $id;
+
+        return $id;
+    }
+
+    /**
+     * A Kingdom-sponsored event: filed under the kingdom with no park.
+     */
+    public function insertKingdomEvent(int $kingdomId, int $ownerMundaneId, string $suffix = 'event'): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'event (kingdom_id, park_id, mundane_id, unit_id, name, status)
+             VALUES (?, 0, ?, 1, ?, \'published\')'
+        );
+        $stmt->execute([$kingdomId, $ownerMundaneId, self::MARKER . ' ' . $suffix]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->eventIds[] = $id;
+
+        return $id;
+    }
+
+    public function insertOfficer(int $mundaneId, int $kingdomId, int $parkId, string $role = 'Regent'): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'officer (kingdom_id, park_id, mundane_id, role, system, authorization_id)
+             VALUES (?, ?, ?, ?, 0, 0)'
+        );
+        $stmt->execute([$kingdomId, $parkId, $mundaneId, $role]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->officerIds[] = $id;
 
         return $id;
     }
@@ -409,6 +442,12 @@ final class ReportsFixture
             $in = implode(',', array_map('intval', $this->attendanceIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "attendance WHERE attendance_id IN ({$in})");
             $this->attendanceIds = [];
+        }
+
+        if ($this->eventIds !== []) {
+            $in = implode(',', array_map('intval', $this->eventIds));
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "event WHERE event_id IN ({$in})");
+            $this->eventIds = [];
         }
 
         if ($this->mundaneIds !== []) {
