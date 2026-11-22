@@ -62,6 +62,11 @@ test('days', () => {
   assert.deepEqual(pick(p('Saturday:'), ['ok', 'setDay']), [false, '2026-11-21']);
   assert.deepEqual(pick(p('fri'), ['ok', 'setDay']), [false, '2026-11-20']);
   assert.deepEqual(pick(p('sat 9a'), ['ok', 'setDay']), [false, null]);
+  // A leading '#tag' does not hide the day word behind it.
+  assert.deepEqual(pick(p('#bg sun clean'), ['day', 'title', 'category']), ['2026-11-22', 'clean', 'Battlegame']);
+  assert.equal(p('#bg sun clean').given.day, true);
+  assert.deepEqual(pick(p('#bg sun 9a clean'), ['day', 'startMin', 'title']), ['2026-11-22', 540, 'clean']);
+  assert.deepEqual(pick(p('#bg Troll every day'), ['title']), ['Troll']);
 });
 test('inside a block the day is fixed and the block keeps its length', () => {
   const blk = { fixedDay: '2026-11-21', fixedStart: 720, fixedEnd: 765 };

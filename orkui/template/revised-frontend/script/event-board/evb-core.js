@@ -1525,17 +1525,23 @@
         // A day word leading such a line is the line's too, not title text:
         // with 'every day' it says nothing more ('Fri 9a Troll every day' is
         // still every day); with a list it joins the list ('Fri 9a Troll, Sat & Sun').
-        if (multi && isWord(toks[0]) && dayOf(toks[0].value)) {
-            if (!multi.every) multi.days = uniqueDays(multi.days.concat([dayOf(toks[0].value)]));
-            toks[0].claimed = true;
+        var lead0 = 0;
+        while (lead0 < toks.length && toks[lead0].kind === 'tag') lead0++;
+        if (multi && isWord(toks[lead0]) && dayOf(toks[lead0].value)) {
+            if (!multi.every) multi.days = uniqueDays(multi.days.concat([dayOf(toks[lead0].value)]));
+            toks[lead0].claimed = true;
         }
 
-        // Day: only the first token.
+        // Day: only the first token, read past any leading '#tag' ('#bg sun ditch'
+        // is Sunday's; tags are claimed later, so without this the day word would
+        // be title text and the item land on the current day).
+        var dayIdx = 0;
+        while (dayIdx < toks.length && toks[dayIdx].kind === 'tag') dayIdx++;
         var typedDay = (span && span.day) || (multi && multi.days[0]);
         if (typedDay) given.day = true;
-        if (!typedDay && !ctx.fixedDay && !ign.day && isWord(toks[0])) {
-            typedDay = resolveDayWord(toks[0].value, days.length ? days : (curDay ? [curDay] : []), ctx.eventDays);
-            if (typedDay) { toks[0].claimed = true; given.day = true; }
+        if (!typedDay && !ctx.fixedDay && !ign.day && isWord(toks[dayIdx])) {
+            typedDay = resolveDayWord(toks[dayIdx].value, days.length ? days : (curDay ? [curDay] : []), ctx.eventDays);
+            if (typedDay) { toks[dayIdx].claimed = true; given.day = true; }
         }
         // The whole line is a day name: the caller switches days instead of adding.
         var setDay = typedDay && toks.length === 1 && weekdayOf(toks[0].value) >= 0 ? typedDay : null;
