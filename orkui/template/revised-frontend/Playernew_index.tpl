@@ -192,6 +192,15 @@
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		}
+		if ($isOwnProfile && !empty($SurveyAvailable)) {
+			// Open surveys the player can answer; the card itself sits at the foot
+			// of the sidebar so it does not outrank their own data.
+			$_svN = count($SurveyAvailable);
+			$_svC = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); }));
+			$_svMsg = $_svN === 1 ? 'A survey is waiting for you' : "{$_svN} surveys are waiting for you";
+			if ($_svC > 0) { $_svMsg .= $_svC === $_svN ? ($_svN === 1 ? ', and it earns bonus credit' : ', and they earn bonus credit') : ", {$_svC} of them earn" . ($_svC === 1 ? 's' : '') . " bonus credit"; }
+			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>$_svMsg . '.','actionLabel'=>$_svN === 1 ? 'Take it.' : 'View surveys.','actionOnclick'=>"document.getElementById('pna-surveys-body').scrollIntoView({behavior:'smooth',block:'start'});return false;"];
+		}
 		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
 ?>
@@ -1640,11 +1649,6 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<!-- Sidebar -->
 					<div class="pna-sidebar">
 
-						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* shared card, see _survey_available_card.tpl */
-							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
-							include __DIR__ . '/_survey_available_card.tpl';
-						endif; ?></div>
-
 						<!-- Tenure -->
 						<?php $_maFirstDate = (!empty($Player['PlayerSinceDate']) && $Player['PlayerSinceDate'] !== '0000-00-00' && $Player['PlayerSinceDate'] !== '1970-01-01') ? $Player['PlayerSinceDate'] : null; ?>
 						<?php if ($_maFirstDate): ?>
@@ -1688,6 +1692,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<?php endforeach; ?>
 						</div>
 						<?php endif; ?>
+
+						<!-- Available Surveys: last in the column so it never pushes the
+						     player's own data down; the alerts strip above points here. -->
+						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* shared card, see _survey_available_card.tpl */
+							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
+							include __DIR__ . '/_survey_available_card.tpl';
+						endif; ?></div>
 
 					</div><!-- /.pna-sidebar -->
 
