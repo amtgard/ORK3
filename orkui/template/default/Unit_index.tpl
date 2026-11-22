@@ -401,6 +401,14 @@ html[data-theme="dark"] .kn-md-help-btn[data-tip]:hover::after {
 	width: max-content; max-width: 200px;
 }
 
+/* Roster search box: wide enough to show its whole placeholder
+   ("Persona, or park (3+ letters)"). DataTables' default is ~10em. */
+#un-roster-table_filter input { width: 17em; max-width: 100%; box-sizing: border-box; }
+@media (max-width: 600px) {
+	#un-roster-table_filter label { display: block; }
+	#un-roster-table_filter input { width: 100%; margin-left: 0; }
+}
+
 /* The roster is a DataTables scrollX table: its body is an overflow box, so the
    CSS ::after tip on the Actions buttons is clipped at the box's top edge
    (reported by a user 2026-10-26: the bubble appeared as a dark sliver above
@@ -710,7 +718,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 	$_is_active   = !empty($_last_signin) && $_last_signin >= $_cutoff;
 ?>
 				<tr>
-					<td>
+					<td data-persona="<?=htmlspecialchars($_persona, ENT_QUOTES)?>">
 						<a href="<?=UIR?>Player/profile/<?=(int)$_m['MundaneId']?>"
 							style="color:var(--ork-link);text-decoration:none;font-weight:500;">
 							<?=htmlspecialchars($_persona)?>
@@ -1378,7 +1386,29 @@ var UnBannerConfig = {
 })();
 $(function () {
 	if ($('#un-roster-table').length) {
-		$('#un-roster-table').DataTable({
+		// Roster search: persona only, widening to persona OR park once the
+		// query is 3+ characters. Most units sit in one park, so letting the
+		// box read the Park column (or Kingdom, Role, Title, sign-in date, or
+		// the "(inactive)" badge) made single letters match the whole roster.
+		// Large households do span many parks, hence the 3+ character widening.
+		var unRosterQuery = '';
+		var UN_PARK_MIN = 3;
+		$.fn.dataTable.ext.search.push(function (settings, searchData, index) {
+			if (settings.nTable.id !== 'un-roster-table') { return true; }
+			var q = unRosterQuery;
+			if (!q) { return true; }
+			var tr = settings.aoData[index].nTr;
+			if (!tr) { return true; }
+			var persona = (tr.cells[0].getAttribute('data-persona') || tr.cells[0].textContent || '').toLowerCase();
+			if (persona.indexOf(q) !== -1) { return true; }
+			if (q.length >= UN_PARK_MIN) {
+				var park = (tr.cells[1].textContent || '').trim().toLowerCase();
+				if (park.indexOf(q) !== -1) { return true; }
+			}
+			return false;
+		});
+
+		var unRoster = $('#un-roster-table').DataTable({
 			dom         : 'lfrtip',
 			scrollX: true,
 			orderClasses: false,
@@ -1388,18 +1418,28 @@ $(function () {
 			],
 			pageLength: 25,
 			order     : [[3, 'asc'], [0, 'asc']],
+			language  : { searchPlaceholder: 'Persona, or park (3+ letters)' },
 			columnDefs: [
-				// Search by persona or park only. Kingdom, role, title and
-				// sign-in date are the same (or near enough) for every row, so
-				// letting the search box read them made single letters like
-				// "a" or "b" match the whole roster.
-				{ targets: [2, 3, 4, 5], searchable: false },
+				// Every column is unsearchable so DataTables' own global search
+				// is a no-op; the ext.search function above does the filtering.
+				{ targets: '_all', searchable: false },
 				{ targets: 5, type: 'date' },
 <?php if ($_can_edit): ?>
-				{ targets: -1, orderable: false, searchable: false, width: '90px' }
+				{ targets: -1, orderable: false, width: '90px' }
 <?php endif; ?>
 			]
 		});
+
+		// Take over the search box: DataTables' built-in handler would run its
+		// global search (which, with no searchable columns, hides everything).
+		$('#un-roster-table_filter input')
+			.off()
+			.on('input keyup change', function () {
+				var v = $.trim(String(this.value || '')).toLowerCase();
+				if (v === unRosterQuery) { return; }
+				unRosterQuery = v;
+				unRoster.draw();
+			});
 	}
 });
 
