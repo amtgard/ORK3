@@ -286,6 +286,7 @@ class Controller_SurveyAjax extends Controller
             'questions' => array_map([$this, 'renderQuestion'], $r['Questions']),
             'images'    => array_map([$this, 'renderImage'], $r['Images']),
             'locked'    => (bool) $r['Locked'],
+            'edit_available' => (bool) ($r['EditAvailable'] ?? false),
         ]);
     }
 

@@ -26,8 +26,12 @@ message applies.
 **Finding the response (approach A, chosen).** A new nullable column
 `ork_survey_response.edit_key CHAR(64)` holds `HMAC-SHA256(secret, "survey-edit:{survey_id}:{mundane_id}")`,
 written at submit only when `allow_edit` is on (and for non-test rows). The secret is
-a new config constant `SURVEY_EDIT_SECRET`; when it is undefined, it is derived from
-`DB_PASSWORD` so no deploy-time config change is required (builder's call). The
+a dedicated config constant `SURVEY_EDIT_SECRET` (or the same-named environment
+variable), at least 32 characters, used for nothing else. It is NOT derived from
+`DB_PASSWORD`: rotating the database password must never cut respondents off. When it
+is unset the feature is unavailable: the builder's toggle is disabled with a note, and
+the server refuses to turn `allow_edit` on (changed 2026-11-22 at the user's request;
+first built with a DB_PASSWORD fallback). The
 column is never selected by results, export, rows, or any manager-facing path. It
 is cleared (set NULL) when the survey closes: on a status change to closed, and
 lazily for date-based closes (a sweep of `close_at <= NOW()` surveys run from the

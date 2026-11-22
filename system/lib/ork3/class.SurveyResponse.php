@@ -667,21 +667,38 @@ class SurveyResponse
      */
     public static function editKey(int $surveyId, int $uid): string
     {
-        return hash_hmac('sha256', 'survey-edit:' . (int) $surveyId . ':' . (int) $uid, self::editSecret());
+        $secret = self::editSecret();
+        if (null === $secret) {
+            // Every caller checks editingConfigured() first; never key with ''.
+            throw new \LogicException('SURVEY_EDIT_SECRET is not configured.');
+        }
+        return hash_hmac('sha256', 'survey-edit:' . (int) $surveyId . ':' . (int) $uid, $secret);
     }
 
+    /** Shortest SURVEY_EDIT_SECRET accepted: 32 characters (e.g. 16 random bytes in hex). */
+    public const EDIT_SECRET_MIN = 32;
+
     /**
-     * SURVEY_EDIT_SECRET when configured; otherwise derived from DB_PASSWORD so
-     * no deploy-time config change is needed. Someone holding the database
-     * already holds its password, so the derived secret protects exactly what
-     * a dedicated one would against a leaked dump without the config.
+     * The dedicated edit-link secret: the SURVEY_EDIT_SECRET constant
+     * (config.php), else the SURVEY_EDIT_SECRET environment variable. It is
+     * used for nothing else, so rotating the database password (or any other
+     * credential) never cuts respondents off from their answers. Null when
+     * neither is set or it is shorter than EDIT_SECRET_MIN: Update My Answers
+     * is then unavailable rather than keyed by something guessable.
      */
-    private static function editSecret(): string
+    private static function editSecret(): ?string
     {
-        if (defined('SURVEY_EDIT_SECRET') && '' !== (string) constant('SURVEY_EDIT_SECRET')) {
-            return (string) constant('SURVEY_EDIT_SECRET');
+        $secret = defined('SURVEY_EDIT_SECRET') ? (string) constant('SURVEY_EDIT_SECRET') : '';
+        if ('' === $secret) {
+            $secret = (string) (getenv('SURVEY_EDIT_SECRET') ?: '');
         }
-        return hash('sha256', 'ork-survey-edit:' . (defined('DB_PASSWORD') ? (string) constant('DB_PASSWORD') : ''));
+        return strlen($secret) >= self::EDIT_SECRET_MIN ? $secret : null;
+    }
+
+    /** Can this server issue edit links (is SURVEY_EDIT_SECRET set)? */
+    public static function editingConfigured(): bool
+    {
+        return null !== self::editSecret();
     }
 
     /** A random RFC 4122 version 4 UUID, lower-case. */
@@ -739,7 +756,7 @@ class SurveyResponse
             }
             return null;
         }
-        if (empty($surveyRow['allow_edit'])) {
+        if (empty($surveyRow['allow_edit']) || !self::editingConfigured()) {
             return null;
         }
 
@@ -1460,7 +1477,7 @@ class SurveyResponse
         $editKey = null;
         $editUuid = null;
         $editJson = null;
-        if (!$isTest && !empty($survey['allow_edit'])) {
+        if (!$isTest && !empty($survey['allow_edit']) && self::editingConfigured()) {
             $editJson = self::editAnswersJson($answers, $check['rows']);
             if (null === $editJson) {
                 return ['Status' => 1, 'Error' => 'Your answers could not be saved.'];

@@ -124,6 +124,14 @@ define('CARTO_API_KEY', '');
 
 define('IDP_CLIENT_ID', 'ORK_CLIENT_ID');
 define('IDP_CLIENT_SECRET', 'ORK_CLIENT_SECRET');
+
+// Survey "Update my answers": the secret that keys each respondent's private
+// edit link. Used for nothing else, so rotating other credentials never cuts
+// respondents off. At least 32 characters; generate one with
+//   php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+// Empty (or unset, with no SURVEY_EDIT_SECRET environment variable) turns the
+// feature off. Changing it later ends every open survey's edit links.
+define('SURVEY_EDIT_SECRET', '');
 define('IDP_BASE_URL', 'https://idp.amtgard.com');
 define('IDP_API_URL', 'https://idp.amtgard.com');
 

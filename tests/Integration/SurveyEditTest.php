@@ -39,6 +39,18 @@ final class SurveyEditTest extends TestCase
     // First submit
     // ------------------------------------------------------------------
 
+    public function testEditLinksUseTheDedicatedSecretOnly(): void
+    {
+        $this->assertTrue(SurveyResponse::editingConfigured(), 'config.test.php sets SURVEY_EDIT_SECRET');
+        $this->assertSame(
+            hash_hmac('sha256', 'survey-edit:7:9', (string) constant('SURVEY_EDIT_SECRET')),
+            SurveyResponse::editKey(7, 9),
+            'keyed by SURVEY_EDIT_SECRET itself, not by anything derived from DB_PASSWORD'
+        );
+        [$sid] = $this->editSurvey(true);
+        $this->assertTrue((new Survey())->get($sid)['EditAvailable']);
+    }
+
     public function testFirstSubmitStoresEditKeyOnlyWhenAllowEdit(): void
     {
         [$off, $offQ, $offA] = $this->editSurvey(false);

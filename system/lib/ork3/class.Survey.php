@@ -17,6 +17,7 @@ class Survey
 {
     /** Error returned by every structural mutation once a survey has been opened. */
     public const LOCKED_ERROR = 'Survey structure is locked because it has been opened.';
+    public const EDIT_UNAVAILABLE = 'Changing answers is not available on this ORK: its administrators have not set a survey edit secret (SURVEY_EDIT_SECRET).';
 
     /** Upload limits for survey illustrations (spec §3). */
     private const IMAGE_MAX_BYTES = 2097152;   // 2 MB
@@ -604,6 +605,7 @@ class Survey
             'Questions' => $questions,
             'Images'    => $images,
             'Locked'    => $this->isStructureLocked($survey),
+            'EditAvailable' => SurveyResponse::editingConfigured(),
         ]);
     }
 
@@ -895,6 +897,13 @@ class Survey
         if (array_key_exists('DataGateEnabled', $fields) && !$this->truthy($fields['DataGateEnabled'])
             && (new SurveyCredit())->hasConfigs($surveyId)) {
             return $this->fail('This survey gives bonus credits, which need respondents to be able to choose Any ORK Data.');
+        }
+
+        // Edit links are keyed by a dedicated server secret; without it the
+        // promise "respondents can change their answers" could not be kept.
+        if (array_key_exists('AllowEdit', $fields) && $this->truthy($fields['AllowEdit'])
+            && !SurveyResponse::editingConfigured()) {
+            return $this->fail(self::EDIT_UNAVAILABLE);
         }
 
         $sets = [];
