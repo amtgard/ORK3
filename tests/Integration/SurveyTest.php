@@ -107,6 +107,8 @@ final class SurveyTest extends TestCase
 
         $row = $this->survey->getRow((int) $r['SurveyId']);
         $this->assertNotNull($row);
+        // Promotion is opt-out: a new survey starts with the site banner on.
+        $this->assertSame(1, (int) $row['show_banner']);
         $this->assertSame('draft', (string) $row['status']);
         $this->assertTrue($this->survey->canManage($this->officerId, $row));
     }
@@ -961,12 +963,12 @@ final class SurveyTest extends TestCase
         $cloneId = (int) $clone['SurveyId'];
         $this->surveyIds[] = $cloneId;
 
-        // #11: the copy starts unscheduled, with no banner.
+        // #11: the copy starts unscheduled; the banner is on, as for any new survey.
         $row = $this->survey->getRow($cloneId);
         $this->assertNull($row['open_at']);
         $this->assertNull($row['close_at']);
         $this->assertNull($row['audience_event_calendardetail_id']);
-        $this->assertSame(0, (int) $row['show_banner']);
+        $this->assertSame(1, (int) $row['show_banner']);
 
         // #12: the copy's markdown names the copy's own file.
         $img = $this->pdo->query("SELECT image_id, token FROM {$p}survey_image WHERE survey_id = {$cloneId}")->fetch(PDO::FETCH_ASSOC);

@@ -2468,14 +2468,19 @@
         } catch (e) { /* private browsing: the sidebar still works, it just forgets */ }
     }
 
-    /** Basics and About on desktop. Under 900px the settings are their own
-        view (the Questions | Settings switch), so they no longer bury the
-        canvas: Basics opens there too, and About stays folded. */
+    /** Basics and About on desktop, plus Promotion while the survey is still
+        a draft: the banner and share link are how anyone learns the survey
+        exists, so they stay in view until it is opened. Under 900px the
+        settings are their own view (the Questions | Settings switch), so they
+        no longer bury the canvas: Basics opens there too, the rest stay folded. */
     function sectionOpen(id) {
         var st  = sectionState();
         var key = stateKey(id);
         if (Object.prototype.hasOwnProperty.call(st, key)) { return !!st[key]; }
-        return id === 'basics' || (id === 'about' && !isNarrow());
+        if (id === 'basics') { return true; }
+        if (isNarrow()) { return false; }
+        if (id === 'about') { return true; }
+        return id === 'promotion' && String((S.survey || {}).status || 'draft') === 'draft';
     }
 
     /** One collapsible .rp-filter-card. `icon` is a FontAwesome class;

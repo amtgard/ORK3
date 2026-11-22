@@ -858,9 +858,9 @@ class Survey
         }
         $ok = $this->exec(
             'INSERT INTO ' . DB_PREFIX . 'survey
-             (scope_type, scope_id, title, slug, status, created_by, updated_by, created_at, updated_at)
+             (scope_type, scope_id, title, slug, status, show_banner, created_by, updated_by, created_at, updated_at)
              VALUES (\'' . $scopeType . '\', ' . $scopeId . ', \'' . $this->esc($title) . '\', \'' . $this->esc($slug) . '\',
-                     \'draft\', ' . (int) $uid . ', ' . (int) $uid . ', ' . self::nowSql() . ', ' . self::nowSql() . ')'
+                     \'draft\', 1, ' . (int) $uid . ', ' . (int) $uid . ', ' . self::nowSql() . ', ' . self::nowSql() . ')'
         );
         $surveyId = $ok ? $this->lastInsertId() : 0;
         if ($surveyId <= 0) {
@@ -1287,9 +1287,11 @@ class Survey
             return $this->fail('Could not copy the survey.');
         }
 
-        // The schedule, banner and event audience are NOT copied: the source's
-        // dates are usually past (a clone would open already closed, and
-        // after-close sharing would unlock at once), and its event is over.
+        // The schedule and event audience are NOT copied: the source's dates
+        // are usually past (a clone would open already closed, and after-close
+        // sharing would unlock at once), and its event is over. The banner is
+        // on, as it is for every new survey: a survey nobody is told about
+        // collects nothing, so promotion is opt-out.
         $ok = $this->exec(
             'INSERT INTO ' . DB_PREFIX . 'survey
              (scope_type, scope_id, title, slug, description, welcome_md, thanks_md, status,
@@ -1301,7 +1303,7 @@ class Survey
                     description, welcome_md, thanks_md, \'draft\',
                     NULL, NULL, audience_kingdom_ids, audience_active_only, audience_min_tenure_months,
                     audience_recent_months, NULL,
-                    data_gate_enabled, results_share, results_share_timing, 0, show_progress, allow_resume, accent_color,
+                    data_gate_enabled, results_share, results_share_timing, 1, show_progress, allow_resume, accent_color,
                     ' . (int) $uid . ', ' . (int) $uid . ', ' . self::nowSql() . ', ' . self::nowSql() . '
              FROM ' . DB_PREFIX . 'survey WHERE survey_id = ' . $surveyId
         );
