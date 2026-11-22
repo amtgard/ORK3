@@ -1029,7 +1029,7 @@ class Report extends Ork3
                     'IsDismissed'        => !empty($row->deleted_by),
                     // A grant is a close too: IsDismissed stays "closed" (it gates the
                     // live-vs-closed split everywhere), IsGranted says why it closed.
-                    'IsGranted'          => !empty($row->deleted_by) && $row->resolution === 'granted',
+                    'IsGranted'          => !empty($row->deleted_by) && $row->resolution === Player::REC_RESOLUTION_GRANTED,
                     'DismissedAt'        => $row->deleted_at,
                     'DismissedByPersona' => $row->deleted_by_persona,
                     'RecommendedByName' => $row->recommended_by_persona,
@@ -1093,18 +1093,6 @@ class Report extends Ork3
         return $this->applyViewerFlags(Ork3::$Lib->recommendationvisibility->filterRecommendations($cached, $hideViewer), $viewer_id);
     }
 
-    /**
-     * One 500-row (cluster) page of Manager recommendations, fully server-side
-     * filtered/sorted. Never selects the full set. Returns:
-     *   ['Groups' => [...≤Limit grouped rows...], 'Total' => int, 'HasMore' => bool]
-     *
-     * SkipCount (optional): the caller has established that the filter set is unchanged
-     * since it last got a Total — an offset-only infinite-scroll batch. The grouped
-     * COUNT (the same correlated subqueries as the page query, over the whole scope) is
-     * then not run at all and Total comes back NULL, meaning "keep the one you have";
-     * HasMore falls back to "this page came back full". Pass KnownTotal instead to have
-     * that previous total echoed back in place of a recomputed one.
-     */
     /** Top stop of the Recs Manager rank scale: "M" (a Master award), above ladder 10. */
     public const RANK_FILTER_MASTER = 11;
 
@@ -1152,6 +1140,18 @@ class Report extends Ork3
         return '(' . implode(' OR ', $parts) . ')';
     }
 
+    /**
+     * One 500-row (cluster) page of Manager recommendations, fully server-side
+     * filtered/sorted. Never selects the full set. Returns:
+     *   ['Groups' => [...≤Limit grouped rows...], 'Total' => int, 'HasMore' => bool]
+     *
+     * SkipCount (optional): the caller has established that the filter set is unchanged
+     * since it last got a Total — an offset-only infinite-scroll batch. The grouped
+     * COUNT (the same correlated subqueries as the page query, over the whole scope) is
+     * then not run at all and Total comes back NULL, meaning "keep the one you have";
+     * HasMore falls back to "this page came back full". Pass KnownTotal instead to have
+     * that previous total echoed back in place of a recomputed one.
+     */
     public function PlayerAwardRecommendationsPage($request)
     {
         $limit  = max(1, (int)($request['Limit']  ?? 500));
@@ -1728,7 +1728,7 @@ class Report extends Ork3
                     // 'granted' | 'dismissed'. A close the backfill could not reach
                     // (NULL) reads as dismissed, the conservative label: it keeps
                     // Restore available rather than hiding a real dismissal.
-                    'Resolution'        => $r->resolution === 'granted' ? 'granted' : 'dismissed',
+                    'Resolution'        => $r->resolution === Player::REC_RESOLUTION_GRANTED ? Player::REC_RESOLUTION_GRANTED : Player::REC_RESOLUTION_DISMISSED,
                 ];
             }
             $response['Status'] = Success();

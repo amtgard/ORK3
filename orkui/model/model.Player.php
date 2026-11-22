@@ -273,6 +273,13 @@ class Model_Player extends Model
         return (int) Ork3::$Lib->recommendationvisibility->officerLevel((int)$uid, (int)$kingdom_id, (int)$park_id);
     }
 
+    // The profile's recs gate (Recommendations tab and award info modal), measured
+    // against the recipient's kingdom and home park.
+    public function profile_recs_visible($uid, $kingdom_id, $park_id)
+    {
+        return Ork3::$Lib->recommendationvisibility->profileRecsVisible((int)$uid, (int)$kingdom_id, (int)$park_id);
+    }
+
     // Kingdom page Add Rec modal: offer the Monarchy Only checkbox to an officer of the
     // kingdom or of any park in it. The recipient check is monarchy_only_level_for().
     public function monarchy_only_eligible_in_kingdom($uid, $kingdom_id)
@@ -293,15 +300,6 @@ class Model_Player extends Model
     public function publishable_award_note($note, $rec_id, $recipient_id)
     {
         return Ork3::$Lib->recommendationvisibility->publishable_text_for_rec((string)$note, (int)$rec_id, (int)$recipient_id);
-    }
-
-    // The recipient of rec $rec_id (0 when it does not exist), so a caller acting on a
-    // client-supplied rec id can confirm it is about the player it is working on.
-    public function recommendation_recipient($rec_id)
-    {
-        $rec = Ork3::$Lib->recommendationvisibility->loadRec((int)$rec_id);
-
-        return $rec === null ? 0 : (int)$rec['MundaneId'];
     }
 
     public function delete_player_recommendation($request)

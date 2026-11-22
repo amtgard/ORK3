@@ -78,7 +78,7 @@
     <label class="rm-fcheck" data-tip="Closed recommendations are kept, not deleted: granted ones (the award was given) and dismissed ones. Turn this on to see them and restore any dismissed by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show granted &amp; dismissed</label>
     <!-- The table header (and its Rank filter icon) is hidden below 1250px, where
          rows render as cards — this button opens the same popover there. -->
-    <button type="button" class="rm-rankf-mbtn" id="rm-rankf-mbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="rm-rankf-pop"><i class="fas fa-filter" aria-hidden="true"></i> Rank: <span id="rm-rankf-msum">All</span></button>
+    <button type="button" class="rm-fbtn rm-rankf-mbtn" id="rm-rankf-mbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="rm-rankf-pop"><i class="fas fa-filter" aria-hidden="true"></i> Rank: <span id="rm-rankf-msum">All</span></button>
     <div id="rm-chips" class="rm-chips"></div>
     <button type="button" id="rm-export" class="rm-fbtn" data-tip="Download the full current filtered list as a CSV file"><i class="fas fa-download"></i> Export CSV</button>
   </div>
@@ -1390,7 +1390,9 @@ function rmDoGrant(rec, tr, opts) {
             fd2.append('Rank', rec.Rank || 0);
             return rmPost(rmRecAjaxBase('resolverecommendationcluster'), fd2);
         }).then(function (j) {
-            if (!rmJsonOk(j)) { var e = new Error('resolve cluster failed'); e.granted = true; throw e; }
+            // The lib leaves a rec open when the award just given does not back it
+            // (say a lower rank than the rec asked for); j.error says so.
+            if (!rmJsonOk(j)) { var e = new Error('resolve cluster failed'); e.granted = true; e.recError = (j && j.error) ? String(j.error) : ''; throw e; }
             rmRemoveRow(tr);
             rmToast('Granted.');
         }).catch(function (err) {
@@ -1547,7 +1549,9 @@ rmGid('rm-grant-submit').addEventListener('click', function () {
                 // rather than leaving a live Grant button on an already-granted rec.
                 rmRemoveRow(ctx.tr);
                 rmCloseGrantModal();
-                rmToast('Granted — but the recommendation could not be cleared. Refresh to confirm; do not grant it again.', true);
+                rmToast(err.recError && err.recError.indexOf('left open') !== -1
+                    ? 'Granted. ' + err.recError.replace(/^[^:]*:\s*(?=The recommendation)/, '') + ' Refresh to see it.'
+                    : 'Granted — but the recommendation could not be cleared. Refresh to confirm; do not grant it again.', true);
             } else {
                 submitBtn.disabled = false;
                 rmGrantErr((err && err.message) ? err.message : 'Grant failed.');

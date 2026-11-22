@@ -27,8 +27,12 @@
  */
 class AwardProvenance extends Ork3
 {
-    /** Awards whose award_id is a generic catch-all; matching recs on it would pull in unrelated honours. */
-    private const GENERIC_AWARD_IDS = [94, 246];
+    /**
+     * Awards whose award_id is a generic catch-all (Custom Award, Custom Title);
+     * matching recs on it would pull in unrelated honours. Public: Player's
+     * backing-award rule skips canonical matches on these too.
+     */
+    public const GENERIC_AWARD_IDS = [94, 246];
 
     /**
      * One award's provenance for $viewer (the UI session's user; 0 = anonymous).
@@ -60,22 +64,13 @@ class AwardProvenance extends Ork3
     }
 
     /**
-     * The profile's own gate for its Recommendations tab, measured against the
-     * RECIPIENT's kingdom: logged in, and either the kingdom publishes recs
-     * (AwardRecsPublic, default on) or the viewer may edit the recipient's park.
+     * Logged in, and the profile's recs gate (RecommendationVisibility::
+     * profileRecsVisible, shared with the Recommendations tab) passes.
      */
     private function recsVisibleTo(int $viewer, array $award): bool
     {
-        if ($viewer <= 0) {
-            return false;
-        }
-        $configs = $award['KingdomOfRecipient'] > 0 ? Common::get_configs($award['KingdomOfRecipient'], CFG_KINGDOM) : [];
-        if (!isset($configs['AwardRecsPublic']) || (int) $configs['AwardRecsPublic']['Value'] === 1) {
-            return true;
-        }
-
-        return $award['ParkOfRecipient'] > 0
-            && (bool) Ork3::$Lib->authorization->HasAuthority($viewer, AUTH_PARK, $award['ParkOfRecipient'], AUTH_EDIT);
+        return $viewer > 0
+            && Ork3::$Lib->recommendationvisibility->profileRecsVisible($viewer, $award['KingdomOfRecipient'], $award['ParkOfRecipient']);
     }
 
     private function loadAward(int $awardsId): ?array
@@ -83,7 +78,9 @@ class AwardProvenance extends Ork3
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT aw.awards_id, aw.mundane_id, aw.kingdomaward_id, aw.award_id, aw.rank, aw.court_award_id,
-                    aw.custom_name, IFNULL(ka.name, a.name) AS award_name,
+                    aw.custom_name, aw.date,
+                    GREATEST(aw.date, IF(aw.entered_at > \'1000-01-01\', DATE(aw.entered_at), aw.date)) AS window_end,
+                    IFNULL(ka.name, a.name) AS award_name,
                     IFNULL(m.kingdom_id, 0) AS recip_kingdom, IFNULL(m.park_id, 0) AS recip_park,
                     ' . Award::sqlEffectiveIsLadder('ka', 'a') . ' AS is_ladder
                FROM ' . DB_PREFIX . 'awards aw
@@ -98,7 +95,7 @@ class AwardProvenance extends Ork3
         }
         $custom = trim((string) ($rs->custom_name ?? ''));
 
-        return [
+        $award = [
             'AwardsId'       => (int) $rs->awards_id,
             'MundaneId'      => (int) $rs->mundane_id,
             'KingdomAwardId' => (int) $rs->kingdomaward_id,
@@ -109,16 +106,83 @@ class AwardProvenance extends Ork3
             'IsLadder'       => (int) $rs->is_ladder === 1,
             'KingdomOfRecipient' => (int) $rs->recip_kingdom,
             'ParkOfRecipient'    => (int) $rs->recip_park,
+            'Date'           => (string) $rs->date,
+            'WindowEnd'      => (string) $rs->window_end,
         ];
+        $award['CourtRecId']  = $this->courtLineRecId($award);
+        $award['WindowStart'] = $award['CourtRecId'] > 0 ? '' : $this->previousInstanceDate($award);
+
+        return $award;
     }
 
     /**
-     * Which recs count as "for this award": the same kingdom award, or — for a
-     * specific (non-generic) award — the same award recommended under another
-     * kingdom's name for it. Ladder: the same rank only. Pure, for tests.
+     * The rec the court line that conferred this award was drawn from (0 if none):
+     * when there is one, it IS the rec behind this award.
+     */
+    private function courtLineRecId(array $award): int
+    {
+        $lineClause = 'ca.award_id = ' . (int) $award['AwardsId'];
+        if ($award['CourtAwardId'] > 0) {
+            $lineClause = '(' . $lineClause . ' OR ca.court_award_id = ' . (int) $award['CourtAwardId'] . ')';
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.recommendations_id FROM ' . DB_PREFIX . 'court_award ca
+              WHERE ' . $lineClause . '
+                AND ca.mundane_id = ' . (int) $award['MundaneId'] . '
+                AND ca.recommendations_id > 0
+              ORDER BY ca.court_award_id DESC LIMIT 1'
+        );
+
+        return ($rs && $rs->Next()) ? (int) $rs->recommendations_id : 0;
+    }
+
+    /**
+     * Date of this player's previous live instance of the same award (same
+     * kingdomaward or same non-generic canonical award; ladder: the same rank),
+     * ordered by award date then id. '' when this is the first. Recs on or before
+     * it were behind that earlier award, not this one.
+     */
+    private function previousInstanceDate(array $award): string
+    {
+        $or = ['p.kingdomaward_id = ' . (int) $award['KingdomAwardId']];
+        if ($award['AwardId'] > 0 && !in_array($award['AwardId'], self::GENERIC_AWARD_IDS, true)) {
+            $or[] = 'p.award_id = ' . (int) $award['AwardId'];
+        }
+        $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $award['Date']) ? $award['Date'] : '0000-00-00';
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT p.date FROM ' . DB_PREFIX . 'awards p
+              WHERE p.mundane_id = ' . (int) $award['MundaneId'] . '
+                AND COALESCE(p.revoked, 0) = 0
+                AND p.awards_id <> ' . (int) $award['AwardsId'] . '
+                AND (' . implode(' OR ', $or) . ')
+                ' . ($award['IsLadder'] ? 'AND p.rank = ' . (int) $award['Rank'] : '') . "
+                AND (p.date < '" . $date . "' OR (p.date = '" . $date . "' AND p.awards_id < " . (int) $award['AwardsId'] . '))
+              ORDER BY p.date DESC, p.awards_id DESC LIMIT 1'
+        );
+
+        return ($rs && $rs->Next()) ? (string) $rs->date : '';
+    }
+
+    /**
+     * Which recs are the recs behind THIS award row. Pure, for tests.
+     *
+     *   - CourtRecId > 0: the court line that conferred it was drawn from that rec,
+     *     so that rec alone.
+     *   - otherwise "for this award": the same kingdom award, or — for a specific
+     *     (non-generic) award — the same award recommended under another kingdom's
+     *     name for it; ladder: the same rank only. Then, when known, only recs made
+     *     no later than this award was given/entered (WindowEnd) and after the
+     *     previous instance of it (WindowStart), so a player's second Order of the
+     *     Rose does not list the recs that earned the first.
      */
     public static function recMatchSql(array $award, string $alias = 'r'): string
     {
+        $courtRec = (int) ($award['CourtRecId'] ?? 0);
+        if ($courtRec > 0) {
+            return "$alias.recommendations_id = $courtRec";
+        }
         $ka   = (int) ($award['KingdomAwardId'] ?? 0);
         $aid  = (int) ($award['AwardId'] ?? 0);
         $or   = [];
@@ -134,6 +198,14 @@ class AwardProvenance extends Ork3
         $sql = '(' . implode(' OR ', $or) . ')';
         if (!empty($award['IsLadder'])) {
             $sql .= " AND COALESCE($alias.rank, 0) = " . (int) ($award['Rank'] ?? 0);
+        }
+        $end   = (string) ($award['WindowEnd'] ?? '');
+        $start = (string) ($award['WindowStart'] ?? '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+            $sql .= " AND $alias.date_recommended <= '$end'";
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) {
+            $sql .= " AND $alias.date_recommended > '$start'";
         }
 
         return $sql;
@@ -180,7 +252,7 @@ class AwardProvenance extends Ork3
                JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
                LEFT JOIN ' . DB_PREFIX . 'mundane rbi ON rbi.mundane_id = r.recommended_by_id
               WHERE r.mundane_id = ' . $recipient . '
-                AND r.resolution = \'granted\'
+                AND r.resolution = \'' . Player::REC_RESOLUTION_GRANTED . '\'
                 AND ' . self::recMatchSql($award, 'r') . '
                 AND ' . $asRecipient . '
                 AND ' . $asViewer . '

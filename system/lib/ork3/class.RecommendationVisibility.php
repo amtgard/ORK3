@@ -104,6 +104,23 @@ class RecommendationVisibility extends Ork3
         return ($rs && $rs->Next()) ? (int) $rs->kingdom_id : 0;
     }
 
+    /**
+     * The player profile's recs gate, the one definition shared by the
+     * Recommendations tab and the award (i) modal: the RECIPIENT's kingdom
+     * publishes recs (AwardRecsPublic, default on), or $viewer may edit the
+     * recipient's home park. Login is the caller's to require on top.
+     */
+    public function profileRecsVisible(int $viewer, int $recipKingdomId, int $recipParkId): bool
+    {
+        $configs = $recipKingdomId > 0 ? Common::get_configs($recipKingdomId, CFG_KINGDOM) : [];
+        if (!isset($configs['AwardRecsPublic']) || (int) $configs['AwardRecsPublic']['Value'] === 1) {
+            return true;
+        }
+
+        return $viewer > 0 && $recipParkId > 0
+            && (bool) Ork3::$Lib->authorization->HasAuthority($viewer, AUTH_PARK, $recipParkId, AUTH_EDIT);
+    }
+
     public function officerLevel(int $viewer, int $kingdomId, int $parkId): int
     {
         if ($viewer <= 0 || $kingdomId <= 0) {

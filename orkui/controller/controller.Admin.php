@@ -1145,11 +1145,24 @@ class Controller_Admin extends Controller
                                 'Note' => $awardNote,
                                 'ParkId' => valid_id($this->request->Admin_player->ParkId) ? $this->request->Admin_player->ParkId : 0,
                                 'KingdomId' => valid_id($this->request->Admin_player->KingdomId) ? $this->request->Admin_player->KingdomId : 0,
-                                'EventId' => valid_id($this->request->Admin_player->EventId) ? $this->request->Admin_player->EventId : 0
+                                'EventId' => valid_id($this->request->Admin_player->EventId) ? $this->request->Admin_player->EventId : 0,
+                                // The lib closes this rec as GRANTED only when the award
+                                // just saved backs it (Player::close_recommendation_as_granted);
+                                // the client never claims "granted" itself.
+                                'RecommendationsId' => $sourceRec
                             ));
                         // add_player_award returns the FLAT shape: Status 0 = saved.
                         if ($noteWithheld && (int)($r['Status'] ?? 1) === 0 && !headers_sent()) {
                             header('X-Ork-Note-Withheld: 1');
+                        }
+                        // The page body is a rendered admin page, so knDoSave / pkDoSave
+                        // read the rec outcome from headers: Closed 1 = the rec is now
+                        // granted; Closed 0 + Error = it was left open, and why.
+                        if ($sourceRec > 0 && (int)($r['Status'] ?? 1) === 0 && isset($r['RecClosed']) && !headers_sent()) {
+                            header('X-Ork-Rec-Closed: ' . (!empty($r['RecClosed']) ? '1' : '0'));
+                            if (!empty($r['RecError'])) {
+                                header('X-Ork-Rec-Error: ' . preg_replace('/[^\x20-\x7E]/', ' ', (string)$r['RecError']));
+                            }
                         }
                         break;
                     case 'deleteaward':

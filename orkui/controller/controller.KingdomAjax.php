@@ -491,7 +491,8 @@ class Controller_KingdomAjax extends Controller
                 'Token'             => $this->session->token,
                 'RecommendationsId' => $rec_id,
                 'RequestedBy'       => $this->session->user_id,
-                'Granted'           => !empty($_POST['Granted']) ? 1 : 0,
+                // Always a dismissal: "granted" is recorded only by the lib when an
+                // award backs it (Admin addaward -> Player::AddAward), never from POST.
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])

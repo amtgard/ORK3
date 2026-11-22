@@ -473,9 +473,7 @@ class Controller_Player extends Controller
             $this->data['Details']['Awards'] = $this->Scrollery->flag_viewer_printable_awards($this->data['Details']['Awards'], $uid);
         }
         $this->data['CanMonarchyOnlyRec'] = $uid > 0 && $this->Player->monarchy_only_level($uid, $playerKingdomId, $playerParkId) > 0;
-        $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
-        $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
-        $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
+        $this->data['ShowRecsTab']          = $this->Player->profile_recs_visible($uid, $playerKingdomId, $playerParkId);
         $this->data['ShowRecsTabLoggedIn']  = $uid > 0;
         $this->data['AwardRecommendations'] = [];  // loaded via AJAX on Recommendations tab click
 

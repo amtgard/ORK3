@@ -35,6 +35,35 @@ final class AwardProvenanceTest extends TestCase
         $this->assertSame('0 = 1', AwardProvenance::recMatchSql(['KingdomAwardId' => 0, 'AwardId' => 94]));
     }
 
+    public function testACourtLineRecIsTheOnlyRecBehindTheAward(): void
+    {
+        $sql = AwardProvenance::recMatchSql([
+            'KingdomAwardId' => 12, 'AwardId' => 7, 'CourtRecId' => 4411,
+            'WindowStart' => '2020-01-01', 'WindowEnd' => '2024-05-01',
+        ]);
+        $this->assertSame('r.recommendations_id = 4411', $sql);
+    }
+
+    public function testRecsAreWindowedBetweenThePreviousInstanceAndThisOne(): void
+    {
+        $sql = AwardProvenance::recMatchSql([
+            'KingdomAwardId' => 12, 'AwardId' => 7, 'Rank' => 0, 'IsLadder' => false,
+            'WindowStart' => '2020-01-01', 'WindowEnd' => '2024-05-01',
+        ]);
+        $this->assertSame(
+            "(r.kingdomaward_id = 12 OR r.award_id = 7) AND r.date_recommended <= '2024-05-01' AND r.date_recommended > '2020-01-01'",
+            $sql
+        );
+        $first = AwardProvenance::recMatchSql([
+            'KingdomAwardId' => 12, 'AwardId' => 7, 'IsLadder' => false,
+            'WindowStart' => '', 'WindowEnd' => '2024-05-01',
+        ]);
+        $this->assertSame("(r.kingdomaward_id = 12 OR r.award_id = 7) AND r.date_recommended <= '2024-05-01'", $first);
+        // Malformed dates never reach the SQL.
+        $bad = AwardProvenance::recMatchSql(['KingdomAwardId' => 12, 'WindowEnd' => "x' OR 1=1"]);
+        $this->assertSame('(r.kingdomaward_id = 12)', $bad);
+    }
+
     public function testMaskedGiverLosesNameAndId(): void
     {
         $rec = AwardProvenance::shapeRec([

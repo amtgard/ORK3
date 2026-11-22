@@ -6180,8 +6180,7 @@ html[data-theme="dark"] .pn-award-action-btn.pn-award-view-btn:hover { color:#63
 /* Award Info modal — the (i) at the end of every Awards/Titles row (every viewer). */
 .pn-award-action-btn.pn-award-info-btn { font-size:14px; }
 .pn-award-action-btn.pn-award-info-btn:hover { color:var(--ork-link); }
-html[data-theme="dark"] .pn-award-action-btn.pn-award-info-btn:hover { background:var(--ork-bg-tertiary); }
-html[data-theme="dark"] .pn-award-action-btn.pn-award-info-btn:hover { color:var(--ork-link); }
+html[data-theme="dark"] .pn-award-action-btn:hover { background:var(--ork-bg-tertiary); }
 .pn-modal-box.pn-ai-box { width:560px; max-width:calc(100vw - 32px); }
 .pn-ai-body { display:flex; flex-direction:column; gap:18px; overflow-wrap:anywhere; }
 .pn-ai-body a { color:var(--ork-link); text-decoration:none; }
@@ -6640,9 +6639,12 @@ table.dataTable.pk-recs-table { width: 100% !important; }
 .kn-rec-export-btns { display:flex; gap:6px; margin-left:auto; }
 .kn-rec-export-btn { padding:4px 10px; border-radius:6px; border:1.5px solid var(--ork-input-border); background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; }
 .kn-rec-export-btn:hover { border-color:#90cdf4; color:#2b6cb0; background:#ebf8ff; }
-.kn-rec-filter-btn { padding:4px 12px; border-radius:20px; border:1.5px solid var(--ork-input-border); background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; }
-.kn-rec-filter-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
-.kn-rec-filter-btn.kn-rec-filter-active { background:var(--ork-link); border-color:var(--ork-link); color:#fff; }
+.kn-rec-filter-btn,
+.pk-closed-filter-btn { padding:4px 12px; border-radius:20px; border:1.5px solid var(--ork-input-border); background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.kn-rec-filter-btn:hover,
+.pk-closed-filter-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
+.kn-rec-filter-btn.kn-rec-filter-active,
+.pk-closed-filter-btn.pk-closed-filter-on { background:var(--ork-link); border-color:var(--ork-link); color:#fff; }
 .kn-rec-filter-info { position:relative; display:inline-flex; align-items:center; }
 .kn-rec-filter-info-btn { background:none; border:none; cursor:pointer; color:#a0aec0; font-size:15px; padding:2px 4px; line-height:1; transition:color 0.15s; }
 .kn-rec-filter-info-btn:hover { color:#2b6cb0; }
@@ -6706,22 +6708,18 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 .pk-deleted-recs-table tr.pk-deleted-restored { transition: opacity 0.5s ease; opacity: 0; }
 /* Granted vs Dismissed: a grant is a close, not a dismissal. Status pill, the
    per-row "Granted by / Dismissed by" verb, and an All/Granted/Dismissed filter. */
-.pk-deleted-recs-msg { margin: 10px 0 0; padding: 8px 12px; border-radius: 6px; font-size: 13px; background: #fff5f5; border: 1px solid #fc8181; color: #c53030; }
-html[data-theme="dark"] .pk-deleted-recs-msg { background: rgba(252,129,129,0.12); color: #fed7d7; }
-.pk-closed-filter { display: inline-flex; flex-wrap: wrap; gap: 0; margin: 10px 0 2px; border: 1px solid var(--ork-border); border-radius: 6px; overflow: hidden; }
-.pk-closed-filter-btn { font-size: 12px; padding: 5px 12px; border: none; border-right: 1px solid var(--ork-border); background: var(--ork-card-bg); color: var(--ork-text-secondary); cursor: pointer; }
-.pk-closed-filter-btn:last-child { border-right: none; }
-.pk-closed-filter-btn:not(.pk-closed-filter-on):hover { background: rgba(0,0,0,0.04); color: var(--ork-text); }
-html[data-theme="dark"] .pk-closed-filter-btn:not(.pk-closed-filter-on):hover { background: rgba(255,255,255,0.06); }
-.pk-closed-filter-btn.pk-closed-filter-on { background: var(--pk-accent-mid, #2b6cb0); color: #fff; }
-/* Dark mode lightens the accent (amber/light blue), so white text washes out. */
-html[data-theme="dark"] .pk-closed-filter-btn.pk-closed-filter-on { color: #1a202c; }
+.pk-deleted-recs-msg { margin: 10px 0 0; padding: 8px 12px; border-radius: 6px; font-size: 13px; background: var(--ork-alert-danger-bg); border: 1px solid var(--ork-alert-danger-border); color: var(--ork-alert-danger-text); }
+.pk-closed-filter { display: inline-flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+/* Buttons share the .kn-rec-filter-btn palette (selector lists above); not the class itself,
+   since revised.js binds .kn-rec-filter-btn[data-filter] document-wide. */
+.pk-closed-filter-btn:focus-visible { outline: 2px solid var(--ork-link); outline-offset: 2px; }
+@media (max-width: 768px) {
+    .pk-closed-filter-btn { min-height: 36px; }
+}
 .pk-closed-filter-n { font-weight: 700; opacity: 0.85; }
-.pk-closed-pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; border: 1px solid transparent; }
-.pk-closed-pill-granted { color: #276749; background: rgba(47,133,90,0.12); border-color: rgba(47,133,90,0.4); }
-.pk-closed-pill-dismissed { color: #5a6472; background: rgba(90,100,114,0.12); border-color: rgba(90,100,114,0.4); }
-html[data-theme="dark"] .pk-closed-pill-granted { color: #9ae6b4; background: rgba(154,230,180,0.14); border-color: rgba(154,230,180,0.35); }
-html[data-theme="dark"] .pk-closed-pill-dismissed { color: #b7bec9; background: rgba(183,190,201,0.14); border-color: rgba(183,190,201,0.35); }
+.pk-closed-pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.pk-closed-pill-granted { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+.pk-closed-pill-dismissed { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
 .pk-deleted-recs-table .pk-closed-verb { color: var(--ork-text-muted); }
 .pk-deleted-recs-table .pk-closed-noaction { color: var(--ork-text-muted); padding: 0 10px; }
 
@@ -7244,6 +7242,7 @@ html[data-theme="dark"] .pk-officer-chip,
    DARK MODE — Recommendations filter bar
    ===================================================== */
 html[data-theme="dark"] .kn-rec-filter-btn,
+html[data-theme="dark"] .pk-closed-filter-btn,
 html[data-theme="dark"] .kn-rec-export-btn,
 html[data-theme="dark"] .kn-view-btn,
 html[data-theme="dark"] .kn-page-btn,
@@ -7608,11 +7607,13 @@ html[data-theme="dark"] .kn-report-group h5 {
 }
 html[data-theme="dark"] .kn-report-group ul li a { color: var(--ork-link-bright); }
 html[data-theme="dark"] .kn-report-group ul li a:hover { color: var(--ork-link); }
-html[data-theme="dark"] .kn-rec-filter-btn:hover {
+html[data-theme="dark"] .kn-rec-filter-btn:hover,
+html[data-theme="dark"] .pk-closed-filter-btn:hover {
   border-color: var(--ork-link-bright);
   color: var(--ork-link-bright);
 }
-html[data-theme="dark"] .kn-rec-filter-btn.kn-rec-filter-active {
+html[data-theme="dark"] .kn-rec-filter-btn.kn-rec-filter-active,
+html[data-theme="dark"] .pk-closed-filter-btn.pk-closed-filter-on {
   background: var(--ork-link);
   border-color: var(--ork-link);
   color: #fff;

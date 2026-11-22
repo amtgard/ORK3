@@ -4156,23 +4156,32 @@ $(document).ready(function() {
         knActiveRecId = rec.RecommendationsId || null;
     };
 
-    // Runs only after the award from "Give from rec" saved: the rec closes as
-    // GRANTED (Granted=1), never as a dismissal, so the closed-recs panel labels it
-    // "Granted" and offers no Restore.
+    // The rec outcome of the last save, read from Admin/player addaward's headers
+    // (knDoSave). The server closes the rec as GRANTED itself, and only when the
+    // award just saved backs it; the client never claims a grant.
+    var knLastRecResult = null;
+
+    // Runs only after the award from "Give from rec" saved. Nothing is posted: the
+    // save already closed the rec (or left it open, with the reason in the header).
     function knAutoDismissRec() {
         var id = knActiveRecId;
+        var res = knLastRecResult;
         knActiveRecId = null;
+        knLastRecResult = null;
         if (!id) return;
         var row = document.querySelector('#kn-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
-        var fd = new FormData();
-        fd.append('RecommendationsId', id);
-        fd.append('Granted', '1');
-        fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/dismissrecommendation', { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
-            })
-            .catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] autoDismissRec failed:', err); });
+        if (res && res.closed) {
+            if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+            return;
+        }
+        if (res && res.error) {
+            // Inline, after the save callbacks have reset the modal (no native dialog).
+            var msg = 'Award saved. The recommendation was left open: ' + res.error + '.';
+            setTimeout(function() {
+                var errEl = gid('kn-award-error');
+                if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+            }, 0);
+        }
     }
 
     // Recommendations tab: grant + dismiss
@@ -4612,6 +4621,9 @@ $(document).ready(function() {
                 // message in a header for exactly this.
                 var refused = resp.headers.get('X-Award-Error');
                 if (refused) throw new Error(refused);
+                var recClosed = resp.headers.get('X-Ork-Rec-Closed');
+                knLastRecResult = recClosed === null ? null
+                    : { closed: recClosed === '1', error: resp.headers.get('X-Ork-Rec-Error') || '' };
                 onSuccess();
             })
             .catch(function(err) {
@@ -8298,23 +8310,32 @@ $(document).ready(function() {
         pkActiveRecId = rec.RecommendationsId || null;
     };
 
-    // Runs only after the award from "Give from rec" saved: the rec closes as
-    // GRANTED (Granted=1), never as a dismissal, so the closed-recs panel labels it
-    // "Granted" and offers no Restore.
+    // The rec outcome of the last save, read from Admin/player addaward's headers
+    // (pkDoSave). The server closes the rec as GRANTED itself, and only when the
+    // award just saved backs it; the client never claims a grant.
+    var pkLastRecResult = null;
+
+    // Runs only after the award from "Give from rec" saved. Nothing is posted: the
+    // save already closed the rec (or left it open, with the reason in the header).
     function pkAutoDismissRec() {
         var id = pkActiveRecId;
+        var res = pkLastRecResult;
         pkActiveRecId = null;
+        pkLastRecResult = null;
         if (!id) return;
         var row = document.querySelector('#pk-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
-        var fd = new FormData();
-        fd.append('RecommendationsId', id);
-        fd.append('Granted', '1');
-        fetch(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/dismissrecommendation', { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
-            })
-            .catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] autoDismissRec failed:', err); });
+        if (res && res.closed) {
+            if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+            return;
+        }
+        if (res && res.error) {
+            // Inline, after the save callbacks have reset the modal (no native dialog).
+            var msg = 'Award saved. The recommendation was left open: ' + res.error + '.';
+            setTimeout(function() {
+                var errEl = gid('pk-award-error');
+                if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+            }, 0);
+        }
     }
 
     // Recommendations tab: grant + dismiss
@@ -8476,6 +8497,9 @@ $(document).ready(function() {
                 // message in a header for exactly this.
                 var refused = resp.headers.get('X-Award-Error');
                 if (refused) throw new Error(refused);
+                var recClosed = resp.headers.get('X-Ork-Rec-Closed');
+                pkLastRecResult = recClosed === null ? null
+                    : { closed: recClosed === '1', error: resp.headers.get('X-Ork-Rec-Error') || '' };
                 onSuccess();
             })
             .catch(function(err) {

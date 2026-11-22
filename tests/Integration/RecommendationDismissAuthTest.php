@@ -242,8 +242,10 @@ final class RecommendationDismissAuthTest extends TestCase
         $rec         = $this->recommendation($recipient['id'], $recommender['id']);
 
         // The notifier skips the granter; a forged RequestedBy = recommender used to
-        // make the recommender "the granter" and silence their notice.
-        $r = $this->dismiss($officer['token'], $rec, $recommender['id'], 1);
+        // make the recommender "the granter" and silence their notice. Granting goes
+        // through the cluster resolve (a dismiss never grants), backed by the award.
+        $this->fixture->createLedgerAward($recipient['id'], $this->ka['kingdomaward_id'], $this->ka['award_id'], 1);
+        $r = $this->resolve($officer['token'], $recipient['id'], $recommender['id']);
 
         $this->assertSame(0, (int) $r['Status']);
         $this->assertSame(1, $this->grantedNoticesFor($recommender['id']));
@@ -284,6 +286,7 @@ final class RecommendationDismissAuthTest extends TestCase
         $stranger    = $this->person('stranger');
         $officer     = $this->parkOfficer();
         $rec         = $this->recommendation($recipient['id'], $recommender['id']);
+        $this->fixture->createLedgerAward($recipient['id'], $this->ka['kingdomaward_id'], $this->ka['award_id'], 1);
 
         $r = $this->resolve($officer['token'], $recipient['id'], $stranger['id']);
 

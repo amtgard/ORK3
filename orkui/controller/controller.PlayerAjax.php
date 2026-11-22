@@ -173,39 +173,19 @@ class Controller_PlayerAjax extends Controller
                 'ParkId'         => $at_park_id,
                 'KingdomId'      => $at_kingdom_id,
                 'EventId'        => valid_id($_POST['EventId']   ?? 0) ? (int)$_POST['EventId'] : 0,
+                'RecommendationsId' => (int)($_POST['RecommendationsId'] ?? 0),
             ]);
             if (($r['Status'] ?? 1) == 0) {
                 $awards_id = (int)($r['AwardsId'] ?? 0);
                 $this->load_model('Scrollery');
                 $printable = $awards_id > 0 && $this->Scrollery->award_is_printable($awards_id, (int)$this->session->user_id);
                 $out = ['status' => 0, 'awardsId' => $awards_id, 'printable' => $printable];
-                // Opened from a recommendation ("Give from rec"): the award is recorded,
-                // so close that rec as GRANTED through the same token-authorized path
-                // the Kingdom/Park "Give from rec" uses. Only a rec about THIS player;
-                // a failure here never undoes the award — it is reported for the modal.
-                $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
-                if ($rec_id > 0) {
-                    $recError = '';
-                    try {
-                        if ($this->Player->recommendation_recipient($rec_id) !== $player_id) {
-                            $recError = 'not about this player';
-                        } else {
-                            $dr = $this->Player->delete_player_recommendation([
-                                'Token'             => $this->session->token,
-                                'RecommendationsId' => $rec_id,
-                                'Granted'           => 1,
-                            ]);
-                            if ((int)($dr['Status'] ?? 1) !== 0) {
-                                $recError = rtrim(($dr['Error'] ?? 'Error') . ': ' . ($dr['Detail'] ?? ''), ': ');
-                            }
-                        }
-                    } catch (\Throwable $e) {
-                        error_log('PlayerAjax::addaward rec close failed (rec ' . $rec_id . '): ' . $e->getMessage());
-                        $recError = 'server error';
-                    }
-                    $out['recClosed'] = $recError === '';
-                    if ($recError !== '') {
-                        $out['recError'] = 'The award was recorded, but its recommendation could not be closed (' . $recError . '). Close it from the Recommendations tab.';
+                // Opened from a recommendation ("Give from rec"): Player::AddAward closed
+                // it as GRANTED. A failure there never undoes the award; relay it.
+                if (array_key_exists('RecClosed', $r)) {
+                    $out['recClosed'] = (bool)$r['RecClosed'];
+                    if (!$r['RecClosed']) {
+                        $out['recError'] = 'The award was recorded, but its recommendation could not be closed (' . ($r['RecError'] ?? 'error') . '). Close it from the Recommendations tab.';
                     }
                 }
                 echo json_encode($out);
