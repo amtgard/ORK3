@@ -248,9 +248,9 @@ class Model_Survey extends Model
         return $this->_response()->definitionForRespondent($surveyId, $uid, $preview);
     }
 
-    public function draft_save(int $surveyId, int $uid, array $answers, int $pageIndex): array
+    public function draft_save(int $surveyId, int $uid, array $answers, int $pageIndex, bool $editing = false): array
     {
-        return $this->_response()->draftSave($surveyId, $uid, $answers, $pageIndex);
+        return $this->_response()->draftSave($surveyId, $uid, $answers, $pageIndex, $editing);
     }
 
     public function draft_load(int $surveyId, int $uid): ?array

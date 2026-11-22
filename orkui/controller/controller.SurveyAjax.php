@@ -684,8 +684,10 @@ class Controller_SurveyAjax extends Controller
         $surveyId = (int) ($_POST['SurveyId'] ?? 0);
         $answers  = $this->jsonField('Answers', [], $this->Survey->max_answer_bytes());
         $pageIndex = (int) ($_POST['PageIndex'] ?? 0);
+        // The runner is changing a sent response (Update My Answers).
+        $editing  = $this->truthy($_POST['Editing'] ?? 0);
 
-        $r = $this->Survey->draft_save($surveyId, $uid, $answers, $pageIndex);
+        $r = $this->Survey->draft_save($surveyId, $uid, $answers, $pageIndex, $editing);
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }

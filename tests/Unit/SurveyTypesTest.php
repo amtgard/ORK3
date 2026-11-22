@@ -642,7 +642,7 @@ final class SurveyTypesTest extends TestCase
         }
     }
 
-    /** Very large sets get gentler bands (tenths of a percent); band_pcts stay percent, whole values as ints. */
+    /** Very large sets get gentler bands (hundredths of a percent); band_pcts stay percent, whole values as ints. */
     public function testPairwiseBandsForLargeSets(): void
     {
         $expect = [

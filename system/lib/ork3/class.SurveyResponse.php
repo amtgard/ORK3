@@ -768,15 +768,25 @@ class SurveyResponse
      * responses of every survey that is not open, has passed its close_at (PHP
      * clock: close_at is the builder's PHP-local wall time, see nowStamp()), or
      * has `allow_edit` off. With $surveyId, only that survey's responses.
+     *
+     * The global form (no id) runs from the hourly cron
+     * (bin/survey-credit-sweep.php) and from the Available Surveys read
+     * (availableAndBannerFor()), so a survey that closes by date alone loses
+     * its links even if nobody opens it again. It filters on `edit_key IS NOT
+     * NULL` only — the three columns are always written and wiped together —
+     * so the scan stays on uq_edit_key: just the live links, never every
+     * response ever sent.
      */
     public function sweepEditKeys(?int $surveyId = null): void
     {
-        $where = '(r.edit_key IS NOT NULL OR r.edit_uuid IS NOT NULL OR r.edit_answers_json IS NOT NULL)
-                  AND (s.status <> \'open\'
+        $closed = '(s.status <> \'open\'
                        OR s.allow_edit = 0
                        OR (s.close_at IS NOT NULL AND s.close_at > \'1000-01-01\' AND s.close_at <= \'' . self::nowStamp() . '\'))';
         if (null !== $surveyId) {
-            $where .= ' AND r.survey_id = ' . (int) $surveyId . ' AND s.survey_id = ' . (int) $surveyId;
+            $where = '(r.edit_key IS NOT NULL OR r.edit_uuid IS NOT NULL OR r.edit_answers_json IS NOT NULL)
+                  AND ' . $closed . ' AND r.survey_id = ' . (int) $surveyId . ' AND s.survey_id = ' . (int) $surveyId;
+        } else {
+            $where = 'r.edit_key IS NOT NULL AND ' . $closed;
         }
         $this->db->Clear();
         $this->db->Execute(
@@ -885,11 +895,17 @@ class SurveyResponse
 
         $public = $this->publicSurveyFields($survey, $imageUrls);
 
-        // The data gate's credit line (§3.7). In preview the builder sees it whenever any config exists.
+        // The data gate's credit line (§3.7). In preview the builder sees it
+        // whenever any config exists. An edit never earns a credit (the edit
+        // path grants none; widgetRow() suppresses it on the card too).
         $credit = new SurveyCredit();
-        $public['credit_available'] = $preview
-            ? $credit->hasConfigs($surveyId)
-            : $credit->creditAvailableFor($survey, $uid);
+        if ($editing) {
+            $public['credit_available'] = false;
+        } else {
+            $public['credit_available'] = $preview
+                ? $credit->hasConfigs($surveyId)
+                : $credit->creditAvailableFor($survey, $uid);
+        }
 
         $seed  = (int) crc32($surveyId . '-' . $uid);
         $pages = $this->renderPagesForRespondent($pages, $seed, $imageUrls);
@@ -1183,10 +1199,17 @@ class SurveyResponse
      * Save (or replace) this player's in-progress answers. A no-op success when
      * the survey has resume turned off, so the runner can autosave blindly.
      *
+     * `$editing` is the runner saying it is changing a sent response (Update
+     * My Answers). Once a player has submitted an allow_edit survey,
+     * eligibility() says `editing`; a save WITHOUT the flag is then a first
+     * attempt's autosave landing after its own submit, and is dropped (no-op
+     * success, Saved=false). Stored, it would come back as a partial "edit in
+     * progress" on reopen.
+     *
      * @param  array<int|string, mixed> $answers
      * @return array<string, mixed>
      */
-    public function draftSave(int $surveyId, int $uid, array $answers, int $pageIndex): array
+    public function draftSave(int $surveyId, int $uid, array $answers, int $pageIndex, bool $editing = false): array
     {
         $surveyId = (int) $surveyId;
         $uid = (int) $uid;
@@ -1205,6 +1228,9 @@ class SurveyResponse
         $e = $this->eligibility($survey, $uid);
         if (!$e['eligible']) {
             return ['Status' => 1, 'Error' => 'This survey is not available to you.', 'Reason' => $e['reason']];
+        }
+        if (!empty($e['editing']) && !$editing) {
+            return ['Status' => 0, 'Error' => '', 'Saved' => false];
         }
 
         $json = json_encode($answers);
@@ -1703,7 +1729,9 @@ class SurveyResponse
              FOR UPDATE'
         );
         if (!$lock || !$lock->Next()) {
-            return $this->rollback('This survey is closed.', 'edit_lock', $surveyId, $uid);
+            $closed = $this->rollback(self::reasonMessage('closed'), 'edit_lock', $surveyId, $uid);
+            $closed['Reason'] = 'closed';
+            return $closed;
         }
 
         $sets = ['edit_answers_json = ' . $this->sqlStr($editJson)];
@@ -1891,6 +1919,11 @@ class SurveyResponse
      */
     public function availableAndBannerFor(int $uid): array
     {
+        // The frequent read that runs everywhere (memoised per viewer by the
+        // page shell): the place a date-based close gets its edit links wiped
+        // between cron runs. Indexed on uq_edit_key, see sweepEditKeys().
+        $this->sweepEditKeys();
+
         $candidates = $this->candidateSurveys($uid, false, 0);
         $eligible = [];
         $editable = [];

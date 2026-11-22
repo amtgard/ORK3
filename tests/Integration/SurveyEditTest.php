@@ -96,7 +96,7 @@ final class SurveyEditTest extends TestCase
         $this->assertSame(1, $def['Survey']['allow_edit']);
 
         // An edit in progress autosaves like a first attempt.
-        $this->assertTrue($sr->draftSave($sid, $uid, [$q => $b], 0)['Saved']);
+        $this->assertTrue($sr->draftSave($sid, $uid, [$q => $b], 0, true)['Saved']);
         $this->assertSame([$q => $b], $sr->definitionForRespondent($sid, $uid, false)['Draft']['answers']);
 
         // The consent sent with an edit is ignored: it stays what it was.
@@ -119,6 +119,37 @@ final class SurveyEditTest extends TestCase
         $this->assertSame([(string) $q => $b], json_decode((string) $after['edit_answers_json'], true));
         $this->assertSame('0', (string) $this->scalar('SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_draft WHERE survey_id = ' . $sid), 'draft deleted on resubmit');
         $this->assertSame(['uuid' => $first['EditUuid'], 'answers' => [$q => $b]], $sr->definitionForRespondent($sid, $uid, false)['Edit']);
+    }
+
+    public function testStaleFirstAttemptDraftAfterSubmitIsDropped(): void
+    {
+        $sid = $this->openSurvey($this->owner, 'kingdom', $this->k);
+        $this->assertSame(0, $this->survey()->update($sid, ['AllowEdit' => 1])['Status']);
+        // A second question, so a partial draft can leave one out.
+        $page = (int) $this->scalar('SELECT page_id FROM ' . DB_PREFIX . 'survey_page WHERE survey_id = ' . $sid . ' ORDER BY page_id LIMIT 1');
+        $this->pdo->exec('INSERT INTO ' . DB_PREFIX . 'survey_question (survey_id, page_id, sort_order, type, prompt, required, created_at, updated_at)
+                          VALUES (' . $sid . ', ' . $page . ', 9, \'short_text\', \'Anything else?\', 0, NOW(), NOW())');
+        $q2 = (int) $this->pdo->lastInsertId();
+        $q = (int) $this->scalar('SELECT question_id FROM ' . DB_PREFIX . 'survey_question WHERE survey_id = ' . $sid . ' ORDER BY question_id LIMIT 1');
+        $a = (int) $this->scalar('SELECT option_id FROM ' . DB_PREFIX . 'survey_option WHERE question_id = ' . $q . ' ORDER BY sort_order, option_id LIMIT 1');
+        $uid = $this->player('stale', $this->park, $this->k);
+        $this->submit($sid, $uid, [$q => $a, $q2 => 'hello'], 'full');
+
+        $sr = new SurveyResponse();
+        // The first attempt's autosave lands after its own submit: no flag, partial answers.
+        $stale = $sr->draftSave($sid, $uid, [$q => $a], 0);
+        $this->assertSame(0, $stale['Status']);
+        $this->assertFalse($stale['Saved']);
+        $def = $sr->definitionForRespondent($sid, $uid, false);
+        $this->assertNull($def['Draft']);
+        $this->assertSame([$q => $a, $q2 => 'hello'], $def['Edit']['answers']);
+        $this->assertFalse($def['Survey']['credit_available'], 'an edit never offers a credit');
+
+        // The runner in edit mode sends the flag: that draft is kept.
+        $this->assertTrue($sr->draftSave($sid, $uid, [$q2 => 'changed'], 0, true)['Saved']);
+        $def = $sr->definitionForRespondent($sid, $uid, false);
+        $this->assertSame([$q2 => 'changed'], $def['Draft']['answers']);
+        $this->assertSame([$q => $a, $q2 => 'hello'], $def['Edit']['answers'], 'the sent answers stay intact under a draft');
     }
 
     public function testAnonymousEditKeepsScrubbedFields(): void
@@ -279,6 +310,27 @@ final class SurveyEditTest extends TestCase
         (new SurveyResponse())->sweepEditKeys();
         $this->assertEditColumnsWiped($closed);
         $this->assertNotNull($this->responseRow($live)['edit_key']);
+    }
+
+    public function testAvailableSurveysReadSweepsDateClosedSurveys(): void
+    {
+        [$closed, $q, $a] = $this->editSurvey(true);
+        [$live, $lq, $la] = $this->editSurvey(true);
+        $uid = $this->player('avail', $this->park, $this->k);
+        $this->submit($closed, $uid, [$q => $a], 'full');
+        $this->submit($live, $uid, [$lq => $la], 'full');
+        $this->pdo->exec('UPDATE ' . DB_PREFIX . 'survey SET close_at = \'' . date('Y-m-d H:i:s', time() - 60) . '\' WHERE survey_id = ' . $closed);
+
+        // Anyone's Available Surveys read sweeps every closed survey, not only theirs.
+        (new SurveyResponse())->availableAndBannerFor($this->player('bystander', $this->park, $this->k));
+        $this->assertEditColumnsWiped($closed);
+        $this->assertNotNull($this->responseRow($live)['edit_key']);
+    }
+
+    public function testCronSweepsEditKeys(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/bin/survey-credit-sweep.php');
+        $this->assertMatchesRegularExpression('/new SurveyResponse\(\)\)->sweepEditKeys\(\)/', $src);
     }
 
     public function testForeignUuidIgnored(): void

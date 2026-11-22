@@ -69,8 +69,10 @@ While it's on:
 
 **Privacy.** To find a player's response again, the ORK keeps a private link from each response
 to the player who sent it, for as long as the survey is open. Nobody can see it in the results,
-the CSV or anywhere else in the ORK, and it's deleted when the survey closes (or when you turn
+the CSV or anywhere else in the ORK, and it's removed once the survey closes (or when you turn
 this setting off). Anonymous and partial responses are only fully unlinkable from that point on.
+If you share results while the survey is open, an edit can change the shared totals by one
+person's answers, so someone comparing two looks at them could see what that one edit changed.
 
 **Earlier responses.** Responses sent before you turned this on can't be changed, because no
 link was kept for them. Those players see the usual "already completed" message.

@@ -410,7 +410,11 @@ class SurveyReport
      * the first floor(N / MIN_CELL) * MIN_CELL responses the view matches (0
      * below MIN_CELL). Deterministic, so nothing is stored, and it moves only
      * once MIN_CELL more matching responses have arrived: two reloads either
-     * match or differ by at least MIN_CELL people.
+     * match or differ by at least MIN_CELL people. The exception is Update My
+     * Answers (`allow_edit`): an edit changes an already-counted response in
+     * place without moving the watermark, so two reloads can differ by one
+     * person's changed answers. That trade-off is accepted and documented in
+     * the builder hint and docs/survey-guide.md.
      */
     private function sharedWatermark(int $surveyId, array $f, ?int &$matched = null): int
     {

@@ -1166,7 +1166,10 @@
         post('draft_save', {
             SurveyId: SURVEY_ID,
             Answers: JSON.stringify(visibleAnswers()),
-            PageIndex: idx
+            PageIndex: idx,
+            // Without it the server drops the save once the player is
+            // editing: a first attempt's draft landing after its own submit.
+            Editing: editing ? 1 : 0
         }).then(function (r) {
             if (mySeq !== draftSeq) { return; }
             if (r && r.status === 0) {
@@ -1558,13 +1561,15 @@
             if (!mirroredIdx && typeof draft.page_index === 'number') { idx = draft.page_index; }
             resumed = true;
         }
-        // No edit in progress here or on the server: start from the answers
-        // sent last time. These are the response itself, not a resumption.
-        if (editing && !useMirror && !(draft && draft.answers && typeof draft.answers === 'object') &&
-                def.edit.answers && typeof def.edit.answers === 'object') {
+        // Changing a sent response: the answers sent last time are the base,
+        // and an edit in progress (this tab's mirror, the server draft) only
+        // overlays them. A partial draft must never stand in for the whole
+        // response, or "Update my answers" would send the later pages empty.
+        if (editing && def.edit.answers && typeof def.edit.answers === 'object') {
             for (k in def.edit.answers) {
                 if (!hasOwn(def.edit.answers, k)) { continue; }
-                answers[toInt(k)] = def.edit.answers[k];
+                qk = toInt(k);
+                if (!hasOwn(answers, qk)) { answers[qk] = def.edit.answers[k]; }
             }
         }
         if (draft && typeof draft.started_ts === 'number') {
