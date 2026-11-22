@@ -448,7 +448,9 @@ html[data-theme="dark"] .pn-acct-field input[type="url"],
 html[data-theme="dark"] .pn-acct-field input[type="password"],
 html[data-theme="dark"] .pn-acct-field select,
 html[data-theme="dark"] .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-html[data-theme="dark"] .pna-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+/* Light mode sets the cards off the white panel with --ork-bg-inset; dark
+   mode mirrors that by lifting them a step above the panel (same hue). */
+html[data-theme="dark"] .pna-card { background: color-mix(in srgb, var(--ork-card-bg) 91%, #fff); border-color: var(--ork-border); }
 html[data-theme="dark"] .pna-card-title { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-tenure-years { color: var(--ork-link); }
 html[data-theme="dark"] .pna-tenure-label,
