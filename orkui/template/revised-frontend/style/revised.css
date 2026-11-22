@@ -696,6 +696,41 @@ html[data-theme="dark"] .pn-ladder-name { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ladder-rank { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-ladder-rank strong { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
+/* Tile click filters the awards table to that ladder's rows */
+.pn-ladder-item[role="button"] { cursor: pointer; }
+.pn-ladder-item[role="button"]:hover { border-color: var(--ork-link-bright); }
+.pn-ladder-item[role="button"]:focus-visible { outline: 2px solid var(--ork-link-bright); outline-offset: 1px; }
+.pn-ladder-item[aria-pressed="true"],
+html[data-theme="dark"] .pn-ladder-item[aria-pressed="true"] {
+    border-color: var(--ork-link);
+    box-shadow: inset 0 0 0 1px var(--ork-link);
+}
+.pn-award-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: var(--ork-text-muted);
+}
+.pn-award-filter[hidden] { display: none; }
+.pn-award-filter strong { color: var(--ork-text); }
+.pn-award-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ork-link);
+    background: var(--ork-bg-inset);
+    border: 1px solid var(--ork-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+.pn-award-filter-clear:hover { border-color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-award-filter-clear { background: var(--ork-bg-secondary); }
 .pn-ladder-bar-track {
     height: 6px;
     background: #e2e8f0;
