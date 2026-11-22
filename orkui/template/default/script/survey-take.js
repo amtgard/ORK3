@@ -78,6 +78,12 @@
     };
     var REASON_FALLBACK = 'This survey is not available to you right now.';
 
+    // Update My Answers (allow_edit) copy.
+    var EDIT_NOTE = 'You\'ve already answered this survey. Change anything you like and press Update my answers.';
+    var EDIT_SUBMIT = 'Update my answers';
+    var EDIT_DONE = 'Your answers have been updated.';
+    var EDIT_LINK_LEAD = 'You can change your answers until this survey closes:';
+
     /** The scope reason names who the survey is for; the generic line is the fallback. */
     function reasonText(reason, s) {
         var label = String((s && s.scope_label) || '').trim();
@@ -144,7 +150,11 @@
 
     // ---------------------------------------------------------------- state
 
-    var def = null;          // {survey, pages, draft, eligible, reason}
+    var def = null;          // {survey, pages, draft, edit, eligible, reason}
+    // Changing an answered allow_edit survey: def.edit = {uuid, answers}. The
+    // consent level is fixed at first submit, so the data gate is skipped.
+    var editing = false;
+    var editNoted = false;   // the "you've already answered" note shows once
     var answers = {};        // { question_id: raw value }  (spec §6 shape)
     var screens = [];        // see "Screen model" above
     var idx = 0;
@@ -366,7 +376,8 @@
         for (i = 0; i < model.length; i++) {
             list.push({ kind: 'page', page: model[i].page, questions: model[i].questions });
         }
-        if (parseInt(s.data_gate_enabled, 10) === 1 || IS_PREVIEW) {
+        // An edit keeps the first submit's consent: no data-gate screen.
+        if ((parseInt(s.data_gate_enabled, 10) === 1 && !editing) || IS_PREVIEW) {
             list.push({ kind: 'final' });
         }
         if (!list.length) {
@@ -409,6 +420,7 @@
                 idx: idx,
                 startedAt: startedAt,
                 consent: consent,
+                edit: editing,
                 rescue: rescue
             }));
         } catch (e) { /* private mode, quota — the server draft is the real store */ }
@@ -743,9 +755,15 @@
     }
 
     function resumeNote() {
-        if (!resumed) { return ''; }
+        var html = '';
+        if (editing && !editNoted) {
+            editNoted = true;
+            html += '<div class="sv-notice sv-edit-note"><i class="fas fa-pen-to-square" aria-hidden="true"></i> ' +
+                esc(EDIT_NOTE) + '</div>';
+        }
+        if (!resumed) { return html; }
         resumed = false;
-        return '<div class="sv-notice"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> ' +
+        return html + '<div class="sv-notice"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> ' +
             'We picked up where you left off.</div>';
     }
 
@@ -762,8 +780,10 @@
         return html;
     }
 
+    /* Whether the data-gate heads-up shows. An edit keeps the consent given
+       at first submit and never reaches the gate, so it gets no heads-up. */
     function gateOn() {
-        return parseInt(((def && def.survey) || {}).data_gate_enabled, 10) === 1;
+        return !editing && parseInt(((def && def.survey) || {}).data_gate_enabled, 10) === 1;
     }
 
     function gateNoteHtml(cls) {
@@ -796,7 +816,9 @@
         return html;
     }
 
-    function nextLabelFor(i) { return isLastAnswerScreen(i) ? 'Submit' : 'Next'; }
+    function submitLabel() { return editing ? EDIT_SUBMIT : 'Submit'; }
+
+    function nextLabelFor(i) { return isLastAnswerScreen(i) ? submitLabel() : 'Next'; }
 
     /**
      * Every question of the page is rendered ONCE; the ones show-if currently
@@ -883,7 +905,7 @@
         var opts = consentOptions(s);
         var i, o;
 
-        if (gate) {
+        if (gate && !editing) {
             html += '<h2 class="sv-card-title">' + esc(CONSENT_HEADING) + '</h2>';
             html += '<p class="sv-intro">' + esc(CONSENT_INTRO) + '</p>';
             // Required, and tied to its error box so a screen reader hears the
@@ -909,6 +931,9 @@
             html += '<p class="sv-credit-note"><i class="fas fa-award" aria-hidden="true"></i><span>' +
                 esc(s.credit_available ? CREDIT_NOTE : CREDIT_MAYBE) + '<strong>Any ORK Data</strong>.</span></p>';
             creditNoticeShown = true;
+        } else if (editing) {
+            html += '<h2 class="sv-card-title">Ready to send</h2>';
+            html += '<p class="sv-intro">Your updated answers replace the ones you sent before.</p>';
         } else {
             html += '<h2 class="sv-card-title">Ready to send</h2>';
             html += '<p class="sv-intro">Your answers are recorded anonymously. Nothing about you is stored with them.</p>';
@@ -922,7 +947,7 @@
 
         html += '<div class="sv-q-error" id="sv-final-error" role="alert" hidden></div>';
         html += '</section>';
-        html += actionsHtml(idx > 0 ? 'Back' : '', 'Submit');
+        html += actionsHtml(idx > 0 ? 'Back' : '', submitLabel());
         return html;
     }
 
@@ -934,8 +959,9 @@
             esc(UIR) + 'Player/index">Back to My Amtgard</a></div>';
     }
 
-    function renderThanks(html, credit, announceText) {
+    function renderThanks(html, credit, announceText, opts) {
         var out = '<section class="sv-card sv-thanks">';
+        opts = opts || {};
         finished = true;
         if (draftTimer) { window.clearTimeout(draftTimer); draftTimer = null; }
         draftSeq++;           // a draft reply still in flight must not repaint the status
@@ -944,7 +970,17 @@
         if (def && def.survey && def.survey.thanks_image_url) {
             out += '<div class="sv-q-image"><img class="sv-q-image-img" src="' + esc(def.survey.thanks_image_url) + '" alt=""></div>';
         }
-        out += '<div class="sv-intro">' + (html ? safe(html) : '<p>Your response has been recorded.</p>') + '</div>';
+        if (opts.edited) {
+            out += '<p class="sv-intro sv-edit-done">' + esc(EDIT_DONE) + '</p>';
+        }
+        out += '<div class="sv-intro">' + (html ? safe(html) : (opts.edited ? '' : '<p>Your response has been recorded.</p>')) + '</div>';
+        if (opts.editUrl) {
+            out += '<div class="sv-edit-link"><p class="sv-edit-link-lead">' + esc(EDIT_LINK_LEAD) + '</p>' +
+                '<div class="sv-edit-link-row"><a class="sv-edit-link-url" href="' + esc(opts.editUrl) + '">' + esc(opts.editUrl) + '</a>' +
+                '<button type="button" class="sv-btn sv-edit-link-copy" data-sv-act="copy-edit-link" data-link="' + esc(opts.editUrl) + '"' +
+                ' data-tip="Copy link" aria-label="Copy link"><i class="fas fa-copy" aria-hidden="true"></i></button></div>' +
+                '<p class="sv-edit-link-status" role="status" aria-live="polite"></p></div>';
+        }
         if (credit === 'granted') {
             out += '<p class="sv-credit-note"><i class="fas fa-award" aria-hidden="true"></i><span>Your bonus credit has been added.</span></p>';
         } else if (credit === 'pending') {
@@ -1212,7 +1248,10 @@
         rebuildScreens();
         if (!validateCurrentPage()) { return; }
         if (isLastAnswerScreen(idx)) {
-            draftSave();
+            // No draft save alongside the submit: on an allow_edit survey a
+            // draft_save that the server handles AFTER the submit would be
+            // accepted (the player may now edit) and leave a stale draft
+            // behind. submit() saves the draft itself when the send fails.
             submit();
             return;
         }
@@ -1270,7 +1309,7 @@
 
         if (submitting) { return; }
 
-        if (gate && screens[idx] && screens[idx].kind === 'final') {
+        if (gate && !editing && screens[idx] && screens[idx].kind === 'final') {
             if (!consent) {
                 if (errEl) {
                     errEl.textContent = 'Please choose what the ORK may record with your answers.';
@@ -1303,10 +1342,12 @@
         post('submit', {
             SurveyId: SURVEY_ID,
             Answers: JSON.stringify(visibleAnswers()),
-            Consent: gate ? (consent || 'anonymous') : 'anonymous',
+            // An edit keeps the stored consent; the server ignores this value then.
+            Consent: (gate && !editing) ? (consent || 'anonymous') : 'anonymous',
             DurationSeconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000)),
             IsTest: isTest ? 1 : 0,
             // Only a respondent the gate told about credits is ever given one (D1).
+            // (An edit never shows the gate, so it never sets creditNoticeShown.)
             CreditNotice: (gate && creditNoticeShown) ? 1 : 0
         }).then(function (r) {
             submitting = false;
@@ -1317,7 +1358,8 @@
                 // The site banner promoting this survey is stale once it is answered.
                 var banner = document.getElementById('ork-survey-banner');
                 if (banner && +banner.getAttribute('data-survey-id') === +SURVEY_ID) { banner.remove(); }
-                renderThanks(r.thanks_html || s.thanks_html || '', r.credit || 'none');
+                renderThanks(r.thanks_html || s.thanks_html || '', r.credit || 'none',
+                    r.edited ? EDIT_DONE : '', { edited: !!r.edited, editUrl: r.edit_url || '' });
                 return;
             }
             if (r && r.status === 5) {
@@ -1333,13 +1375,16 @@
                 return;
             }
             if (r && r.status === 1 && r.errors) {
+                draftSave();
                 showSubmitErrors(r.errors);
                 return;
             }
+            draftSave();
             failFinal((r && r.error) || 'Your response could not be saved. Please try again.');
         })['catch'](function () {
             submitting = false;
             if (btn) { btn.classList.remove('sv-is-busy'); btn.disabled = false; }
+            draftSave();
             failFinal('Your response could not be saved — check your connection and try again.');
         });
     }
@@ -1401,6 +1446,25 @@
         var act = btn.getAttribute('data-sv-act');
         if (act === 'next') { goNext(); }
         if (act === 'back') { goBack(); }
+        if (act === 'copy-edit-link') { copyEditLink(btn); }
+    }
+
+    /** Copy the thanks screen's "change your answers" link (no native dialogs). */
+    function copyEditLink(btn) {
+        var link = btn.getAttribute('data-link') || '';
+        var box = btn.closest ? btn.closest('.sv-edit-link') : null;
+        var status = box ? box.querySelector('.sv-edit-link-status') : null;
+        function say(msg) {
+            if (status) { status.textContent = msg; }
+        }
+        if (!link) { return; }
+        if (window.navigator.clipboard && window.navigator.clipboard.writeText) {
+            window.navigator.clipboard.writeText(link).then(function () {
+                say('Link copied to the clipboard.');
+            })['catch'](function () { say('Copy the link above to keep it.'); });
+        } else {
+            say('Copy the link above to keep it.');
+        }
     }
 
     function onStageChange(e) {
@@ -1460,6 +1524,10 @@
         // The mirror follows allow_resume (#25); a rescue copy written when a
         // send was refused is honoured once even on a one-sitting survey.
         useMirror = !!(mirror && (resumeAllowed() || mirror.rescue === true));
+        // Changing a sent response: only a mirror written during an edit may
+        // stand in for it. A first attempt's copy (sent from another tab or
+        // device) must never overwrite the answers the server holds.
+        if (useMirror && editing && mirror.edit !== true) { useMirror = false; }
         if (mirror && !useMirror) { mirrorClear(); }
 
         if (useMirror && mirror.answers && typeof mirror.answers === 'object') {
@@ -1489,6 +1557,15 @@
             // tab's own mirror is the fresher record of where they were.
             if (!mirroredIdx && typeof draft.page_index === 'number') { idx = draft.page_index; }
             resumed = true;
+        }
+        // No edit in progress here or on the server: start from the answers
+        // sent last time. These are the response itself, not a resumption.
+        if (editing && !useMirror && !(draft && draft.answers && typeof draft.answers === 'object') &&
+                def.edit.answers && typeof def.edit.answers === 'object') {
+            for (k in def.edit.answers) {
+                if (!hasOwn(def.edit.answers, k)) { continue; }
+                answers[toInt(k)] = def.edit.answers[k];
+            }
         }
         if (draft && typeof draft.started_ts === 'number') {
             // Epoch seconds from the server: started_at itself is the server's
@@ -1567,6 +1644,7 @@
                 return;
             }
 
+            editing = !IS_PREVIEW && !!(def.edit && typeof def.edit === 'object');
             applyDraft();
             screens = buildScreens();
             if (idx > screens.length - 1) { idx = screens.length - 1; }

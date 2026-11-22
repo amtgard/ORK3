@@ -7,6 +7,7 @@
  * Route=Survey/build/{id}                 builder
  * Route=Survey/take/{id}[/preview]        runner
  * Route=Survey/s/{slug}                   runner, resolved by share slug
+ *   (either runner route takes &r={uuid}: the "change your answers" link)
  * Route=Survey/results/{id}               reporting
  * Route=Survey/export/{id}?filters=<json> CSV download
  *
@@ -65,14 +66,29 @@ class Controller_Survey extends Controller
         if ((int) ($r['Status'] ?? 1) !== 0) {
             return null;
         }
+        $edit = is_array($r['Edit'] ?? null) ? $r['Edit'] : null;
         return [
             'status'   => 0,
             'survey'   => $r['Survey'],
             'pages'    => $r['Pages'],
             'draft'    => $r['Draft'],
+            'edit'     => $edit,
+            // The "change your answers" link (&r=) only names a response; the
+            // domain finds the viewer's own one by its server key, never by
+            // this value. It is honoured as a hint only when it IS that
+            // response, and silently ignored otherwise.
+            'reopened' => $edit !== null && $this->reopenUuid() !== ''
+                && hash_equals((string) $edit['uuid'], $this->reopenUuid()),
             'eligible' => (bool) $r['Eligible'],
             'reason'   => $r['Reason'],
         ];
+    }
+
+    /** The &r= reopen link's response uuid, or '' when absent or malformed. */
+    private function reopenUuid(): string
+    {
+        $r = strtolower(trim((string) ($_GET['r'] ?? '')));
+        return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $r) ? $r : '';
     }
 
     /**

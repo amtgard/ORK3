@@ -2635,6 +2635,8 @@
         /* Experience */
         body  = checkRow('Show a progress bar', truthy(s.show_progress), 'data-sv-field="ShowProgress"', false);
         body += checkRow('Let respondents resume a part-finished survey', truthy(s.allow_resume), 'data-sv-field="AllowResume"', false);
+        body += checkRow('Allow respondents to change their answers before the survey closes', truthy(s.allow_edit), 'data-sv-field="AllowEdit"', false,
+                         'Responses can be reopened from the survey link until it closes. While open, the server keeps a private link from each response to its player, removed at close. Responses sent before this was turned on can\'t be changed.');
         body += fieldRow('<div class="svb-color"><input type="color" class="svb-color-input" id="svb-f-accent" data-sv-field="AccentColor" value="' +
                          esc(s.accent_color || '#2c5282') + '">' +
                          '<button type="button" class="sv-btn" data-act="accent-clear">Use the ORK default</button></div>',

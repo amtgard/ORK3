@@ -36,7 +36,7 @@ The builder has two parts:
   question below the last one on a page.
 - **Survey settings** (left) are collapsible sections: Basics, Screens (welcome and thank-you),
   Audience, Schedule, Privacy (the data gate), Promotion (site banner and share link) and
-  Experience (progress bar, resume, accent colour). The site banner is **on** for every new survey;
+  Experience (progress bar, resume, changing answers, accent colour). The site banner is **on** for every new survey;
   untick it in Promotion if you'd rather reach players only by share link.
 
 Everything saves as you go. The pill in the header says **Saved**, **Saving…** or **Not saved**
@@ -49,6 +49,31 @@ on the longest side. A survey can hold up to 40 images and 40 MB in total. When 
 limit, the ORK first clears out images that no question, screen or text uses any more (anything
 uploaded in the last hour is kept, in case you're still placing it). If the survey is still full,
 the upload is refused and the message says which limit you hit.
+
+### Letting players change their answers
+
+In **Experience**, tick **Allow respondents to change their answers before the survey closes**
+to let players come back and update what they sent. It's off by default, and you can turn it on
+or off while the survey is open. It suits long surveys, such as a big pairwise question, where
+players may want to do some matchups now and add more later.
+
+While it's on:
+
+- A player who has answered sees **Update my answers** on the survey's card, and the survey link
+  opens their own answers for them to change. Their thank-you screen also gives them a link they
+  can keep, for coming back later.
+- An update replaces their earlier answers. It's still one response, so it isn't counted twice
+  and never earns a second bonus credit.
+- The data gate isn't asked again. The choice a player made the first time stays.
+- Once the survey closes, the answers are final, and the link says the survey has closed.
+
+**Privacy.** To find a player's response again, the ORK keeps a private link from each response
+to the player who sent it, for as long as the survey is open. Nobody can see it in the results,
+the CSV or anywhere else in the ORK, and it's deleted when the survey closes (or when you turn
+this setting off). Anonymous and partial responses are only fully unlinkable from that point on.
+
+**Earlier responses.** Responses sent before you turned this on can't be changed, because no
+link was kept for them. Those players see the usual "already completed" message.
 
 ### Question types
 

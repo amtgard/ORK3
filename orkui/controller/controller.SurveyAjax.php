@@ -672,6 +672,7 @@ class Controller_SurveyAjax extends Controller
             'survey'   => $r['Survey'],
             'pages'    => $r['Pages'],
             'draft'    => $r['Draft'],
+            'edit'     => $r['Edit'] ?? null,
             'eligible' => (bool) $r['Eligible'],
             'reason'   => $r['Reason'],
         ]);
@@ -711,7 +712,28 @@ class Controller_SurveyAjax extends Controller
         // The banner is memoised per viewer in the session; a finished survey
         // must stop being promoted on the very next page load.
         $this->bust_survey_banner_cache();
-        $this->jsonOut(['status' => 0, 'thanks_html' => $r['ThanksHtml'], 'credit' => $r['Credit'] ?? 'none']);
+        $this->jsonOut([
+            'status'      => 0,
+            'thanks_html' => $r['ThanksHtml'],
+            'credit'      => $r['Credit'] ?? 'none',
+            'edited'      => !empty($r['Edited']),
+            'edit_url'    => $this->editUrl($surveyId, (string) ($r['EditUuid'] ?? '')),
+        ]);
+    }
+
+    /**
+     * The "change your answers" link for an allow_edit response: the share
+     * slug route (the runner's own Survey/take/{id} when a survey has no slug)
+     * with &r={uuid}. Null when the response cannot be changed.
+     */
+    private function editUrl(int $surveyId, string $uuid): ?string
+    {
+        if ($uuid === '') {
+            return null;
+        }
+        $row  = $this->Survey->get_row($surveyId);
+        $slug = (string) ($row['slug'] ?? '');
+        return UIR . ($slug !== '' ? 'Survey/s/' . rawurlencode($slug) : 'Survey/take/' . $surveyId) . '&r=' . rawurlencode($uuid);
     }
 
     public function available($p = null)

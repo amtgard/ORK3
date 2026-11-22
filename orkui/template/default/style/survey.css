@@ -1702,6 +1702,19 @@ html[data-theme="dark"] .sv-credit-warning { background: rgba(214, 158, 46, 0.12
 .sv-chip-credit { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 12px;
     font-size: var(--ork-font-size-sm); font-weight: 600; background: var(--sv-l2); border: 1px solid var(--sv-border); }
 
+/* ── Update My Answers (allow_edit): the thanks screen's reopen link ──
+   Theme-safe through the --sv-* tokens, which carry their own dark values. */
+.sv-edit-done { margin: 0 0 8px; font-weight: 600; color: var(--sv-text); }
+.sv-edit-link { margin: 14px 0 0; padding: 10px 12px; border-radius: var(--sv-radius-l3);
+    background: var(--sv-l2); border: 1px solid var(--sv-line-2); }
+.sv-edit-link-lead { margin: 0 0 6px; font-size: var(--ork-font-size-base); color: var(--sv-text-body); }
+.sv-edit-link-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sv-edit-link-url { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; word-break: break-all;
+    font-size: var(--ork-font-size-sm); color: var(--ork-link); }
+.sv-edit-link-copy { flex: 0 0 auto; }
+.sv-edit-link-status { margin: 6px 0 0; min-height: 1em; font-size: var(--ork-font-size-sm); color: var(--sv-text-muted); }
+.sv-edit-link-status:empty { display: none; }
+
 /* ── data-tip tooltip (every survey page; placed by script/survey-tip.js) ──
    One position:fixed node on <body>. A pseudo-element tip would be clipped by
    the scrolling table areas (and, laid out at opacity 0, grow their scroll
