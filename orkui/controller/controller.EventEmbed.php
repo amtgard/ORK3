@@ -10,7 +10,8 @@
  *          detail_url, schedule_url, grid_url,
  *          days: [ { date, day_label, items: [
  *              { id, title, start, end, time_label, location, category, leads[] }
- *          ] } ] }
+ *          ] } ],
+ *          category_colors: { <category name>: '#rrggbb', ... } }
  *   {detail_id} is optional — omit it to get the next upcoming occurrence.
  *
  * Drafts return 404 so nothing that isn't already public can leak. The data
@@ -76,6 +77,12 @@ class Controller_EventEmbed extends Controller
             ];
         }
 
+        // Each category's solid colour, from the one category source (EventPlanning::ScheduleCategories).
+        $categoryColors = [];
+        foreach ($this->Event->schedule_categories() as $catName => $catDef) {
+            $categoryColors[$catName] = (string) ($catDef['bold'] ?? '');
+        }
+
         $detailUrl = UIR . 'Event/detail/' . $eventId . '/' . $detailId;
         $this->json([
             'ok'           => true,
@@ -88,6 +95,7 @@ class Controller_EventEmbed extends Controller
             'schedule_url' => $detailUrl . '#ev-tab-schedule',
             'grid_url'     => $detailUrl . '#ev-tab-schedule?view=grid',
             'days'         => array_values($days),
+            'category_colors' => (object) $categoryColors,
         ]);
     }
 
