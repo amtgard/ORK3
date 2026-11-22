@@ -642,6 +642,26 @@ final class SurveyTypesTest extends TestCase
         }
     }
 
+    /** Very large sets get gentler bands (tenths of a percent); band_pcts stay percent, whole values as ints. */
+    public function testPairwiseBandsForLargeSets(): void
+    {
+        $expect = [
+            32  => [496, [10, 15, 20, 25], [50, 75, 100, 124], 50],
+            33  => [528, [5, 10, 15, 20], [27, 53, 80, 106], 27],
+            46  => [1035, [2, 4, 6, 8], [21, 42, 63, 83], 21],
+            64  => [2016, [1, 2, 3, 4], [21, 41, 61, 81], 21],
+            101 => [5050, [0.5, 1, 1.5, 2], [26, 51, 76, 101], 26],
+            142 => [10011, [0.1, 0.2, 0.3, 0.4], [11, 21, 31, 41], 11],
+        ];
+        foreach ($expect as $n => [$possible, $pcts, $tiers, $gate]) {
+            $plan = SurveyTypes::pairwisePlan($n);
+            $this->assertSame($possible, $plan['possible'], 'n=' . $n);
+            $this->assertSame($pcts, $plan['band_pcts'], 'n=' . $n);
+            $this->assertSame($tiers, $plan['tiers'], 'n=' . $n);
+            $this->assertSame($gate, $plan['gate'], 'n=' . $n);
+        }
+    }
+
     public function testPairwiseGateMessages(): void
     {
         $this->assertSame('Please finish all 15 matchups to continue.', SurveyTypes::pairwiseGateMessage(SurveyTypes::pairwisePlan(6)));

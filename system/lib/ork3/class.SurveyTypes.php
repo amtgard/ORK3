@@ -85,15 +85,20 @@ final class SurveyTypes
 
     /**
      * Encouragement bands for a pairwise question by its matchup count (pairwise
-     * spec P5): [upper bound or null, [tier 1..4 percent]]. Tier 1 is the gate a
+     * spec P5): [upper bound or null, [tier 1..4 in TENTHS of a percent]]. Tier 1 is the gate a
      * REQUIRED respondent must reach. survey-render.js mirrors this table as
      * PW_BANDS; SurveyPairwisePlanScriptTest pins the two together.
      */
     public const PAIRWISE_BANDS = [
-        [105,  [30, 40, 50, 60]],
-        [200,  [20, 30, 40, 50]],
-        [300,  [10, 20, 30, 40]],
-        [null, [10, 15, 20, 25]],
+        [105,   [300, 400, 500, 600]],
+        [200,   [200, 300, 400, 500]],
+        [300,   [100, 200, 300, 400]],
+        [500,   [100, 150, 200, 250]],
+        [1000,  [50, 100, 150, 200]],
+        [2000,  [20, 40, 60, 80]],
+        [5000,  [10, 20, 30, 40]],
+        [10000, [5, 10, 15, 20]],
+        [null,  [1, 2, 3, 4]],
     ];
 
     public static function isType(string $type): bool
@@ -111,7 +116,7 @@ final class SurveyTypes
      * (pairwise spec §2). Tier counts are integer ceilings, so float rounding
      * can never move a threshold.
      *
-     * @return array{possible: int, small: bool, band_pcts: list<int>, tiers: list<int>, gate: int}
+     * @return array{possible: int, small: bool, band_pcts: list<int|float>, tiers: list<int>, gate: int}
      */
     public static function pairwisePlan(int $optionCount): array
     {
@@ -120,16 +125,18 @@ final class SurveyTypes
         if ($possible <= self::PAIRWISE_SMALL_MAX) {
             return ['possible' => $possible, 'small' => true, 'band_pcts' => [], 'tiers' => [], 'gate' => $possible];
         }
-        $pcts = [];
-        foreach (self::PAIRWISE_BANDS as [$max, $bandPcts]) {
+        $tenths = [];
+        foreach (self::PAIRWISE_BANDS as [$max, $bandTenths]) {
             if (null === $max || $possible <= $max) {
-                $pcts = $bandPcts;
+                $tenths = $bandTenths;
                 break;
             }
         }
+        $pcts = [];
         $tiers = [];
-        foreach ($pcts as $pct) {
-            $tiers[] = intdiv($pct * $possible + 99, 100);
+        foreach ($tenths as $t) {
+            $pcts[] = 0 === $t % 10 ? intdiv($t, 10) : $t / 10;
+            $tiers[] = intdiv($t * $possible + 999, 1000);
         }
         return ['possible' => $possible, 'small' => false, 'band_pcts' => $pcts, 'tiers' => $tiers, 'gate' => $tiers[0]];
     }

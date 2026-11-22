@@ -94,7 +94,12 @@ your question's own numbers.
 | 31–105 | 30% | 40% | 50% | 60% |
 | 106–200 | 20% | 30% | 40% | 50% |
 | 201–300 | 10% | 20% | 30% | 40% |
-| 301 or more | 10% | 15% | 20% | 25% |
+| 301–500 | 10% | 15% | 20% | 25% |
+| 501–1,000 | 5% | 10% | 15% | 20% |
+| 1,001–2,000 | 2% | 4% | 6% | 8% |
+| 2,001–5,000 | 1% | 2% | 3% | 4% |
+| 5,001–10,000 | 0.5% | 1% | 1.5% | 2% |
+| 10,001 or more | 0.1% | 0.2% | 0.3% | 0.4% |
 
 - **Required or optional.** A required pairwise question won't let the player move on until they reach
   "Can continue". An optional one can be skipped, and whatever matchups the player did still count.
