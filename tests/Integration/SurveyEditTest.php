@@ -98,6 +98,10 @@ final class SurveyEditTest extends TestCase
         // An edit in progress autosaves like a first attempt.
         $this->assertTrue($sr->draftSave($sid, $uid, [$q => $b], 0, true)['Saved']);
         $this->assertSame([$q => $b], $sr->definitionForRespondent($sid, $uid, false)['Draft']['answers']);
+        // An emptied answer travels as null so a reload does not refill it.
+        $this->assertTrue($sr->draftSave($sid, $uid, [$q => null], 0, true)['Saved']);
+        $this->assertSame([$q => null], $sr->definitionForRespondent($sid, $uid, false)['Draft']['answers']);
+        $this->assertTrue($sr->draftSave($sid, $uid, [$q => $b], 0, true)['Saved']);
 
         // The consent sent with an edit is ignored: it stays what it was.
         $edit = $this->submit($sid, $uid, [$q => $b], 'anonymous');
@@ -114,11 +118,34 @@ final class SurveyEditTest extends TestCase
         $this->assertSame('full', $after['consent']);
         $this->assertSame($before['mundane_id'], $after['mundane_id']);
         $this->assertSame($before['duration_seconds'], $after['duration_seconds']);
-        $this->assertGreaterThan(strtotime((string) $before['submitted_at']), strtotime((string) $after['submitted_at']), 'full consent: submitted_at moves to the edit');
+        $this->assertSame($before['submitted_at'], $after['submitted_at'], 'submitted_at keeps the first submit: bonus credit is judged and dated from it');
         $this->assertSame([$b], $this->answerOptions($responseId));
         $this->assertSame([(string) $q => $b], json_decode((string) $after['edit_answers_json'], true));
         $this->assertSame('0', (string) $this->scalar('SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_draft WHERE survey_id = ' . $sid), 'draft deleted on resubmit');
         $this->assertSame(['uuid' => $first['EditUuid'], 'answers' => [$q => $b]], $sr->definitionForRespondent($sid, $uid, false)['Edit']);
+    }
+
+    public function testEditRefusedWhenTheSurveyClosedUnderneathIt(): void
+    {
+        [$sid, $q, $a, $b] = $this->editSurvey(true);
+        $uid = $this->player('closer', $this->park, $this->k);
+        $first = $this->submit($sid, $uid, [$q => $a], 'full');
+        $responseId = (int) $first['ResponseId'];
+        $staleOpenRow = $this->row($sid);
+
+        // Survey::setStatus commits the status BEFORE it sweeps: model the
+        // window where the close has landed but the edit link still exists.
+        $this->pdo->exec('UPDATE ' . DB_PREFIX . 'survey SET status = \'closed\' WHERE survey_id = ' . $sid);
+
+        $sr = new SurveyResponse();
+        $rows = [['question_id' => $q, 'option_id' => $b]];
+        $m = new \ReflectionMethod(SurveyResponse::class, 'submitEdit');
+        $m->setAccessible(true);
+        $r = $m->invoke($sr, $staleOpenRow, $uid, [$q => $b], $rows);
+
+        $this->assertSame(1, $r['Status']);
+        $this->assertSame('closed', $r['Reason']);
+        $this->assertSame([$a], $this->answerOptions($responseId), 'answers untouched after close');
     }
 
     public function testStaleFirstAttemptDraftAfterSubmitIsDropped(): void

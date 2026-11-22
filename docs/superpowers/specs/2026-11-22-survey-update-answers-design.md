@@ -43,9 +43,10 @@ player, and that the link is wiped at close.
   the consent screen is skipped on edit. Profile-link scrubbing rules apply unchanged.
 - `response_count` and bonus credit are not touched by an edit (no double counting,
   no second grant).
-- `submitted_at` / `duration_seconds` keep their first-submit values for partial and
-  anonymous responses (no new timing signal). For full consent, `submitted_at` may
-  update to the edit time (builder's call).
+- `submitted_at` / `duration_seconds` keep their first-submit values for every
+  consent level: no new timing signal, and bonus credit judges coverage and dates
+  the grant from `submitted_at`, so an edit must not move it (changed after review;
+  first drafted as "full consent may update to the edit time").
 - Drafts: an edit in progress autosaves to `ork_survey_draft` like a first attempt when
   `allow_resume` is on; the draft is deleted on resubmit.
 - Survey cards show "Update my answers" instead of "Take survey" when the player has

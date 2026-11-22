@@ -1685,14 +1685,14 @@ class SurveyResponse
     /**
      * Replace an editable response's answers in place (Update My Answers).
      * ONE transaction: lock the response row and re-check its edit link ->
-     * refresh edit_answers_json (and submitted_at, for full consent only) ->
-     * replace the answer rows -> delete the draft.
+     * re-check the survey is still open (shared lock) -> refresh
+     * edit_answers_json -> replace the answer rows -> delete the draft.
      *
      * No participation row, no response_count bump and no bonus credit: the
      * response was already counted and credited at first submit. Consent and
-     * the scrubbed identity columns stay exactly as first stored; for partial
-     * and anonymous responses not even the day moves, so an edit adds no new
-     * timing signal.
+     * the scrubbed identity columns stay exactly as first stored, and so does
+     * submitted_at (bonus credit is judged and dated from it, and for partial
+     * and anonymous responses a moved day would be a new timing signal).
      *
      * @param  array<string, mixed>       $survey  raw ork_survey row
      * @param  array<int|string, mixed>   $answers raw submission
@@ -1734,14 +1734,38 @@ class SurveyResponse
             return $closed;
         }
 
-        $sets = ['edit_answers_json = ' . $this->sqlStr($editJson)];
-        if ('full' === $editable['consent']) {
-            $sets[] = 'submitted_at = ' . $this->sqlStr(self::nowStamp());
+        // And re-read the survey itself under a shared lock: Survey::setStatus
+        // commits the status change BEFORE its sweep, so a close can land
+        // while this edit holds the response lock. A locking read sees the
+        // committed status, and the shared lock holds a close (an UPDATE on
+        // the survey row) until this edit commits, without serialising edits
+        // to the same survey against each other.
+        $this->db->Clear();
+        $open = $this->db->DataSet(
+            'SELECT status, open_at, close_at, allow_edit FROM ' . DB_PREFIX . 'survey
+             WHERE survey_id = ' . $surveyId . '
+             LOCK IN SHARE MODE'
+        );
+        if (!$open || !$open->Next()
+            || empty($open->allow_edit)
+            || !self::isOpenNow([
+                'status'   => (string) $open->status,
+                'open_at'  => $open->open_at,
+                'close_at' => $open->close_at,
+            ])
+        ) {
+            $closed = $this->rollback(self::reasonMessage('closed'), 'edit_survey_closed', $surveyId, $uid);
+            $closed['Reason'] = 'closed';
+            return $closed;
         }
+
+        // submitted_at stays the first-submit value for EVERY consent level:
+        // bonus credit judges coverage and dates the grant from it
+        // (SurveyCredit::coverage/grant), so an edit must not move it.
         $this->db->Clear();
         error_clear_last();
         if (!$this->exec(
-            'UPDATE ' . DB_PREFIX . 'survey_response SET ' . implode(', ', $sets) . '
+            'UPDATE ' . DB_PREFIX . 'survey_response SET edit_answers_json = ' . $this->sqlStr($editJson) . '
              WHERE response_id = ' . $responseId
         )) {
             return $this->rollback('Your answers could not be saved.', 'edit_update_response', $surveyId, $uid);

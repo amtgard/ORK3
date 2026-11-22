@@ -156,6 +156,10 @@
     var editing = false;
     var editNoted = false;   // the "you've already answered" note shows once
     var answers = {};        // { question_id: raw value }  (spec §6 shape)
+    // Editing only: questions the player emptied that held an answer last
+    // time. A draft or mirror carries them (as null / this map) so a reload
+    // does not refill them from def.edit.answers.
+    var cleared = {};
     var screens = [];        // see "Screen model" above
     var idx = 0;
     var startedAt = Date.now();
@@ -168,6 +172,7 @@
     var mirrorTimer = null;  // pending debounced sessionStorage write
     var draftTimer = null;   // pending debounced server draft save
     var draftSeq = 0;        // only the newest draft_save reply paints the status
+    var draftInFlight = null; // the draft_save request on the wire; submit waits for it
     var deferredSince = 0;   // when the pending save was first asked for (DRAFT_MAX_WAIT)
     var saveState = '';      // '' | 'saved' | 'failed' — what the status line shows
 
@@ -421,6 +426,7 @@
                 startedAt: startedAt,
                 consent: consent,
                 edit: editing,
+                cleared: editing ? cleared : {},
                 rescue: rescue
             }));
         } catch (e) { /* private mode, quota — the server draft is the real store */ }
@@ -560,8 +566,10 @@
             v = R.read(root, q);
             if (v === undefined) {
                 delete answers[qid];
+                if (editing) { cleared[qid] = true; }
             } else {
                 answers[qid] = v;
+                delete cleared[qid];
             }
         }
         mirrorSave();
@@ -1157,20 +1165,39 @@
         }
     }
 
+    /** What a draft stores: the visible answers, plus (editing) null for each emptied one. */
+    function draftAnswers() {
+        var out = visibleAnswers();
+        var k;
+        if (editing) {
+            for (k in cleared) {
+                if (hasOwn(cleared, k) && !hasOwn(out, k)) { out[k] = null; }
+            }
+        }
+        return out;
+    }
+
     function draftSave() {
-        var mySeq;
+        var mySeq, req;
         if (draftTimer) { window.clearTimeout(draftTimer); draftTimer = null; }
         deferredSince = 0;
         if (IS_PREVIEW || finished || !resumeAllowed()) { return; }
         mySeq = ++draftSeq;
-        post('draft_save', {
+        req = post('draft_save', {
             SurveyId: SURVEY_ID,
-            Answers: JSON.stringify(visibleAnswers()),
+            Answers: JSON.stringify(draftAnswers()),
             PageIndex: idx,
             // Without it the server drops the save once the player is
             // editing: a first attempt's draft landing after its own submit.
             Editing: editing ? 1 : 0
-        }).then(function (r) {
+        });
+        // submit() waits on this so a save already on the wire cannot land
+        // after the submit that deletes the draft (it would resurrect older
+        // answers on the next reopen).
+        draftInFlight = req['catch'](function () {}).then(function () {
+            if (draftInFlight && mySeq === draftSeq) { draftInFlight = null; }
+        });
+        req.then(function (r) {
             if (mySeq !== draftSeq) { return; }
             if (r && r.status === 0) {
                 setSaveStatus('saved');
@@ -1342,7 +1369,7 @@
         if (draftTimer) { window.clearTimeout(draftTimer); draftTimer = null; }
         if (btn) { btn.classList.add('sv-is-busy'); btn.disabled = true; }
 
-        post('submit', {
+        (draftInFlight || Promise.resolve()).then(function () { return post('submit', {
             SurveyId: SURVEY_ID,
             Answers: JSON.stringify(visibleAnswers()),
             // An edit keeps the stored consent; the server ignores this value then.
@@ -1352,7 +1379,7 @@
             // Only a respondent the gate told about credits is ever given one (D1).
             // (An edit never shows the gate, so it never sets creditNoticeShown.)
             CreditNotice: (gate && creditNoticeShown) ? 1 : 0
-        }).then(function (r) {
+        }); }).then(function (r) {
             submitting = false;
             if (btn) { btn.classList.remove('sv-is-busy'); btn.disabled = false; }
 
@@ -1540,6 +1567,11 @@
                 consent = mirror.consent;
             }
             if (saneStart(mirror.startedAt)) { startedAt = mirror.startedAt; }
+            if (editing && mirror.cleared && typeof mirror.cleared === 'object') {
+                for (k in mirror.cleared) {
+                    if (hasOwn(mirror.cleared, k) && !hasOwn(answers, k)) { cleared[toInt(k)] = true; }
+                }
+            }
             for (k in answers) {
                 if (hasOwn(answers, k)) { resumed = true; break; }
             }
@@ -1554,7 +1586,13 @@
             for (k in draft.answers) {
                 if (!hasOwn(draft.answers, k)) { continue; }
                 qk = toInt(k);
-                if (!hasOwn(answers, qk)) { answers[qk] = draft.answers[k]; }
+                if (hasOwn(answers, qk) || cleared[qk]) { continue; }
+                if (draft.answers[k] === null) {
+                    // An edit's draft marks an emptied answer with null.
+                    if (editing) { cleared[qk] = true; }
+                    continue;
+                }
+                answers[qk] = draft.answers[k];
             }
             // The server draft is the durable record of the answers, but this
             // tab's own mirror is the fresher record of where they were.
@@ -1569,7 +1607,8 @@
             for (k in def.edit.answers) {
                 if (!hasOwn(def.edit.answers, k)) { continue; }
                 qk = toInt(k);
-                if (!hasOwn(answers, qk)) { answers[qk] = def.edit.answers[k]; }
+                // An answer the player emptied stays empty across a reload.
+                if (!hasOwn(answers, qk) && !cleared[qk]) { answers[qk] = def.edit.answers[k]; }
             }
         }
         if (draft && typeof draft.started_ts === 'number') {
