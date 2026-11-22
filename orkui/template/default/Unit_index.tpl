@@ -1389,6 +1389,11 @@ $(function () {
 			pageLength: 25,
 			order     : [[3, 'asc'], [0, 'asc']],
 			columnDefs: [
+				// Search by persona or park only. Kingdom, role, title and
+				// sign-in date are the same (or near enough) for every row, so
+				// letting the search box read them made single letters like
+				// "a" or "b" match the whole roster.
+				{ targets: [2, 3, 4, 5], searchable: false },
 				{ targets: 5, type: 'date' },
 <?php if ($_can_edit): ?>
 				{ targets: -1, orderable: false, searchable: false, width: '90px' }
