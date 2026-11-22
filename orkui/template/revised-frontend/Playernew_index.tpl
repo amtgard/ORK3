@@ -195,11 +195,10 @@
 		if ($isOwnProfile && !empty($SurveyAvailable)) {
 			// Open surveys the player can answer; the card itself sits at the foot
 			// of the sidebar so it does not outrank their own data.
-			$_svN = count($SurveyAvailable);
-			$_svC = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); }));
-			$_svMsg = $_svN === 1 ? 'A survey is waiting for you' : "{$_svN} surveys are waiting for you";
-			if ($_svC > 0) { $_svMsg .= $_svC === $_svN ? ($_svN === 1 ? ', and it earns bonus credit' : ', and they earn bonus credit') : ", {$_svC} of them earn" . ($_svC === 1 ? 's' : '') . " bonus credit"; }
-			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>$_svMsg . '.','actionLabel'=>$_svN === 1 ? 'Take it.' : 'View surveys.','actionOnclick'=>"document.getElementById('pna-surveys-body').scrollIntoView({behavior:'smooth',block:'start'});return false;"];
+			// The link scrolls to that card and pulses it (pnaJumpToSurveys).
+			$_svCredit = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); })) > 0;
+			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>'Make your feedback known,','actionLabel'=>'take an Amtgard survey today','actionOnclick'=>'pnaJumpToSurveys();return false;',
+				'actionAfter'=>$_svCredit ? ' and you can even earn a bonus credit when you share your profile details!' : '.'];
 		}
 		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
@@ -299,6 +298,11 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:var(--ork-bg-dark);color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
+/* Survey alert link → the Available Surveys card pulses twice to say "here". */
+@keyframes pna-survey-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ork-link) 75%,transparent)}45%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ork-link) 40%,transparent)}100%{box-shadow:0 0 0 14px color-mix(in srgb,var(--ork-link) 0%,transparent)}}
+/* ID-scoped so it beats the themed .pna-card border in light and dark. */
+#pna-surveys-body .pna-survey-pulse{animation:pna-survey-pulse 1s ease-out 2;border-color:var(--ork-link);transition:border-color .2s}
+@media (prefers-reduced-motion:reduce){#pna-surveys-body .pna-survey-pulse{animation:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ork-link) 45%,transparent)}}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
 .pna-class-row{margin-bottom:10px}
 .pna-class-row:last-child{margin-bottom:0}
@@ -1638,7 +1642,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div class="pna-alerts">
 					<?php foreach ($_maAlerts as $_al): ?>
 					<div class="pna-alert pna-alert-<?= $_al['type'] ?>">
-						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?php endif; ?></span>
+						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?= htmlspecialchars($_al['actionAfter'] ?? '') ?><?php endif; ?></span>
 					</div>
 					<?php endforeach; ?>
 				</div>
@@ -1699,6 +1703,37 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
 							include __DIR__ . '/_survey_available_card.tpl';
 						endif; ?></div>
+						<?php if ($isOwnProfile && !empty($SurveyAvailable)): ?>
+						<script>
+						/* The alerts strip's survey link: bring the Available Surveys card
+						   into view, then pulse it once the scroll has settled. */
+						function pnaJumpToSurveys() {
+							var body = document.getElementById('pna-surveys-body');
+							var card = body && (body.querySelector('.pna-card') || body);
+							if (!card) { return; }
+							var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+							var done = false;
+							function pulse() {
+								if (done) { return; }
+								done = true;
+								window.removeEventListener('scrollend', pulse);
+								card.classList.remove('pna-survey-pulse');
+								void card.offsetWidth; /* restart the animation on a repeat click */
+								card.classList.add('pna-survey-pulse');
+								window.setTimeout(function () { card.classList.remove('pna-survey-pulse'); }, 2400);
+							}
+							var r = card.getBoundingClientRect();
+							var vh = window.innerHeight || document.documentElement.clientHeight;
+							if (r.top >= 0 && r.bottom <= vh) { pulse(); return; }  /* already on screen */
+							if (!still && 'onscrollend' in window) { window.addEventListener('scrollend', pulse); }
+							/* A card taller than the screen (many surveys) shows its top, clear of the sticky header. */
+							card.style.scrollMarginTop = '72px';
+							card.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: r.height > vh - 96 ? 'start' : 'center' });
+							/* Fallback: no scrollend support, or the scroll ended early. */
+							window.setTimeout(pulse, still ? 0 : 1200);
+						}
+						</script>
+						<?php endif; ?>
 
 					</div><!-- /.pna-sidebar -->
 
