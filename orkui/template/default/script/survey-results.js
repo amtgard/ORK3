@@ -490,6 +490,20 @@
        shows the top PW_CHART_ROWS and a "Show more…" button opens the rest;
        paper always gets every row. */
     var PW_CHART_ROWS = 25;
+    var PW_MORE_GAP = 44;   /* px between the last bar and the axis, for the button */
+
+    /* Does this card get the Show more / Show fewer button? (Never on paper.) */
+    function pwHasMore(q) {
+        return ((q.agg && q.agg.options) || []).length > PW_CHART_ROWS &&
+            !(q.agg && q.agg.suppressed) && !hasCrosstab(q) && !state.printing;
+    }
+
+    /* Centre the button in the gap above the percentage axis. */
+    function placePwMore(qid, chart) {
+        var btn = document.querySelector('.svr-pw-more[data-pw-qid="' + qid + '"]');
+        if (!btn || !chart) { return; }
+        btn.style.top = Math.round(chart.plotTop + chart.plotHeight + (PW_MORE_GAP - btn.offsetHeight) / 2) + 'px';
+    }
 
     function pwTruncated(q) {
         var n = ((q.agg && q.agg.options) || []).length;
@@ -501,6 +515,12 @@
         if (pwTruncated(q)) { opts = opts.slice(0, PW_CHART_ROWS); }
         var cfg = baseCfg(theme, 'bar');
         cfg.chart.height = barHeight(opts.length, 1);
+        if (pwHasMore(q)) {
+            /* Open a gap between the bars and the percentage axis for the
+               "Show more…" button (placed there by placePwMore()). */
+            cfg.yAxis.offset = PW_MORE_GAP;
+            cfg.chart.height += PW_MORE_GAP;
+        }
         cfg.xAxis.categories = opts.map(function (o) { return o.label; });
         cfg.yAxis.min = 0;
         cfg.yAxis.max = 100;
@@ -975,7 +995,7 @@
     /* The chart's "Show more…" / "Show fewer" toggle (empty for a short set). */
     function pwMoreHtml(q) {
         var n = ((q.agg && q.agg.options) || []).length;
-        if (n <= PW_CHART_ROWS || (q.agg && q.agg.suppressed)) { return ''; }
+        if (!pwHasMore(q)) { return ''; }
         return '<button type="button" class="sv-btn svr-pw-more" data-pw-qid="' + q.question_id + '"' +
             ' aria-controls="svr-chart-' + q.question_id + '" aria-expanded="' + (state.pwAll[q.question_id] ? 'true' : 'false') + '">' +
             pwMoreLabel(q.question_id, n) + '</button>';
@@ -1109,9 +1129,11 @@
            writes its own aria-label onto this container, and labelledby wins
            the accessible-name computation, so every chart region is announced
            with the question it belongs to instead of a generic label. */
+        var pwMore = q.type === 'pairwise' ? pwMoreHtml(q) : '';
+        if (pwMore) { html += '<div class="svr-pw-chartwrap">'; }
         html += '<div class="svr-chart' + (q.type === 'matrix' || q.type === 'ranking' || q.type === 'pairwise' ? ' svr-chart-tall' : '') +
             '" id="svr-chart-' + qid + '" data-qid="' + qid + '" aria-labelledby="svr-title-' + qid + '"></div>';
-        if (q.type === 'pairwise' && !hasCrosstab(q)) { html += pwMoreHtml(q); }
+        if (pwMore) { html += pwMore + '</div>'; }
         html += calloutsFor(q);
         if (q.type === 'pairwise') { html += pairwiseTableHtml(q); }
 
@@ -1218,6 +1240,7 @@
         }
         try {
             state.charts[q.question_id] = new HC.Chart(cfg);
+            if (q.type === 'pairwise') { placePwMore(q.question_id, state.charts[q.question_id]); }
             /* A chart that sized itself (bars grow with their categories)
                replaces the CSS pre-build reservation; the rest keep it, which
                is also the height Highcharts reads on the next rebuild. */

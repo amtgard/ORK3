@@ -543,8 +543,17 @@
 
 .svr-textlist li:last-child { margin-bottom: 0; }
 
-.svr-showmore,
-.svr-pw-more { margin-top: 8px; }
+.svr-showmore { margin-top: 8px; }
+
+/* Pairwise "Show more…": centred in the gap the chart leaves above its
+   percentage axis (top set by placePwMore()). */
+.svr-pw-chartwrap { position: relative; }
+.svr-pw-more {
+    position : absolute;
+    left     : 50%;
+    transform: translateX(-50%);
+    z-index  : 2;
+}
 
 
 /* ── Rows table ──────────────────────────────────────────── */
