@@ -773,7 +773,7 @@ html[data-theme="dark"] .qt-review-opt-tag { opacity: 1; color: #cbd5e0; }
 html[data-theme="dark"] .qt-review-q-correct .qt-review-q-badge { color: #68d391; }
 html[data-theme="dark"] .qt-review-q-wrong   .qt-review-q-badge { color: #fc8181; }
 html[data-theme="dark"] .qt-review-toggle { color: #cbd5e0; border-color: #4a5568; }
-html[data-theme="dark"] .qt-review-toggle:hover { background: #374151; }
+html[data-theme="dark"] .qt-review-toggle:hover { background: var(--ork-bg-tertiary); }
 
 /* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 600px) {

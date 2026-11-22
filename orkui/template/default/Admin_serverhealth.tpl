@@ -82,7 +82,7 @@ html[data-theme="dark"] .sh-metric {
 }
 html[data-theme="dark"] .sh-metric-label { color: #a0aec0; }
 html[data-theme="dark"] .sh-metric-val   { color: #e2e8f0; }
-html[data-theme="dark"] .sh-worker        { background: #374151; }
+html[data-theme="dark"] .sh-worker        { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .sh-worker.active { background: #4f46e5; }
 html[data-theme="dark"] .sh-worker.idle   { background: #16a34a; }
 html[data-theme="dark"] .sh-proc-table th {
@@ -116,7 +116,7 @@ html[data-theme="dark"] .sh-last-updated { color: #718096; }
 .sh-al-none { font-size: 0.76rem; color: var(--rp-text-muted, #9ca3af); font-style: italic; }
 
 html[data-theme="dark"] .sh-al-clear { border-color: #4a5568; color: #a0aec0; }
-html[data-theme="dark"] .sh-al-clear:hover { background: #374151; }
+html[data-theme="dark"] .sh-al-clear:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .sh-al-entry { border-color: #4a5568; }
 html[data-theme="dark"] .sh-al-time  { color: #e2e8f0; }
 html[data-theme="dark"] .sh-al-tag   { background: #422006; border-color: #78350f; color: #fcd34d; }
@@ -137,7 +137,7 @@ html[data-theme="dark"] .sh-al-none  { color: #718096; }
 .sh-fs-row.alert > span:last-child { color: #b91c1c; font-weight: 700; }
 .sh-fs-checked { font-size: 0.7rem; color: var(--rp-text-muted, #9ca3af); margin-top: 8px; font-style: italic; }
 #sh-fs-result { margin-top: 12px; }
-html[data-theme="dark"] .sh-fs-btn { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .sh-fs-btn { background: var(--ork-bg-tertiary); border-color: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .sh-fs-btn:hover:not(:disabled) { background: #4a5568; }
 html[data-theme="dark"] .sh-fs-row { border-color: #4a5568; }
 html[data-theme="dark"] .sh-fs-checked { color: #718096; }
@@ -161,8 +161,8 @@ html[data-theme="dark"] .sh-fs-checked { color: #718096; }
 .sh-lt-stat-val { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--rp-text, #111827); }
 .sh-lt-stat-label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rp-text-muted, #9ca3af); margin-top: 2px; }
 .sh-lt-log { margin-top: 12px; max-height: 120px; overflow-y: auto; font-size: 0.75rem; font-family: monospace; color: var(--rp-text-secondary, #374151); background: var(--ork-bg-inset); border: 1px solid var(--rp-border, #e5e7eb); border-radius: 6px; padding: 8px 10px; }
-html[data-theme="dark"] .sh-lt-select { background: #374151; border-color: #4a5568; color: #e2e8f0; }
-html[data-theme="dark"] .sh-lt-stat { background: #374151; border-color: #4a5568; }
+html[data-theme="dark"] .sh-lt-select { background: var(--ork-bg-tertiary); border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .sh-lt-stat { background: var(--ork-bg-tertiary); border-color: #4a5568; }
 html[data-theme="dark"] .sh-lt-stat-val { color: #e2e8f0; }
 html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568; color: #a0aec0; }
 <?php endif; ?>

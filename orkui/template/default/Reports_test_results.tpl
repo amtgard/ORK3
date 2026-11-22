@@ -132,7 +132,7 @@ html[data-theme="dark"] .rp-rev-q.bad .rp-rev-qh { color: #fc8181; }
 .rp-filter-pill.rp-filter-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
 html[data-theme="dark"] .rp-filter-label { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .rp-filter-pill { background: #2d3748; border-color: #4a5568; color: #cbd5e0; }
-html[data-theme="dark"] .rp-filter-pill:hover { background: #374151; }
+html[data-theme="dark"] .rp-filter-pill:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .rp-filter-pill.rp-filter-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
 /* Info tooltip ("i") on stat labels */
 .rp-info { position: relative; display: inline-block; margin-left: 4px; color: #a0aec0; cursor: help; font-size: 0.82em; vertical-align: middle; }

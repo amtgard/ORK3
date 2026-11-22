@@ -149,24 +149,24 @@ html[data-theme="dark"] .qt-preview-setchip-draft { background:#3c366b; color:#d
 html[data-theme="dark"] .qt-ver-live,
 html[data-theme="dark"] .qt-mem-live,
 html[data-theme="dark"] .qt-preview-setchip-live  { background:#22543d; color:#9ae6b4; }
-html[data-theme="dark"] .qt-mem-unused { background:#374151; color:#a0aec0; }
+html[data-theme="dark"] .qt-mem-unused { background:var(--ork-bg-tertiary); color:#a0aec0; }
 html[data-theme="dark"] .qt-mem-lib    { background:#2a4365; color:#bee3f8; }
 html[data-theme="dark"] .qt-preview-btn-draft { background:#3c366b; color:#d6bcfa; }
 html[data-theme="dark"] .qt-preview-btn-draft:hover { background:#4c4285; }
-html[data-theme="dark"] .qt-mem-btn { background:#374151; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .qt-mem-btn { background:var(--ork-bg-tertiary); border-color:#4a5568; color:#e2e8f0; }
 html[data-theme="dark"] .qt-mem-btn:hover { background:#4a5568; }
 html[data-theme="dark"] .qt-mem-btn.qt-mem-in { background:#3c366b; border-color:#553c9a; color:#d6bcfa; }
 html[data-theme="dark"] .qt-ver-label { color:#a0aec0; }
-html[data-theme="dark"] .qt-ver-off { background:#374151; color:#cbd5e0; }
-html[data-theme="dark"] .qt-lib-ver-none { background:#374151; color:#718096; }
+html[data-theme="dark"] .qt-ver-off { background:var(--ork-bg-tertiary); color:#cbd5e0; }
+html[data-theme="dark"] .qt-lib-ver-none { background:var(--ork-bg-tertiary); color:#718096; }
 /* The "multi" / "select all that apply" badge — was inline-styled, now a class so dark works. */
 .qt-multi-badge { background:#e6fffa; color:#234e52; font-size:0.7rem; padding:1px 6px; border-radius:3px; font-weight:600; margin-left:6px; }
 html[data-theme="dark"] .qt-multi-badge { background:#234e52; color:#9decdb; }
 
 html[data-theme="dark"] .qt-versions { background:#2d3748; border-color:#4a5568; }
 html[data-theme="dark"] .qt-ver-note { background:#322659; border-color:#553c9a; color:#e9d8fd; }
-html[data-theme="dark"] .qt-ver-btn { background:#374151; border-color:#4a5568; color:#e2e8f0; }
-html[data-theme="dark"] .qt-ver-input { background:#374151; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .qt-ver-btn { background:var(--ork-bg-tertiary); border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .qt-ver-input { background:var(--ork-bg-tertiary); border-color:#4a5568; color:#e2e8f0; }
 
 /* Unsaved-config warning (test is running on invisible defaults) */
 .qt-unsaved-warning {

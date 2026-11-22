@@ -426,7 +426,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
+html[data-theme="dark"] .pn-badge-gray { background: var(--ork-bg-tertiary); color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
@@ -448,16 +448,18 @@ html[data-theme="dark"] .pn-acct-field input[type="url"],
 html[data-theme="dark"] .pn-acct-field input[type="password"],
 html[data-theme="dark"] .pn-acct-field select,
 html[data-theme="dark"] .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-/* Light mode sets the cards off the white panel with --ork-bg-inset; dark
-   mode mirrors that by lifting them a step above the panel (same hue). */
-html[data-theme="dark"] .pna-card { background: color-mix(in srgb, var(--ork-card-bg) 91%, #fff); border-color: var(--ork-border); }
+/* Light mode sets the cards off the white panel with --ork-bg-inset, which
+   is the panel colour in dark mode; --ork-bg-tertiary is dark mode's one-step-up
+   layer (the same token every other nested dark surface uses). */
+html[data-theme="dark"] .pna-card { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
 html[data-theme="dark"] .pna-card-title { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-tenure-years { color: var(--ork-link); }
 html[data-theme="dark"] .pna-tenure-label,
 html[data-theme="dark"] .pna-tenure-since { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-class-name { color: var(--ork-text); }
 html[data-theme="dark"] .pna-class-level { color: #68d391; }
-html[data-theme="dark"] .pna-bar-wrap { background: var(--ork-bg-tertiary); }
+/* On the raised (bg-tertiary) cards, tracks and empty cells recess to the panel colour. */
+html[data-theme="dark"] .pna-bar-wrap { background: var(--ork-card-bg); }
 html[data-theme="dark"] .pna-bar { background: linear-gradient(90deg,#48bb78,#38a169) !important; }
 html[data-theme="dark"] .pna-bar-max { background: linear-gradient(90deg,#f6ad55,#c05621) !important; }
 html[data-theme="dark"] .pna-class-credits { color: var(--ork-text-muted); }
@@ -475,7 +477,8 @@ html[data-theme="dark"] .pna-alert-warning { background: var(--ork-alert-warning
 html[data-theme="dark"] .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
 html[data-theme="dark"] .pna-alert-info { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); color: var(--ork-alert-info-text, #90cdf4); }
 html[data-theme="dark"] .pna-spark-off,
-html[data-theme="dark"] .pna-spark-swatch-off { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-spark-swatch-off { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-card .pna-survey-credit { background: var(--ork-card-bg); }
 html[data-theme="dark"] .pna-spark-legend { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-congrats-banner { background: linear-gradient(90deg,#3d3300,#4a3c00); border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .pna-anni-banner { color: #fbd38d; }
@@ -1083,8 +1086,8 @@ html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
 .dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
 #dp-prefs-body{transition:opacity .15s}
 #dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
-html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
-html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
+html[data-theme="dark"] .dp-no-restrict-row{background:var(--ork-bg-tertiary);border-color:var(--ork-border)}
+html[data-theme="dark"] .dp-no-restrict-row:hover{background:var(--ork-border)}
 .pna-notif-card { padding: 0; overflow: hidden; }
 .pna-notif-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; }
 .pna-notif-title { font-weight: 700; font-size: 14px; color: #2d3748; }

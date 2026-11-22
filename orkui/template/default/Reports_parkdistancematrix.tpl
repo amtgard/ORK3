@@ -29,7 +29,7 @@ html[data-theme="dark"] .pdm-table td.pdm-rowhead a { color: #90cdf4; }
 html[data-theme="dark"] .pdm-table td.pdm-location { background: #2d3748; color: #718096; }
 html[data-theme="dark"] .pdm-table th.pdm-colhead { background: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .pdm-table th.pdm-corner { background: #2d3748; }
-html[data-theme="dark"] .pdm-table td.pdm-self { background: #374151; color: #718096; }
+html[data-theme="dark"] .pdm-table td.pdm-self { background: var(--ork-bg-tertiary); color: #718096; }
 </style>
 
 <div class="rp-root">
