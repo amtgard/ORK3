@@ -2938,6 +2938,8 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 #kn-rec-overlay .pk-acct-field textarea:focus { outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12); }
 #kn-award-overlay .kn-form-error, #kn-rec-overlay .pk-form-error,
 #pk-award-overlay .pk-form-error, #pk-rec-overlay .pk-form-error { display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px; }
+/* Bulk "Add and Next": recs whose award saved but which stayed open */
+#kn-award-overlay .kn-bulk-leftopen-list { margin:6px 0 0; padding-left:18px; overflow-wrap:anywhere; }
 #kn-award-overlay .kn-char-count, #kn-rec-overlay .pk-char-count { font-size:11px; color:var(--ork-text-muted); margin-top:3px; display:block; }
 /* ---- Events calendar container ---- */
 #kn-events-cal {
@@ -7264,6 +7266,7 @@ html[data-theme="dark"] .pk-award-type-btn:hover:not(.pk-active) {
 }
 /* Form feedback */
 html[data-theme="dark"] #pk-award-overlay .pk-form-error,
+html[data-theme="dark"] #kn-award-overlay .kn-form-error,
 html[data-theme="dark"] #pk-rec-overlay .pk-form-error {
   background: rgba(197,48,48,0.15);
   border-color: #fc8181;

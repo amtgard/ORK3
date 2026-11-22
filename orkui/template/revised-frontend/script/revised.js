@@ -2521,6 +2521,11 @@ if (PnConfig.recError) {
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
             var held      = tnHeldRank(playerRanks, opt, awardId);
             var suggested = Math.min(held + 1, maxRank);
+            // Opened from a rec: the rec's rank is what is being granted, not the
+            // player's next rank.
+            if (pnGrantRank && opt && String(pnGrantRank.awardId) === String(opt.value)) {
+                suggested = Math.min(pnGrantRank.rank, maxRank);
+            }
             // Informational only: never changes the suggested rank above.
             tnSiblingLadderNote(gid('pn-rank-pills'), playerRanks, opt ? opt.value : 0, 'pn-add');
             var hint = gid('pn-rank-hint');
@@ -2697,6 +2702,7 @@ if (PnConfig.recError) {
         // ---- Open / Close ----
         window.pnOpenAwardModal = function(type) {
             pnActiveRecId = null; // set again by pnGiveFromRec when opened from a rec
+            pnGrantRank = null;
             // Reset
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
@@ -2745,16 +2751,17 @@ if (PnConfig.recError) {
         // The rec a "Give from rec" opened this modal from: sent with the save so the
         // server's Monarchy Only gate can check the note (cleared on every other open).
         var pnActiveRecId = null;
+        // { awardId, rank } of that rec, so the rank pills preselect the rec's rank.
+        var pnGrantRank = null;
         // Pre-populate the award modal from a recommendation row
         window.pnGiveFromRec = function(rec) {
             pnOpenAwardModal('awards');
             pnActiveRecId = rec.RecommendationsId || null;
+            var recRank = parseInt(rec.Rank, 10) || 0;
+            pnGrantRank = (rec.KingdomAwardId && recRank > 0) ? { awardId: rec.KingdomAwardId, rank: recRank } : null;
             var sel = gid('pn-award-select');
             sel.value = String(rec.KingdomAwardId || '');
             sel.dispatchEvent(new Event('change'));
-            if (rec.Rank) {
-                setTimeout(function() { selectRankPill(parseInt(rec.Rank)); }, 0);
-            }
             // Monarchy Only: the reason is officer-only and never becomes the public note.
             var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
             if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), recMo);
@@ -2885,6 +2892,7 @@ if (PnConfig.recError) {
                         throw new Error((data && data.error) || 'Save failed.');
                     }
                     pnActiveRecId = null;
+                    pnGrantRank = null;
                     onSuccess(data);
                     // Opened from a rec: the server closes it as granted after the
                     // award saves. If that part failed, say so inline (the award stands).
@@ -3780,6 +3788,7 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var knPlayerRanks = {};
+    var knGrantRank = null; // { awardId, rank } while the modal was opened from a rec
 
     function gid(id) { return document.getElementById(id); }
 
@@ -3864,6 +3873,12 @@ $(document).ready(function() {
         // Informational only: never changes the suggested rank above.
         tnSiblingLadderNote(wrap, knPlayerRanks, opt.value, 'kn-add');
         var suggested = Math.min(held + 1, maxRank);
+        // Opened from a rec: the rec's rank is what is being granted, not the
+        // player's next rank. Re-applied on every rebuild because the player's
+        // ranks arrive async and rebuild the pills after the rec prefill ran.
+        if (knGrantRank && String(knGrantRank.awardId) === String(awardId)) {
+            suggested = Math.min(knGrantRank.rank, maxRank);
+        }
         wrap.dataset.rankHeld = held;
         tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
@@ -4051,6 +4066,7 @@ $(document).ready(function() {
     window.knOpenAwardModal = function() {
         var today = new Date();
         knPlayerRanks = {};
+        knGrantRank = null;
         gid('kn-award-error').style.display      = 'none';
         gid('kn-award-error').textContent        = '';
         gid('kn-award-success').style.display    = 'none';
@@ -4099,11 +4115,18 @@ $(document).ready(function() {
     var knBulkGrantCallback = null;
     var knBulkQueuePos = 0;
     var knBulkQueueTotal = 0;
+    // Bulk "Add and Next": the rec on screen, the recs whose award saved but which
+    // the server left open (shown, never skipped), and whether the modal is parked
+    // on such an item waiting for the officer to read the reason and move on.
+    var knBulkCurrentRec = null;
+    var knBulkLeftOpen   = [];
+    var knBulkPaused     = false;
     function knSetBulkMode(isBulk) {
         var normal = gid('kn-award-footer-normal');
         var next   = gid('kn-award-save-next');
         if (normal) normal.style.display = isBulk ? 'none' : '';
         if (next)   next.style.display   = isBulk ? ''     : 'none';
+        if (!isBulk) knBulkPaused = false;
         var title = gid('kn-award-modal-title');
         if (title && isBulk && knBulkQueueTotal > 1) {
             var icon = title.querySelector('i') ? title.querySelector('i').outerHTML : '';
@@ -4114,9 +4137,21 @@ $(document).ready(function() {
         knBulkGrantCallback = onAfter || null;
         knBulkQueuePos   = queuePos   || 0;
         knBulkQueueTotal = queueTotal || 0;
+        if (knBulkQueuePos <= 1) knBulkLeftOpen = [];
+        knBulkCurrentRec = rec;
+        knBulkPaused     = false;
         gtag('event', 'recommendation_give');
         knOpenAwardModal();
-        knSetBulkMode(!!onAfter);
+        // The last item of a bulk run stays in bulk mode (no callback left, but it
+        // is still "N of N" and its save must finish the run, not reset the form).
+        var inBulk = !!onAfter || knBulkQueueTotal > 1;
+        knSetBulkMode(inBulk);
+        var nextBtn = gid('kn-award-save-next');
+        if (nextBtn && inBulk) {
+            nextBtn.innerHTML = onAfter
+                ? '<i class="fas fa-arrow-right"></i> Add and Next'
+                : '<i class="fas fa-check"></i> Add and Finish';
+        }
         if (rec.Persona || rec.MundaneId) {
             gid('kn-award-player-text').value = rec.Persona || '';
             gid('kn-award-player-id').value   = String(rec.MundaneId || '');
@@ -4131,16 +4166,12 @@ $(document).ready(function() {
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }
+        var recRank = parseInt(rec.Rank, 10) || 0;
+        knGrantRank = (rec.KingdomAwardId && recRank > 0) ? { awardId: rec.KingdomAwardId, rank: recRank } : null;
         if (rec.KingdomAwardId) {
             var sel = gid('kn-award-select');
             sel.value = String(rec.KingdomAwardId);
             sel.dispatchEvent(new Event('change'));
-        }
-        if (rec.Rank) {
-            setTimeout(function() {
-                var pill = document.querySelector('#kn-rank-pills .kn-rank-pill[data-rank="' + rec.Rank + '"]');
-                if (pill) pill.click();
-            }, 0);
         }
         // Monarchy Only: the reason is officer-only and never becomes the public note.
         var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
@@ -4167,6 +4198,7 @@ $(document).ready(function() {
         var id = knActiveRecId;
         var res = knLastRecResult;
         knActiveRecId = null;
+        knGrantRank = null;
         knLastRecResult = null;
         if (!id) return;
         var row = document.querySelector('#kn-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
@@ -4633,7 +4665,9 @@ $(document).ready(function() {
             .finally(function() {
                 btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
                 btnSame.innerHTML = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player';
-                btnNext.innerHTML = '<i class="fas fa-arrow-right"></i> Add and Next';
+                btnNext.innerHTML = knBulkGrantCallback
+                    ? '<i class="fas fa-arrow-right"></i> Add and Next'
+                    : '<i class="fas fa-check"></i> Add and Finish';
                 checkRequired();
             });
     }
@@ -4664,13 +4698,61 @@ $(document).ready(function() {
             gid('kn-award-select').focus();
         });
     });
-    // "Add and Next" — bulk mode: save, dismiss rec, advance to next in queue
+    // "Add and Next" — bulk mode: save, close the rec, advance to next in queue.
+    // When the award saved but the rec stayed open, the modal stays on that item
+    // with the reason inline and the button becomes Continue/Finish; nothing is
+    // re-saved. Finishing a run that left any rec open lists them all in the modal
+    // instead of closing it, so no error is lost behind a closed modal.
+    function knBulkAdvance() {
+        var btnNext = gid('kn-award-save-next');
+        knBulkPaused = false;
+        var cb = knBulkGrantCallback;
+        knBulkGrantCallback = null;
+        if (cb) { cb(); return; }
+        if (!knBulkLeftOpen.length) { knCloseAwardModal(); return; }
+        var errEl = gid('kn-award-error');
+        var n = knBulkLeftOpen.length;
+        errEl.textContent = '';
+        errEl.appendChild(document.createTextNode('Awards saved, but ' + n + ' recommendation'
+            + (n === 1 ? ' was' : 's were') + ' left open:'));
+        var ul = document.createElement('ul');
+        ul.className = 'kn-bulk-leftopen-list';
+        knBulkLeftOpen.forEach(function(item) {
+            var li = document.createElement('li');
+            li.textContent = item.label + ' \u2014 ' + item.error;
+            ul.appendChild(li);
+        });
+        errEl.appendChild(ul);
+        errEl.style.display = 'block';
+        knBulkLeftOpen = [];
+        if (btnNext) btnNext.style.display = 'none';
+    }
     gid('kn-award-save-next').addEventListener('click', function() {
+        if (knBulkPaused) { knBulkAdvance(); return; }
+        var rec = knBulkCurrentRec || {};
+        var sel = gid('kn-award-select');
+        var opt = sel && sel.options[sel.selectedIndex];
+        var rank = gid('kn-award-rank-val').value;
+        var label = (rec.Persona || 'Player') + ': ' + (opt ? opt.text.trim() : 'award')
+            + (rank ? ' (rank ' + rank + ')' : '');
         knDoSave(function() {
+            var res = knLastRecResult;
             knAutoDismissRec(); knShowSuccess();
-            var cb = knBulkGrantCallback;
-            knBulkGrantCallback = null;
-            if (cb) { cb(); } else { knCloseAwardModal(); }
+            if (res && !res.closed) {
+                knBulkLeftOpen.push({ label: label, error: res.error || 'not closed' });
+                knBulkPaused = true;
+                // After knDoSave's finally has reset the button label.
+                setTimeout(function() {
+                    var b = gid('kn-award-save-next');
+                    if (!b) return;
+                    b.disabled = false;
+                    b.innerHTML = knBulkGrantCallback
+                        ? '<i class="fas fa-arrow-right"></i> Continue to Next'
+                        : '<i class="fas fa-check"></i> Finish';
+                }, 0);
+                return;
+            }
+            knBulkAdvance();
         });
     });
 })();
@@ -7952,6 +8034,7 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var pkPlayerRanks = {};
+    var pkGrantRank = null; // { awardId, rank } while the modal was opened from a rec
 
     function gid(id) { return document.getElementById(id); }
 
@@ -8037,6 +8120,12 @@ $(document).ready(function() {
         // Informational only: never changes the suggested rank above.
         tnSiblingLadderNote(wrap, pkPlayerRanks, opt.value, 'pk-add');
         var suggested = Math.min(held + 1, maxRank);
+        // Opened from a rec: the rec's rank is what is being granted, not the
+        // player's next rank. Re-applied on every rebuild because the player's
+        // ranks arrive async and rebuild the pills after the rec prefill ran.
+        if (pkGrantRank && String(pkGrantRank.awardId) === String(awardId)) {
+            suggested = Math.min(pkGrantRank.rank, maxRank);
+        }
         wrap.dataset.rankHeld = held;
         tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
@@ -8226,6 +8315,7 @@ $(document).ready(function() {
     window.pkOpenAwardModal = function() {
         var today = new Date();
         pkPlayerRanks = {};
+        pkGrantRank = null;
         gid('pk-award-error').style.display      = 'none';
         gid('pk-award-error').textContent        = '';
         gid('pk-award-success').style.display    = 'none';
@@ -8285,16 +8375,12 @@ $(document).ready(function() {
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }
+        var recRank = parseInt(rec.Rank, 10) || 0;
+        pkGrantRank = (rec.KingdomAwardId && recRank > 0) ? { awardId: rec.KingdomAwardId, rank: recRank } : null;
         if (rec.KingdomAwardId) {
             var sel = gid('pk-award-select');
             sel.value = String(rec.KingdomAwardId);
             sel.dispatchEvent(new Event('change'));
-        }
-        if (rec.Rank) {
-            setTimeout(function() {
-                var pill = document.querySelector('#pk-rank-pills .pk-rank-pill[data-rank="' + rec.Rank + '"]');
-                if (pill) pill.click();
-            }, 0);
         }
         // Monarchy Only: the reason is officer-only and never becomes the public note.
         var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
@@ -8321,6 +8407,7 @@ $(document).ready(function() {
         var id = pkActiveRecId;
         var res = pkLastRecResult;
         pkActiveRecId = null;
+        pkGrantRank = null;
         pkLastRecResult = null;
         if (!id) return;
         var row = document.querySelector('#pk-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
