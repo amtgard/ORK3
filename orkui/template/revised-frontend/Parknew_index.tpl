@@ -601,6 +601,17 @@
 			</ul>
 		</div>
 
+		<?php
+		// Available Surveys: this park's, its kingdom's and Amtgard-wide ones
+		// the viewer is eligible for (SurveyAvailable is empty when logged out).
+		$_svcRows = array_values(array_filter($SurveyAvailable ?? [], function ($s) use ($park_id, $kingdom_id) {
+			$t  = (string) ($s['scope_type'] ?? '');
+			$id = (int) ($s['scope_id'] ?? 0);
+			return $t === 'ork' || ($t === 'kingdom' && $id === (int) $kingdom_id) || ($t === 'park' && $id === (int) $park_id);
+		}));
+		if ($_svcRows) { $_svcWrap = 'pk-card'; $_svcHead = 'pk'; include __DIR__ . '/_survey_available_card.tpl'; }
+		?>
+
 	</aside>
 
 	<!-- ---- Tabbed Main ---- -->
@@ -1321,6 +1332,12 @@
 						<h5><i class="fas fa-cog"></i> Park</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
+						</ul>
+					</div>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-poll"></i> Surveys</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Survey/index/Park/<?= $park_id ?>">Manage Surveys</a></li>
 						</ul>
 					</div>
 				</div>

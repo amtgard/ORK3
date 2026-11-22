@@ -322,6 +322,16 @@
 			</ul>
 		</div>
 
+		<?php
+		// Available Surveys: this kingdom's and Amtgard-wide ones the viewer is
+		// eligible for (SurveyAvailable is empty for a logged-out visitor).
+		$_svcRows = array_values(array_filter($SurveyAvailable ?? [], function ($s) use ($kingdom_id) {
+			$t = (string) ($s['scope_type'] ?? '');
+			return $t === 'ork' || ($t === 'kingdom' && (int) ($s['scope_id'] ?? 0) === (int) $kingdom_id);
+		}));
+		if ($_svcRows) { $_svcWrap = 'kn-card'; $_svcHead = 'kn'; include __DIR__ . '/_survey_available_card.tpl'; }
+		?>
+
 	</div>
 
 	<!-- ========== MAIN CONTENT (Tabbed) ========== -->
@@ -935,6 +945,12 @@
 					<ul>
 						<li><a href="<?= UIR ?>Admin/permissions/Kingdom/<?= $kingdom_id ?>">Roles &amp; Permissions</a></li>
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
+					</ul>
+				</div>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-poll"></i> Surveys</h5>
+					<ul>
+						<li><a href="<?= UIR ?>Survey/index/Kingdom/<?= $kingdom_id ?>">Manage Surveys</a></li>
 					</ul>
 				</div>
 				<?php endif; ?>

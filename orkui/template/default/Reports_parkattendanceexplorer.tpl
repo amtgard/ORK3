@@ -435,10 +435,14 @@ $(function() {
 			{ extend: 'print', exportOptions: { columns: ':visible' } }
 		],
 		columnDefs: [
-			{ targets: spNumericCols, type: 'num', className: 'dt-center' }
+			// html-num: the Total cell is wrapped in <strong>, which plain 'num' reads as NaN.
+			{ targets: spNumericCols, type: 'html-num', className: 'dt-center' }
 		],
 		pageLength: 25,
-		order: [[-1, 'desc'], [0, 'asc']],
+		// Sort by the Total column (last). DataTables does not accept -1 as a
+		// column index here; it threw during init, which also skipped the
+		// Export/Print bindings below.
+		order: [[3 + periodCount, 'desc'], [0, 'asc']],
 		fixedHeader : { headerOffset: 48 },
 		scrollX     : true,
 		fixedColumns: { left: 1 }

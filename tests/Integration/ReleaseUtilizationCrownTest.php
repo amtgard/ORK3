@@ -91,15 +91,14 @@ final class ReleaseUtilizationCrownTest extends TestCase
         return $id;
     }
 
-    public function testCrownIsTheNewestReleaseAndCoversCourtAndRecommendations(): void
+    public function testCrownCoversCourtAndRecommendations(): void
     {
-        $releases = $this->report->ReleaseFeatureUtilization()['releases'];
+        $crown = $this->crown();
 
-        $this->assertSame('3.5.6', $releases[0]['version']);
-        $this->assertSame('Crown', $releases[0]['name']);
+        $this->assertSame('Crown', $crown['name']);
         $this->assertSame(
             ['court_planner', 'court_run', 'court_artisans', 'recs_workflow', 'rec_notifications'],
-            array_column($releases[0]['features'], 'key')
+            array_column($crown['features'], 'key')
         );
     }
 
