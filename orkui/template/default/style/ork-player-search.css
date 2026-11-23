@@ -57,8 +57,11 @@ html[data-theme="dark"] .ops-ac-foot{ border-top-color:#4a5568; }
 html[data-theme="dark"] .ops-ac-adv{ color:#63b3ed; border-left-color:#4a5568; }
 html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
 
-/* ===== Scope filter: icon + pill overlay (absolutely positioned sibling of the input; the
-   component sizes/positions it and pads the input, so host layouts never reflow) ===== */
+/* ===== Scope filter: icon + pill overlay. It hangs off a zero-size anchor placed right before the
+   input (the anchor's box styles are set inline, !important, per formatting context), so it moves
+   with the input; the component sizes it and pads the input, so host layouts never reflow. ===== */
+/* Unplaced (field not yet rendered) anchors take no part in layout. */
+.ops-filter-anchor{ display:none; }
 .ops-filter{ position:absolute; z-index:3; display:flex; align-items:center; box-sizing:border-box;
   padding:0 2px 0 4px; pointer-events:none; margin:0; border:0; background:none; }
 .ops-filter-pill, .ops-filter-btn{ pointer-events:auto; }
@@ -67,7 +70,9 @@ html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
   color:#2c5282; font-size:11px; font-weight:700; line-height:1; white-space:nowrap; letter-spacing:.02em;
   box-sizing:border-box; }
 .ops-filter-pill[hidden]{ display:none; }
-.ops-filter-pill-x{ display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px;
+/* Long labels (a name fallback when an abbreviation is missing) are clamped. */
+.ops-filter-pill-label{ display:inline-block; max-width:9em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ops-filter-pill-x{ position:relative; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px;
   margin:0; padding:0; border:0; border-radius:50%; background:transparent; color:inherit; font-size:14px;
   line-height:1; cursor:pointer; box-shadow:none; min-width:0; }
 .ops-filter-pill-x:hover, .ops-filter-pill-x:focus-visible{ background:rgba(44,82,130,.15); }
@@ -123,6 +128,14 @@ html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
 .ops-filter-b-clear{ border-color:transparent; background:transparent; color:#c53030; padding:0 8px; }
 .ops-filter-b-clear:hover{ background:rgba(197,48,48,.08); }
 
+/* placement:'anchored' — popover under the input: no dim (the transparent backdrop still catches
+   outside clicks, which close it as Cancel); the component sets the dialog's left/top/width. */
+.ops-filter-modal.ops-filter-anchored{ display:block; padding:0; }
+.ops-filter-modal.ops-filter-anchored[hidden]{ display:none; }
+.ops-filter-modal.ops-filter-anchored .ops-filter-backdrop{ background:transparent; }
+.ops-filter-modal.ops-filter-anchored .ops-filter-dialog{ position:fixed; max-width:none;
+  border:1px solid #cbd5e0; box-shadow:0 6px 22px rgba(0,0,0,.2); }
+
 html[data-theme="dark"] .ops-filter-pill{ background:#2a4365; border-color:#3c5a87; color:#bee3f8; }
 html[data-theme="dark"] .ops-filter-pill-x:hover, html[data-theme="dark"] .ops-filter-pill-x:focus-visible{ background:rgba(190,227,248,.18); }
 html[data-theme="dark"] .ops-filter-btn{ color:#718096; }
@@ -133,6 +146,8 @@ html[data-theme="dark"] .ops-filter .ops-filter-btn[data-tip]:focus-visible::aft
 html[data-theme="dark"] .ops-filter-modal{ color-scheme:dark; }
 html[data-theme="dark"] .ops-filter-backdrop{ background:rgba(0,0,0,.6); }
 html[data-theme="dark"] .ops-filter-dialog{ background:#2d3748; color:#e2e8f0; box-shadow:0 10px 36px rgba(0,0,0,.6); }
+html[data-theme="dark"] .ops-filter-modal.ops-filter-anchored .ops-filter-backdrop{ background:transparent; }
+html[data-theme="dark"] .ops-filter-modal.ops-filter-anchored .ops-filter-dialog{ border-color:#4a5568; }
 html[data-theme="dark"] .ops-filter-title{ color:#e2e8f0; }
 html[data-theme="dark"] .ops-filter-title .fas{ color:#63b3ed; }
 html[data-theme="dark"] .ops-filter-lbl{ color:#cbd5e0; }
@@ -150,7 +165,14 @@ html[data-theme="dark"] .ops-filter-b-clear:hover{ background:rgba(252,129,129,.
   .ops-filter-btn{ width:34px; max-height:none; }
   .ops-filter-pill{ height:24px; }
   .ops-filter-pill-x{ width:22px; height:22px; }
+  /* ≥36×36 hit areas without growing the visuals: a transparent centred ::before (::after is the
+     tooltip). Overrides page-level [data-tip]::before arrows (pointer-events:none, borders). */
+  .ops-filter .ops-filter-pill-x::before, .ops-filter .ops-filter-btn::before{
+    content:''; display:block; position:absolute; top:50%; left:50%; width:40px; height:40px;
+    transform:translate(-50%,-50%); margin:0; border:0; background:transparent; opacity:0;
+    pointer-events:auto; z-index:1; }
   .ops-filter-modal{ padding:16px; align-items:flex-start; padding-top:15vh; }
   .ops-filter-dialog{ width:100%; }
+  .ops-filter-modal.ops-filter-anchored{ padding:0; }
   .ops-filter-sel, .ops-filter-b{ min-height:40px; height:40px; font-size:16px; }
 }
