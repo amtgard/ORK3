@@ -200,6 +200,17 @@ function ork_signin_link_og(array $card, $now = null)
 }
 
 /**
+ * Online badge (wifi icon) for an attendance row signed in online (ork_attendance.online = 1).
+ * Same markup as ornOnlineBadge() in revised-frontend/script/revised.js; styled
+ * by .orn-online-badge in default/style/orkui.css (loaded on every page).
+ */
+function ork_online_badge(): string
+{
+    return '<span class="orn-online-badge" role="img" aria-label="Signed in online" data-tip="Signed in online">'
+        . '<i class="fa-solid fa-wifi" aria-hidden="true"></i></span>';
+}
+
+/**
  * Next occurrence dates for a park-day row, mirroring the recurrence
  * predicates in Weather::parks_playing_on(). $pd uses the GetParkDays keys:
  * Recurrence, WeekDay, WeekOfMonth, MonthDay, StartDate, WeekInterval.

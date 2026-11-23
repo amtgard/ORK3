@@ -2027,6 +2027,7 @@ class Report extends Ork3
                         'UnitName' => $r->unit_name,
                         'Persona' => $r->persona,
                         'ClassName' => $r->class_name,
+                        'Online' => (int) $r->online,
                     );
             }
             $response['Status'] = Success();
@@ -2119,6 +2120,7 @@ class Report extends Ork3
                         'AttendancePersona' => $r->attendance_persona,
                         'Note' => $r->note,
                         'Flavor' => $r->class_id == 6 ? $r->flavor : '',
+                        'Online' => (int) $r->online,
                     );
             }
             $response['Status'] = Success($sql);
@@ -4434,7 +4436,7 @@ class Report extends Ork3
         $kingdom_evt_bonus       = !empty($request['KingdomEventBonus']);
         $active_knight_threshold  = isset($request['ActiveKnightThreshold']) ? (int)$request['ActiveKnightThreshold'] : 0;
         $active_member_threshold  = isset($request['ActiveMemberThreshold']) ? (int)$request['ActiveMemberThreshold'] : 0;
-        $exclude_online           = !empty($request['ExcludeOnline']);
+        $exclude_online           = !empty($request['ExcludeOnline']); // resolved from the kingdom setting below unless passed
         $all_kingdoms             = !empty($request['AllKingdoms']); // count attendance from any kingdom
         $days_window             = isset($request['DaysWindow']) ? (int)$request['DaysWindow'] : 0;
         $min_age                 = isset($request['MinAge']) ? (int)$request['MinAge'] : 0;
@@ -4488,6 +4490,13 @@ class Report extends Ork3
             return ['Players' => [], 'AttendanceRequired' => $att_req, 'MonthsWindow' => $months_win, 'MinMembershipMonths' => $min_mem_mo, 'ProvinceMode' => $province_mode];
         }
 
+        // The kingdom's CountOnlineAttendance setting decides online exclusion unless the caller
+        // passes ExcludeOnline. Independent of the stored-rule merge above (skipped when
+        // AttendanceMode is passed), and applied after a ParkId-only call has resolved its kingdom.
+        if (!array_key_exists('ExcludeOnline', $request)) {
+            $exclude_online = !Ork3::$Lib->kingdom->CountsOnlineAttendance($kingdom_id);
+        }
+
         $park_clause    = $park_id ? " AND m.park_id    = $park_id" : '';
         $mundane_clause = $mundane_id ? " AND m.mundane_id = $mundane_id" : '';
 
@@ -4497,8 +4506,8 @@ class Report extends Ork3
         // kingdom-wide report.
         $single_att_clause = $mundane_id ? " AND a.mundane_id = $mundane_id" : '';
 
-        // Online exclusion: LEFT JOIN event + park inside attendance subqueries, filter out
-        // rows where the event name or park name contains 'Online' (case-insensitive).
+        // Online exclusion: drop rows flagged online, and (historical rows) rows whose event
+        // or park name contains 'Online' (case-insensitive) via LEFT JOINs inside the subqueries.
         // ExcludeEvents: restrict attendance to park-day sign-ins only (event_id = 0 or NULL).
         $events_clause = $exclude_events ? "AND (a.event_id = 0 OR a.event_id IS NULL)" : '';
 
@@ -4509,7 +4518,8 @@ class Report extends Ork3
 					LEFT JOIN " . DB_PREFIX . "park    _op ON _op.park_id  = a.park_id";
             // NULL-safe: a.park_id = 0 (kingdom events) yields NULL park name — allow those through.
             // Only exclude when we can positively confirm 'Online' is in the name.
-            $online_clause = "AND (_oe.name IS NULL OR _oe.name NOT LIKE '%Online%')
+            $online_clause = "AND a.online = 0
+					AND (_oe.name IS NULL OR _oe.name NOT LIKE '%Online%')
 					AND (_op.name IS NULL OR _op.name NOT LIKE '%Online%')";
         }
 
@@ -4595,18 +4605,22 @@ class Report extends Ork3
 					           $_per_evt * ($_in_scope_clause)    AS in_credits,
 					           $_per_evt * (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
+					    $online_join
 					    WHERE a.event_id IS NOT NULL AND a.event_id != 0
 					      AND a.date >= '$start_date'
 					      $single_att_clause
+					      $online_clause
 					    GROUP BY a.mundane_id, a.event_id, a.kingdom_id
 					    UNION ALL
 					    SELECT a.mundane_id,
 					           ($_in_scope_clause)    AS in_credits,
 					           (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
+					    $online_join
 					    WHERE (a.event_id = 0 OR a.event_id IS NULL)
 					      AND a.date >= '$start_date'
 					      $single_att_clause
+					      $online_clause
 					) att_inner
 					GROUP BY mundane_id
 				) att ON att.mundane_id = m.mundane_id";
@@ -4658,16 +4672,27 @@ class Report extends Ork3
         $online_count_join   = '';
         $online_count_select = '';
         if ($exclude_online) {
+            // Same scope as the main attendance count, so for a COUNT-mode report
+            // excluded == (count with the setting on) - (count with it off):
+            // the outside-credit path reads every kingdom's rows, the standard path
+            // uses park membership (or any kingdom with AllKingdoms), HomeParkOnly
+            // keeps only home-park rows, ExcludeEvents keeps only park days.
+            $_online_count_scope       = $max_outside_kingdom_creds > 0 ? '1=1' : ($all_kingdoms ? '1=1' : $_in_scope_clause);
+            $_online_count_home_join   = ($home_park_only && $max_outside_kingdom_creds <= 0) ? $home_park_join : '';
+            $_online_count_home_clause = ($home_park_only && $max_outside_kingdom_creds <= 0) ? 'AND a.park_id = mp.park_id' : '';
             $online_count_join = "
 				LEFT JOIN (
 					SELECT a.mundane_id, COUNT(*) AS online_excluded_count
 					FROM " . DB_PREFIX . "attendance a
 					LEFT JOIN " . DB_PREFIX . "event _oe ON _oe.event_id = a.event_id AND a.event_id != 0
 					LEFT JOIN " . DB_PREFIX . "park  _op ON _op.park_id  = a.park_id
-					WHERE a.kingdom_id = $kingdom_id
+					$_online_count_home_join
+					WHERE $_online_count_scope
 					  AND a.date >= '$start_date'
 					  $single_att_clause
-					  AND (_oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
+					  $events_clause
+					  $_online_count_home_clause
+					  AND (a.online = 1 OR _oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
 					GROUP BY a.mundane_id
 				) oatt ON oatt.mundane_id = m.mundane_id
 			";

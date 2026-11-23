@@ -175,7 +175,8 @@ class Controller_EventAjax extends Controller
             $detail_id,
             $_POST['MundaneId'] ?? 0,
             $_POST['ClassId'] ?? 0,
-            $_POST['Credits'] ?? 1
+            $_POST['Credits'] ?? 1,
+            (int)!empty($_POST['Online'])
         );
 
         if ($r['Status'] == 0) {

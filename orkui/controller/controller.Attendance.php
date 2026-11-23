@@ -151,6 +151,7 @@ class Controller_Attendance extends Controller
                 if (!is_numeric($this->session->behold_park_id)) {
                     die('Park ID is not numeric');
                 }
+                $online = (int)!empty($_POST['Online']);
                 foreach ($this->request->class as $mundane_id => $class_id) {
                     $r = $this->Attendance->add_attendance(
                         $this->session->token,
@@ -159,7 +160,8 @@ class Controller_Attendance extends Controller
                         null,
                         $mundane_id,
                         $class_id,
-                        1
+                        1,
+                        $online
                     );
                     if ($r['Status'] == 5) {
                         header('location: /orkui/index.php?Route=Login/login');

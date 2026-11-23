@@ -7350,6 +7350,10 @@ function pnOpenTestChooser() {
 				<label>Class</label>
 				<select id="pn-player-att-class" style="width:100%"></select>
 			</div>
+			<div class="pn-acct-field">
+				<span id="pn-player-att-online-switch"></span>
+				<span class="orn-online-hint" id="pn-player-att-online-hint" style="display:none"></span>
+			</div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-player-att-cancel">Cancel</button>
@@ -7384,6 +7388,9 @@ function pnOpenTestChooser() {
 					<input type="number" id="pn-att-edit-credits" value="1" min="0.5" max="4" step="0.5" style="width:100%">
 				</div>
 			</div>
+			<label class="orn-online-check" for="pn-att-edit-online">
+				<input type="checkbox" id="pn-att-edit-online" value="1"> Online?
+			</label>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-att-edit-cancel">Cancel</button>
@@ -7586,6 +7593,10 @@ $(function() {
 				else if (r.active_member === false) sub = 'Contributing';
 				var $sub = $('#pn-voting-badge-sub');
 				if (sub) { $sub.html(sub).show(); }
+				if (r.exclude_online) {
+					var $vb = $('#pn-voting-badge');
+					$vb.attr('data-tip', (($vb.attr('data-tip') || '') + ' Online sign-ins are not counted (Kingdom setting).').trim());
+				}
 				$('#pn-voting-badge').show();
 			}
 		});
@@ -7771,6 +7782,7 @@ $(function() {
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
 						+ '<th data-sorttype="text">By</th>'
+						+ '<th class="pn-export-only">Online</th>'
 						+ (canEditAny ? '<th class="pn-nosort" style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
@@ -7782,6 +7794,7 @@ $(function() {
 							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
 						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
 						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						var isOnline = parseInt(d.Online, 10) === 1;
 						// "By" cell: show the entry source. signin_link / self_reg
 						// surface as labels (not a link to the player themselves —
 						// that would be redundant and look like "John entered
@@ -7799,11 +7812,12 @@ $(function() {
 						html += '<tr>'
 							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
 							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
-							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
+							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a>' + (isOnline ? ' ' + ornOnlineBadge() : '') + '</td>'
 							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
 							+ '<td>' + classLabel + '</td>'
 							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>'
-							+ '<td>' + byCell + '</td>';
+							+ '<td>' + byCell + '</td>'
+							+ '<td>' + (isOnline ? 'Yes' : '') + '</td>';
 						if (canEditAny) {
 							html += '<td class="pn-award-actions-cell">';
 							if (canEditThis) {
@@ -7813,6 +7827,7 @@ $(function() {
 									+ ' data-credits="' + parseFloat(d.Credits) + '"'
 									+ ' data-class-id="' + parseInt(d.ClassId) + '"'
 									+ ' data-mundane-id="' + parseInt(d.MundaneId) + '"'
+									+ ' data-online="' + (isOnline ? 1 : 0) + '"'
 									+ ' title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>'
 									+ ' <button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"'
 									+ ' data-att-id="' + parseInt(d.AttendanceId) + '"'

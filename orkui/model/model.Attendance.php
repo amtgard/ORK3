@@ -19,7 +19,7 @@ class Model_Attendance extends Model
         return $this->Attendance->GetClasses(array());
     }
 
-    public function add_attendance($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits)
+    public function add_attendance($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits, int $online = 0)
     {
         logtrace("Model_Attendance->add_attendance()", array($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits));
         return $this->Attendance->AddAttendance(array(
@@ -31,19 +31,24 @@ class Model_Attendance extends Model
             'ClassId' => $class_id,
             'Credits' => $credits,
             'ReactivateInactive' => true,
+            'Online' => $online ? 1 : 0,
         ));
     }
 
-    public function update_attendance($token, $attendance_id, $date, $credits, $class_id, $mundane_id)
+    public function update_attendance($token, $attendance_id, $date, $credits, $class_id, $mundane_id, ?int $online = null)
     {
-        return $this->Attendance->SetAttendance(array(
+        $req = array(
             'Token'        => $token,
             'AttendanceId' => $attendance_id,
             'MundaneId'    => $mundane_id,
             'Date'         => $date,
             'Credits'      => $credits,
             'ClassId'      => $class_id,
-        ));
+        );
+        if ($online !== null) {
+            $req['Online'] = $online ? 1 : 0;
+        }
+        return $this->Attendance->SetAttendance($req);
     }
 
     public function lookup_by_faces($request)
