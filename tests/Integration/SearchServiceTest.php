@@ -497,7 +497,7 @@ final class SearchServiceTest extends TestCase
         $parks = $this->searchService->filter_scope_parks($kid, $scope);
         $this->assertContains($parkA, array_map(fn ($r) => $r['id'], $parks));
         foreach ($parks as $row) {
-            $this->assertSame(['id', 'name', 'abbr'], array_keys($row));
+            $this->assertSame(['id', 'name', 'abbr', 'kingdomId', 'kingdomAbbr'], array_keys($row));
         }
 
         $withoutA = $this->searchService->filter_scope_parks($kid, $scope + ['excludeParkId' => $parkA]);
@@ -620,6 +620,64 @@ final class SearchServiceTest extends TestCase
         [$kid, $pid] = $m->invoke($this->searchService, $q);
 
         return [(int) $kid, (int) $pid];
+    }
+
+    public function testPrincipalityParkInParentParkListAndPrefix(): void
+    {
+        $pair = $this->fixture->principalityPair();
+        if ($pair === null) {
+            $this->markTestSkipped('Need an active kingdom/principality pair with a park.');
+        }
+        $parent = $pair['parent'];
+        $child = $pair['child'];
+        $pAbbrK = $this->fixture->kingdomAbbreviation($parent);
+        $cAbbrK = $this->fixture->kingdomAbbreviation($child);
+        $abbr = $this->fixture->unusedParkAbbreviation($parent, $child);
+        if (!preg_match('/^[a-z0-9]{2,3}$/i', $pAbbrK) || $abbr === '') {
+            $this->markTestSkipped('Fixture abbreviations are not prefix-shaped.');
+        }
+        $childPark = $this->fixture->createPark($child, $abbr, 'Principality ' . $abbr);
+
+        // Parent's park list rolls down to the principality, own parks first, each row labelled.
+        $parks = $this->searchService->filter_scope_parks($parent, []);
+        $byId = array_column($parks, null, 'id');
+        $this->assertArrayHasKey($childPark, $byId);
+        $this->assertSame($child, $byId[$childPark]['kingdomId']);
+        $this->assertSame($cAbbrK, $byId[$childPark]['kingdomAbbr']);
+        $seenChild = false;
+        foreach ($parks as $row) {
+            if ($row['kingdomId'] !== $parent) {
+                $seenChild = true;
+            } else {
+                $this->assertFalse($seenChild, 'Own parks must precede principality parks.');
+            }
+        }
+        // ...but only within the field's scope, and never upwards from the principality.
+        $this->assertNotContains($childPark, array_column($this->searchService->filter_scope_parks($parent, ['restrictKingdomIds' => [$parent]]), 'id'));
+        $this->assertNotContains($childPark, array_column($this->searchService->filter_scope_parks($parent, ['excludeKingdomId' => $child]), 'id'));
+        foreach ($this->searchService->filter_scope_parks($child, []) as $row) {
+            $this->assertSame($child, $row['kingdomId']);
+        }
+
+        // Parent prefix resolves the principality park; the pill keeps the typed kingdom.
+        $m = $this->searchService->resolve_filter_prefix("{$pAbbrK}:{$abbr}", []);
+        $this->assertNotNull($m);
+        $this->assertSame($parent, $m['kingdomId']);
+        $this->assertSame($pAbbrK, $m['kingdomAbbr']);
+        $this->assertSame($childPark, $m['parkId']);
+        $this->assertSame([$parent, $childPark], $this->searchPrefix("{$pAbbrK}:{$abbr} someone"));
+        $this->assertNull($this->searchService->resolve_filter_prefix("{$pAbbrK}:{$abbr}", ['restrictKingdomIds' => [$parent]]));
+
+        // Search path finds a member of that park under the parent prefix.
+        $stem = 'Prin' . bin2hex(random_bytes(3));
+        $member = $this->fixture->createPlayer($childPark, 'prinpk', 'T11SRC ' . $stem . ' Member');
+        $this->assertContains($member['mundane_id'], array_column($this->searchService->RankedPlayers(['q' => "{$pAbbrK}:{$abbr} {$stem}", 'limit' => 50]), 'MundaneId'));
+
+        // The parent's own park wins over a principality park with the same abbreviation, even when newer.
+        $ownPark = $this->fixture->createPark($parent, $abbr, 'Own ' . $abbr);
+        $this->assertSame($ownPark, $this->searchService->resolve_filter_prefix("{$pAbbrK}:{$abbr}", [])['parkId']);
+        // Fresh query string: resolveAbbrevPrefix memoises per query.
+        $this->assertSame([$parent, $ownPark], $this->searchPrefix("{$pAbbrK}:{$abbr} someone else"));
     }
 
     public function testUniversalSearchHonorsFilter(): void

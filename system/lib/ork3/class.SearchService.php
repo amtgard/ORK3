@@ -773,22 +773,28 @@ class SearchService extends Ork3
     }
 
     /**
-     * The park an abbreviation names within $kingdomId, preferring an active record (then lowest id).
+     * The park an abbreviation names within $kingdomId's family (kingdom + principalities), matching
+     * the family roll-down of a kingdom filter. Active parks first; among those the kingdom's own park
+     * beats a principality's; then lowest kingdom id, then lowest park id (deterministic).
      *
-     * @return array{id: int, name: string, abbr: string, active: bool}|null
+     * @return array{id: int, name: string, abbr: string, active: bool, kingdomId: int}|null
      */
     private function abbrevPark(int $kingdomId, string $abbr): ?array
     {
         if ($kingdomId <= 0 || !preg_match('/^[a-z0-9]{2,3}$/i', $abbr)) {
             return null;
         }
+        $kingdomId = (int)$kingdomId;
+        $family = implode(',', $this->familyKingdomIds($kingdomId));
         $this->db->clear();
-        $rs = $this->db->query("SELECT park_id, name, abbreviation, active FROM " . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = " . (int)$kingdomId . " ORDER BY (active = 'Active') DESC, park_id ASC LIMIT 1");
+        $rs = $this->db->query("SELECT park_id, kingdom_id, name, abbreviation, active FROM " . DB_PREFIX . "park"
+            . " WHERE abbreviation = '{$abbr}' AND kingdom_id IN ({$family})"
+            . " ORDER BY (active = 'Active') DESC, (kingdom_id = {$kingdomId}) DESC, kingdom_id ASC, park_id ASC LIMIT 1");
         if ($rs === false || $rs->size() === 0) {
             return null;
         }
         $rs->Next();
-        return ['id' => (int)$rs->park_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation, 'active' => $rs->active === 'Active'];
+        return ['id' => (int)$rs->park_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation, 'active' => $rs->active === 'Active', 'kingdomId' => (int)$rs->kingdom_id];
     }
 
     /** $kingdomId plus its active child principalities (never empty for a positive id). */
@@ -891,9 +897,11 @@ class SearchService extends Ork3
     }
 
     /**
-     * Active parks of $kingdomId for the filter's park dropdown; [] when the kingdom is outside the scope.
+     * Active parks of $kingdomId and of its principalities that are inside the field's scope, for the
+     * filter's park dropdown. Own parks first, then principality parks, each group by name; each row
+     * carries its kingdom so the UI can label principality parks. [] when $kingdomId is out of scope.
      *
-     * @return array<int, array{id: int, name: string, abbr: string}>
+     * @return array<int, array{id: int, name: string, abbr: string, kingdomId: int, kingdomAbbr: string}>
      */
     public function filter_scope_parks(int $kingdomId, array $scope): array
     {
@@ -901,20 +909,33 @@ class SearchService extends Ork3
         if (!$this->kingdomInFilterScope($kingdomId, $scope) || !$this->kingdomIsActive($kingdomId)) {
             return [];
         }
-        $where = ["kingdom_id = {$kingdomId}", "active = 'Active'"];
+        $kids = [];
+        foreach ($this->familyKingdomIds($kingdomId) as $kid) {
+            if ($kid === $kingdomId || $this->kingdomInFilterScope($kid, $scope)) {
+                $kids[] = (int)$kid;
+            }
+        }
+        $where = ["p.kingdom_id IN (" . implode(',', $kids) . ")", "p.active = 'Active'", "k.active = 'Active'"];
         $exclude = (int)($scope['excludeParkId'] ?? 0);
         if ($exclude > 0) {
-            $where[] = "park_id != {$exclude}";
+            $where[] = "p.park_id != {$exclude}";
         }
         $this->db->clear();
-        $rs = $this->db->query("SELECT park_id, name, abbreviation FROM " . DB_PREFIX . "park WHERE " . implode(' AND ', $where));
+        $rs = $this->db->query("SELECT p.park_id, p.name, p.abbreviation, p.kingdom_id, k.abbreviation AS kingdom_abbr FROM " . DB_PREFIX . "park p"
+            . " JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id WHERE " . implode(' AND ', $where));
         $out = [];
         if ($rs !== false && $rs->size() > 0) {
             while ($rs->Next()) {
-                $out[] = ['id' => (int)$rs->park_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation];
+                $out[] = [
+                    'id'          => (int)$rs->park_id,
+                    'name'        => (string)$rs->name,
+                    'abbr'        => (string)$rs->abbreviation,
+                    'kingdomId'   => (int)$rs->kingdom_id,
+                    'kingdomAbbr' => (string)$rs->kingdom_abbr,
+                ];
             }
         }
-        usort($out, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+        usort($out, fn ($a, $b) => (($b['kingdomId'] === $kingdomId) <=> ($a['kingdomId'] === $kingdomId)) ?: strcasecmp($a['name'], $b['name']));
         return $out;
     }
 
@@ -948,8 +969,10 @@ class SearchService extends Ork3
         if ($pAbbr === '') {
             return $match;
         }
+        // Family-aware like the search path: KD:PK may name a principality park; the pill keeps KD.
         $park = $this->abbrevPark($kingdom['id'], $pAbbr);
-        if ($park === null || !$park['active'] || $park['id'] === (int)($scope['excludeParkId'] ?? 0)) {
+        if ($park === null || !$park['active'] || $park['id'] === (int)($scope['excludeParkId'] ?? 0)
+            || ($park['kingdomId'] !== $kingdom['id'] && !$this->kingdomInFilterScope($park['kingdomId'], $scope))) {
             return null;
         }
         $match['parkId']   = $park['id'];

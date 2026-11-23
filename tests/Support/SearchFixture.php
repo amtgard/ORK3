@@ -276,14 +276,15 @@ final class SearchFixture
     }
 
     /**
-     * An abbreviation no park in $kingdomId uses yet ('' when none found).
+     * An abbreviation no park in any of $kingdomIds uses yet ('' when none found).
      */
-    public function unusedParkAbbreviation(int $kingdomId): string
+    public function unusedParkAbbreviation(int ...$kingdomIds): string
     {
-        $stmt = $this->pdo->prepare('SELECT 1 FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ? AND abbreviation = ?');
+        $in = implode(',', array_map('intval', $kingdomIds));
+        $stmt = $this->pdo->prepare('SELECT 1 FROM ' . DB_PREFIX . "park WHERE kingdom_id IN ({$in}) AND abbreviation = ?");
         for ($i = 0; $i < 50; $i++) {
             $abbr = 'Q' . strtoupper(bin2hex(random_bytes(1)));
-            $stmt->execute([$kingdomId, $abbr]);
+            $stmt->execute([$abbr]);
             if ($stmt->fetchColumn() === false) {
                 return $abbr;
             }
