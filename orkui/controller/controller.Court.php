@@ -207,6 +207,12 @@ class Controller_Court extends Controller
         $this->data['StatusFlow']   = $statusFlow;
         $this->data['TrackingStatuses'] = $this->Court->tracking_status_definitions();
         $this->data['CanManage']    = $canManage;
+        // Scrollery's issuing rule over the court's issuing scope: a host-park officer
+        // runs a Kingdom Court's planner but cannot print its kingdom-headed scrolls.
+        $this->data['CanIssueScrolls'] = $this->Scrollery->may_issue_for_court($uid, $court);
+        // Grant / finalize / Record Court: CourtAjax refuses them over the issuing
+        // scope, so the planner says so up front instead of after the modal.
+        $this->data['CanIssueAwards'] = $this->Court->can_issue_for_court($uid, $court);
         $this->data['CanSetIssuedBy'] = $court['ParkId'] > 0
             && $this->Court->can_manage($uid, $court['KingdomId'], 0);
         $this->data['Uid']          = $uid;
@@ -246,6 +252,12 @@ class Controller_Court extends Controller
 
         if (!$this->Court->can_manage($uid, $court['KingdomId'], $court['ParkId'])) {
             $this->data['Error'] = 'You do not have permission to record this court.';
+            return;
+        }
+        // Recording is granting: a Kingdom Court's grants go out in the kingdom's
+        // name, so its host-park officers may plan it but not record it.
+        if (!$this->Court->can_issue_for_court($uid, $court)) {
+            $this->data['Error'] = 'This is a Kingdom Court: its grants are recorded by kingdom officers.';
             return;
         }
 

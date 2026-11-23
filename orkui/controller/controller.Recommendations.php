@@ -20,6 +20,46 @@ if (!function_exists('rmNiceDate')) {
     }
 }
 
+/**
+ * Scroll / regalia tracking of a rec's court line, for the dot on the Recs Manager
+ * court badge, labelled from the one shared definition (Court::trackingStatusDefinitions,
+ * passed in as $defs). Defined here for the same reason as rmNiceDate().
+ * Returns ['state' => pending|working|done, 'tip' => 'Scroll: Pending · Regalia: Assigned'],
+ * or null (no dot) for a finalized court or a line that needs neither.
+ */
+if (!function_exists('rmCourtTracking')) {
+    function rmCourtTracking(array $court, array $defs)
+    {
+        if (($court['Status'] ?? '') === 'complete' || empty($defs['scroll']) || empty($defs['regalia'])) {
+            return null;
+        }
+        $parts  = [];
+        $groups = [];
+        foreach (['scroll' => ['Scroll', 'ScrollStatus'], 'regalia' => ['Regalia', 'RegaliaStatus']] as $type => [$label, $key]) {
+            $v = (int)($court[$key] ?? 0);
+            foreach ($defs[$type] as $d) {
+                if ((int)$d['value'] === $v) {
+                    $parts[]  = $label . ': ' . $d['label'];
+                    $groups[] = $d['group'];
+                    break;
+                }
+            }
+        }
+        if (!array_diff($groups, ['notneeded'])) {
+            return null;
+        }
+        // Worst first: anything nobody has yet is what the officer must chase.
+        if (in_array('pending', $groups, true)) {
+            $state = 'pending';
+        } elseif (array_diff($groups, ['done', 'notneeded'])) {
+            $state = 'working';
+        } else {
+            $state = 'done';
+        }
+        return ['state' => $state, 'tip' => implode(' · ', $parts)];
+    }
+}
+
 class Controller_Recommendations extends Controller
 {
     // Per-request memoization for the two scope-wide maps every rendered row needs.
@@ -68,12 +108,24 @@ class Controller_Recommendations extends Controller
         // First 500-row batch for the scope (server-side filtered/sorted/paged).
         // Defaults mirror the recs-tab pills: eligibility 'open', sort by date desc.
         $this->load_model('Reports');
+        // Optional rank range handed over by the Kingdom/Park recs panels' Rank filter
+        // (?rmin=&rmax=&nl=): open already filtered, same 1..10 + 11 = Master scale as rows().
+        $rankMin = max(1, min(11, (int)($_GET['rmin'] ?? 1)));
+        $rankMax = max(1, min(11, (int)($_GET['rmax'] ?? 11)));
+        if ($rankMin > $rankMax) {
+            [$rankMin, $rankMax] = [$rankMax, $rankMin];
+        }
+        $rankNl = (string)($_GET['nl'] ?? '1') !== '0';
+        $this->data['RankInit'] = ['min' => $rankMin, 'max' => $rankMax, 'nl' => $rankNl];
         $page = $this->Reports->recommended_awards_page([
             'RequestedBy' => $uid,
             'Token'       => $this->session->token,
             'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
             'ParkId'      => $park_id,
             'Eligibility' => 'open',
+            'RankMin'     => $rankMin,
+            'RankMax'     => $rankMax,
+            'IncludeNonLadder' => $rankNl,
             'SortKey'     => 'date',
             'SortDir'     => 'desc',
             'Limit'       => 500,
@@ -95,6 +147,10 @@ class Controller_Recommendations extends Controller
 
         $this->data['CourtMap'] = $courtMap;
         $this->data['Courts']   = $courts;
+        // Court-badge tracking dot labels; the first page is Open, so nothing granted
+        // to print yet (rows() fills GrantedPrintable for the closed views).
+        $this->data['TrackingDefs']     = $this->Court->tracking_status_definitions();
+        $this->data['GrantedPrintable'] = [];
         // Parks in the kingdom (kingdom-scope park filter + abbrev lookup); DB in lib.
         $this->data['Parks']    = $this->rmParkMap($kingdom_id);
 
@@ -160,7 +216,9 @@ class Controller_Recommendations extends Controller
             'Court'       => (string)($_GET['court'] ?? 'all'),
             'Park'        => (string)($_GET['park'] ?? 'all'),
             'PassLocal'   => !empty($_GET['passlocal']),
-            // Opt-in: fold dismissed (soft-deleted) recommendations into the list.
+            // Status view: open (default) | granted | dismissed | closed. The lib
+            // validates it; a legacy ?dismissed=1 alone still means live + closed.
+            'Status'      => (string)($_GET['status'] ?? ''),
             'IncludeDismissed' => !empty($_GET['dismissed']),
             // Rank-range filter (Rank header popover): 1..10, 11 = Master; the lib clamps.
             'RankMin'     => (int)($_GET['rmin'] ?? 1),
@@ -194,6 +252,9 @@ class Controller_Recommendations extends Controller
         $CourtMap = $this->rmCourtMap($kingdom_id, $park_id);
         $Parks    = $this->rmParkMap($kingdom_id);
         $Context  = $context;
+        // Granted rows offer View/Print scroll only where this viewer may print it.
+        $GrantedPrintable = $this->rmGrantedPrintable($page['Groups'], $uid);
+        $TrackingDefs     = $this->Court->tracking_status_definitions();
 
         $html = '';
         foreach ($page['Groups'] as $group) {
@@ -383,7 +444,9 @@ class Controller_Recommendations extends Controller
             'Court'       => (string)($_GET['court'] ?? 'all'),
             'Park'        => (string)($_GET['park'] ?? 'all'),
             'PassLocal'   => !empty($_GET['passlocal']),
-            // Opt-in: fold dismissed (soft-deleted) recommendations into the list.
+            // Status view: open (default) | granted | dismissed | closed. The lib
+            // validates it; a legacy ?dismissed=1 alone still means live + closed.
+            'Status'      => (string)($_GET['status'] ?? ''),
             'IncludeDismissed' => !empty($_GET['dismissed']),
             // Rank-range filter (Rank header popover): 1..10, 11 = Master; the lib clamps.
             'RankMin'     => (int)($_GET['rmin'] ?? 1),
@@ -524,7 +587,7 @@ class Controller_Recommendations extends Controller
                 $this->monarchyOnlyLabel((int)($g['MonarchyOnlyLevel'] ?? 0)),
                 $this->csvSafe(implode('; ', array_keys($courtNames))),
                 $this->csvSafe($g['Members'][0]['Reason'] ?? ''),
-                // Only differs from "Pending" with "Show granted & dismissed" on.
+                // Only differs from "Pending" in the Granted / Dismissed / All closed views.
                 // Last column so existing spreadsheets keyed on positions still line up.
                 empty($g['IsDismissed']) ? 'Pending' : (!empty($g['IsGranted']) ? 'Granted' : 'Dismissed'),
             ]);
@@ -590,6 +653,23 @@ class Controller_Recommendations extends Controller
             $this->rmCourtMapMemo[$key] = $this->Court->get_recommendation_court_map($kingdom_id, $park_id, true);
         }
         return $this->rmCourtMapMemo[$key];
+    }
+
+    // awards_id => true for the granted rows' awards this viewer may print (the
+    // Scrollery render gate, Model_Scrollery::printable_awards_ids). Batched per page.
+    private function rmGrantedPrintable(array $groups, int $uid)
+    {
+        $ids = [];
+        foreach ($groups as $g) {
+            if (!empty($g['IsGranted']) && (int)($g['GrantedAwardsId'] ?? 0) > 0) {
+                $ids[] = (int)$g['GrantedAwardsId'];
+            }
+        }
+        if (!$ids || $uid <= 0) {
+            return [];
+        }
+        $this->load_model('Scrollery');
+        return $this->Scrollery->printable_awards_ids($ids, $uid);
     }
 
     // Park map for the kingdom-scope filter + row abbrev. DB lives in the lib

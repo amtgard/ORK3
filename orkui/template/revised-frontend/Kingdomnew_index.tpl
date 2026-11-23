@@ -365,7 +365,7 @@
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
+				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false) || !empty($CanIssueScrolls)): ?>
 				<li data-kntab="admin">
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
@@ -927,7 +927,7 @@
 			</div>
 
 		<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
-		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
+		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false) || !empty($CanIssueScrolls)): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
 			<div class="kn-report-cols">
 				<?php if ($CanManageKingdom ?? false): ?>
@@ -947,20 +947,22 @@
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
 					</ul>
 				</div>
-				<?php /* Scrollery. Sits inside the CanManageKingdom block above, so it inherits
-				         the same AUTH_EDIT gate the rest of this column uses rather than
-				         computing a second one. Both routes re-check authority server-side. */ ?>
-				<div class="kn-report-group">
-					<h5><i class="fas fa-scroll"></i> Certificates</h5>
-					<ul>
-						<li><a href="<?= UIR ?>Scrollery/create/kingdom/<?= $kingdom_id ?>">Print a Scroll</a></li>
-						<li><a href="<?= UIR ?>Scrollery/bulk/kingdom/<?= $kingdom_id ?>">Print Bulk Scrolls</a></li>
-					</ul>
-				</div>
 				<div class="kn-report-group">
 					<h5><i class="fas fa-poll"></i> Surveys</h5>
 					<ul>
 						<li><a href="<?= UIR ?>Survey/index/Kingdom/<?= $kingdom_id ?>">Manage Surveys</a></li>
+					</ul>
+				</div>
+				<?php endif; ?>
+				<?php /* Scrollery. Gated on CanIssueScrolls — Scrollery's own AUTH_EDIT
+				         issuing check, the one create/bulk enforce — not the AUTH_CREATE
+				         column above, so an officer who may issue always sees the links. */ ?>
+				<?php if (!empty($CanIssueScrolls)): ?>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-scroll"></i> Scrolls</h5>
+					<ul>
+						<li><a href="<?= UIR ?>Scrollery/create/kingdom/<?= $kingdom_id ?>">Print a Scroll</a></li>
+						<li><a href="<?= UIR ?>Scrollery/bulk/kingdom/<?= $kingdom_id ?>">Print Scrolls in Bulk</a></li>
 					</ul>
 				</div>
 				<?php endif; ?>
@@ -1424,6 +1426,10 @@ var KnBannerConfig = {
 			<div class="kn-award-success" id="kn-award-success" style="display:none">
 				<i class="fas fa-check-circle"></i> Award saved!
 			</div>
+			<?php /* Not on the success banner's timer: the court note and the print run stay
+			         put while the modal is open (revised.js knDoSave / knNotePrintable). */ ?>
+			<div class="ork-award-court-note" id="kn-award-court-note" role="status" style="display:none"></div>
+			<div class="ork-award-print-run" id="kn-award-print-run" style="display:none"></div>
 			<div class="kn-form-error" id="kn-award-error"></div>
 
 			<!-- Award Type Toggle -->
@@ -1552,17 +1558,28 @@ var KnBannerConfig = {
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-award-cancel">Close</button>
-			<div style="display:flex;gap:8px" id="kn-award-footer-normal">
-				<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
-					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
-				</button>
-				<button class="kn-btn kn-btn-primary" id="kn-award-save-new" disabled>
-					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
+			<div style="display:flex;gap:8px;align-items:center">
+				<?php /* Scrollery: the last printable award granted in this sitting, as on the
+				         profile's Add Award modal. Shown only when the server said THIS officer
+				         may print it (X-Ork-Printable), so it is never a dead link. */ ?>
+				<a href="#" id="kn-award-print-link" class="pn-award-print-icon" style="display:none"
+				   target="_blank" rel="noopener"
+				   data-tip="Print the scroll for the award you just granted"
+				   aria-label="Print the scroll for the award you just granted">
+					<i class="fas fa-print"></i>
+				</a>
+				<div style="display:flex;gap:8px" id="kn-award-footer-normal">
+					<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
+						<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
+					</button>
+					<button class="kn-btn kn-btn-primary" id="kn-award-save-new" disabled>
+						<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
+					</button>
+				</div>
+				<button class="kn-btn kn-btn-primary" id="kn-award-save-next" disabled style="display:none">
+					<i class="fas fa-arrow-right"></i> Add and Next
 				</button>
 			</div>
-			<button class="kn-btn kn-btn-primary" id="kn-award-save-next" disabled style="display:none">
-				<i class="fas fa-arrow-right"></i> Add and Next
-			</button>
 		</div>
 	</div>
 </div>
@@ -3652,3 +3669,5 @@ window.OrkBcCfg = {
 </script>
 <?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>
+<?php /* Award Info modal for the closed-recs panel's granted rows ((i) button). */ ?>
+<?php include __DIR__ . '/_award_info_modal.tpl'; ?>

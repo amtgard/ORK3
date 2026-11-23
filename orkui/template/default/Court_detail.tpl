@@ -16,6 +16,9 @@ $pendingRecs = $PendingRecs  ?? [];
 $awardOpts   = $AwardOptions ?? [];
 $statusFlow  = $StatusFlow   ?? [];
 $canManage   = $CanManage    ?? false;
+// Grant / finalize / record over the court's ISSUING scope (Court::canIssueForCourt):
+// false for a host-park officer on a Kingdom Court, who may still plan it.
+$canIssueAwards = $CanIssueAwards ?? $canManage;
 $error       = $Error        ?? '';
 $heraldryUrl = $HeraldryUrl  ?? '';
 $hasHeraldry = $HasHeraldry  ?? false;
@@ -373,6 +376,37 @@ html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: 
 .cp-rm-view-btn { background: #edf2f7; border: 1px solid #e2e8f0; color: #4a5568; padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; transition: background .1s, border-color .1s; white-space: nowrap; }
 .cp-rm-view-btn:hover { background: #e2e8f0; }
 .cp-rm-view-btn.active { background: #2c5282; border-color: #2c5282; color: #fff; }
+
+/* Rank-range filter (cpRkf*): the Recs Manager's .rm-rankf-* popover, ladder 1..10
+   (10 = 10 and above). position:fixed so the modal body's overflow cannot clip it;
+   z-index above .cp-overlay (1000). */
+.cp-rkf-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; }
+.cp-rkf-btn.is-active { background: #2c5282; border-color: #2c5282; color: #fff; }
+.cp-rkf-pop { position: fixed; z-index: 1002; width: 320px; max-width: calc(100vw - 16px); box-sizing: border-box; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; color: #2d3748; box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 13px; }
+.cp-rkf-pop[hidden] { display: none; }
+.cp-rkf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.cp-rkf-title { font-weight: 700; }
+.cp-rkf-status { color: #718096; font-size: 12px; text-align: right; }
+.cp-rkf-stops { position: relative; display: flex; border-radius: 999px; background: #f7fafc; box-shadow: inset 0 0 0 1px #e2e8f0; }
+.cp-rkf-pill { position: absolute; top: 50%; height: 30px; margin-top: -15px; border-radius: 999px; background: #2c5282; transition: left .12s ease, width .12s ease; }
+.cp-rkf-pill[hidden] { display: none; }
+.cp-rkf-stop { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; min-height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 0; border-radius: 999px; background: transparent; color: #2d3748; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cp-rkf-num { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 999px; }
+.cp-rkf-stop:hover .cp-rkf-num { box-shadow: inset 0 0 0 1px currentColor; }
+.cp-rkf-stop.is-in .cp-rkf-num { color: #fff; }
+.cp-rkf-stop.is-end .cp-rkf-num, .cp-rkf-stop.is-anchor .cp-rkf-num { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
+.cp-rkf-stop:focus-visible { outline: none; }
+.cp-rkf-stop:focus-visible .cp-rkf-num { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2c5282; }
+.cp-rkf-hint { margin: 8px 0 4px; font-size: 12px; color: #718096; }
+.cp-rkf-note { margin: 0 0 10px; font-size: 12px; color: #718096; }
+.cp-rkf-foot { display: flex; justify-content: space-between; gap: 8px; }
+@media (max-width: 600px) {
+    /* Pin to the viewport bottom so the scale always fits a phone; grow the hit targets. */
+    .cp-rkf-pop { left: 8px !important; right: 8px; top: auto !important; bottom: 8px; width: auto; max-height: 80vh; overflow: auto; }
+    .cp-rkf-stop { min-height: 44px; }
+    .cp-rkf-foot button { min-height: 44px; }
+    .cp-rkf-btn { min-height: 32px; }
+}
 
 /* Inline metadata chips inside the rec head */
 .cp-rm-age-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; letter-spacing: .03em; flex-shrink: 0; }
@@ -905,12 +939,15 @@ html[data-theme="dark"] .cp-track-opt-check { color: #90cdf4; }
 .cp-list-toolbar .cp-scrollery-btn:disabled:hover { background: #fff; }
 html[data-theme="dark"] .cp-list-toolbar .cp-scrollery-btn:disabled:hover { background: #1f2733; }
 
-/* The post-print bar: "Printed N Scrollery scrolls." · Set these scrolls to complete? · Not yet */
+/* The post-print bar: "N Scrollery scrolls opened…" / "K of N printed." · Complete those K? · Not yet */
 .cp-print-bar { background: #ebf8ff; border: 1px solid #90cdf4; color: #2c5282; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; font-size: 13px; }
 .cp-print-bar[hidden] { display: none; }
 .cp-print-bar-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cp-print-bar-icon { font-size: 16px; color: #2b6cb0; flex-shrink: 0; }
-.cp-print-bar-text { flex: 1 1 200px; min-width: 0; font-weight: 600; line-height: 1.4; }
+.cp-print-bar-text-wrap { flex: 1 1 200px; min-width: 0; line-height: 1.4; }
+.cp-print-bar-text { font-weight: 600; }
+.cp-print-bar-progress { display: block; font-size: 12px; font-weight: 500; margin-top: 2px; }
+.cp-print-bar-progress:empty { display: none; }
 .cp-print-bar-text a { color: inherit; text-decoration: underline; font-weight: 700; margin-left: 4px; }
 .cp-print-bar-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 .cp-print-bar-actions[hidden], .cp-print-bar-close[hidden] { display: none; }
@@ -1180,6 +1217,15 @@ html[data-theme="dark"] .cp-rm-sort-btn.active { background: #2b6cb0; border-col
 html[data-theme="dark"] .cp-rm-view-btn { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] .cp-rm-view-btn:hover { background: #2d3748; }
 html[data-theme="dark"] .cp-rm-view-btn.active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .cp-rkf-btn.is-active { background: #63b3ed; border-color: #63b3ed; color: #10161d; }
+html[data-theme="dark"] .cp-rkf-pop { background: #161b22; border-color: #2d3748; color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,.6); }
+html[data-theme="dark"] .cp-rkf-status, html[data-theme="dark"] .cp-rkf-hint, html[data-theme="dark"] .cp-rkf-note { color: #a0aec0; }
+html[data-theme="dark"] .cp-rkf-stops { background: #1f2733; box-shadow: inset 0 0 0 1px #2d3748; }
+html[data-theme="dark"] .cp-rkf-pill { background: #63b3ed; }
+html[data-theme="dark"] .cp-rkf-stop { color: #e2e8f0; }
+html[data-theme="dark"] .cp-rkf-stop.is-in .cp-rkf-num { color: #10161d; }
+html[data-theme="dark"] .cp-rkf-stop.is-end .cp-rkf-num, html[data-theme="dark"] .cp-rkf-stop.is-anchor .cp-rkf-num { box-shadow: inset 0 0 0 1.5px rgba(16,22,29,.45); }
+html[data-theme="dark"] .cp-rkf-stop:focus-visible .cp-rkf-num { box-shadow: 0 0 0 2px #161b22, 0 0 0 4px #63b3ed; }
 html[data-theme="dark"] .cp-age-green   { background: rgba(72,187,120,.18); color: #9ae6b4; }
 html[data-theme="dark"] .cp-age-yellow  { background: rgba(214,158,46,.18); color: #f6e05e; }
 html[data-theme="dark"] .cp-age-orange  { background: rgba(237,137,54,.18); color: #fbd38d; }
@@ -1916,7 +1962,7 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
                 <?= $nextLabel[$courtSt] ?? 'Advance' ?> <i class="fas fa-arrow-right"></i>
             </button>
             <?php endif; ?>
-            <?php if ($courtSt === 'published'): ?>
+            <?php if ($courtSt === 'published' && $canIssueAwards): ?>
             <a class="cp-btn-primary" style="margin-top:5px" href="<?= UIR ?>Court/record/<?= (int)$court['CourtId'] ?>">
                 <i class="fas fa-clipboard-check"></i> Record Court
             </a>
@@ -2043,7 +2089,7 @@ $_stat_html = function ($type) use ($_track_counts) {
                 </button>
                 <hr style="border:none;border-top:1px solid #e2e8f0;margin:8px 0">
                 <button class="cp-sb-toggle-btn" id="cp-printing-list-btn" onclick="cpTogglePrintingList()">
-                    <i class="fas fa-print"></i> Printing List
+                    <i class="fas fa-list"></i> Printing List
                 </button>
             </div>
         </div>
@@ -2165,14 +2211,18 @@ $_stat_html = function ($type) use ($_track_counts) {
     <div class="cp-view-panel" id="cp-panel-order" role="tabpanel" aria-labelledby="cp-tab-order"<?= $cpView === 'order' ? '' : ' hidden' ?>>
 
     <?php if ($courtSt !== 'complete'): ?>
-    <!-- After a Scrollery print run: "Set these scrolls to complete?" (cpShowPrintBar).
-         The bar acts only on the lines the preflight said would print. -->
+    <!-- After a Scrollery print run: "K of N printed. Complete those K?" (cpShowPrintBar).
+         The bar acts only on the preflighted lines the print log shows printed since
+         the run started (cpPrintProgressPoll). -->
     <div class="cp-print-bar" id="cp-print-bar" role="region" aria-label="Scrollery print" hidden>
         <div class="cp-print-bar-main">
             <i class="fas fa-print cp-print-bar-icon" aria-hidden="true"></i>
-            <span class="cp-print-bar-text" id="cp-print-bar-text" role="status" aria-live="polite"></span>
+            <span class="cp-print-bar-text-wrap">
+                <span class="cp-print-bar-text" id="cp-print-bar-text"></span>
+                <span class="cp-print-bar-progress" id="cp-print-bar-progress" role="status" aria-live="polite"></span>
+            </span>
             <span class="cp-print-bar-actions" id="cp-print-bar-actions">
-                <button type="button" class="cp-btn-primary cp-btn-sm" id="cp-print-bar-yes" onclick="cpCompletePrinted()"><i class="fas fa-check" aria-hidden="true"></i> Set these scrolls to complete?</button>
+                <button type="button" class="cp-btn-primary cp-btn-sm" id="cp-print-bar-yes" onclick="cpCompletePrinted()" disabled><i class="fas fa-check" aria-hidden="true"></i> <span id="cp-print-bar-yes-label">Complete printed scrolls</span></button>
                 <button type="button" class="cp-btn-outline cp-btn-sm" id="cp-print-bar-no" onclick="cpDismissPrintBar()">Not yet</button>
             </span>
             <button type="button" class="cp-print-bar-close" id="cp-print-bar-close" onclick="cpDismissPrintBar()" aria-label="Dismiss" data-tip="Dismiss" hidden>&times;</button>
@@ -2199,7 +2249,20 @@ $_stat_html = function ($type) use ($_track_counts) {
                 if (($_ca['Status'] ?? '') !== 'cancelled' && (int)($_ca['ScrollStatus'] ?? 0) === $cpScrolleryValue) $_scrolleryN++;
             }
         ?>
-        <button type="button" class="cp-btn-outline cp-btn-sm cp-scrollery-btn" id="cp-scrollery-print-btn" onclick="cpPrintScrollery()"<?= $_scrolleryN ? '' : ' disabled data-tip="Set a scroll chip to Scrollery Print to add it here."' ?>>
+        <?php
+            // A viewer who manages but cannot issue (host park of a Kingdom Court)
+            // keeps the count but never the button; cpRefreshScrolleryButton leaves it.
+            if (empty($CanIssueScrolls)) {
+                $_scrolleryAttrs = ' disabled data-cannot-issue="1" data-tip="'
+                    . (!empty($court['IsKingdomCourt'])
+                        ? 'Kingdom Court scrolls are printed by kingdom officers.'
+                        : 'Only officers who can issue awards for this park can print its scrolls.')
+                    . '"';
+            } else {
+                $_scrolleryAttrs = $_scrolleryN ? '' : ' disabled data-tip="Set a scroll chip to Scrollery Print to add it here."';
+            }
+        ?>
+        <button type="button" class="cp-btn-outline cp-btn-sm cp-scrollery-btn" id="cp-scrollery-print-btn" onclick="cpPrintScrollery()"<?= $_scrolleryAttrs ?>>
             <i class="fas fa-print" aria-hidden="true"></i><span>Print Scrollery scrolls (<span id="cp-scrollery-print-n"><?= $_scrolleryN ?></span>)</span>
         </button>
         <?php endif; ?>
@@ -2542,7 +2605,35 @@ $_stat_html = function ($type) use ($_track_counts) {
                 <button class="cp-rm-view-btn"        data-view="all"      onclick="cpRmView('all')"      data-tip="Every eligible rec for this kingdom/park">All</button>
                 <button class="cp-rm-view-btn"        data-view="snoozed"  onclick="cpRmView('snoozed')"  data-tip="Recs the monarchy has set aside for this regnum">Snoozed</button>
                 <button class="cp-rm-view-btn"        data-view="already"  onclick="cpRmView('already')"  data-tip="Player already has this award at or above the recommended rank">Already Has</button>
+                <?php
+                // Rank range (the Recs Manager's popover, filtered client-side here): only
+                // worth showing when some pending rec is for a ladder award.
+                $cpRecsHasLadder = false;
+                foreach ($pendingRecs as $_r) { if (!empty($_r['IsLadderAward'])) { $cpRecsHasLadder = true; break; } }
+                if ($cpRecsHasLadder): ?>
+                <button type="button" class="cp-rm-view-btn cp-rkf-btn" id="cp-rkf-btn" onclick="cpRkfToggle()" aria-haspopup="dialog" aria-expanded="false" aria-controls="cp-rkf-pop" aria-label="Filter by rank: all ranks"><i class="fas fa-filter" aria-hidden="true"></i> Rank: <span id="cp-rkf-sum">All</span></button>
+                <?php endif; ?>
             </div>
+            <?php if ($cpRecsHasLadder): ?>
+            <div class="cp-rkf-pop" id="cp-rkf-pop" role="dialog" aria-label="Filter by rank" hidden>
+                <div class="cp-rkf-head">
+                    <span class="cp-rkf-title">Show ranks</span>
+                    <span class="cp-rkf-status" id="cp-rkf-status">All ranks</span>
+                </div>
+                <div class="cp-rkf-stops" id="cp-rkf-stops" role="group" aria-label="Rank range: pick a start, then an end">
+                    <span class="cp-rkf-pill" id="cp-rkf-pill" aria-hidden="true" hidden></span>
+                    <?php for ($st = 1; $st <= 10; $st++): ?>
+                    <button type="button" class="cp-rkf-stop" data-stop="<?= $st ?>" tabindex="<?= $st === 1 ? '0' : '-1' ?>"<?= $st === 10 ? ' aria-label="10 and above"' : '' ?>><span class="cp-rkf-num"><?= $st === 10 ? '10+' : $st ?></span></button>
+                    <?php endfor; ?>
+                </div>
+                <p class="cp-rkf-hint" id="cp-rkf-hint" aria-live="polite">Tap a start rank, then an end rank.</p>
+                <p class="cp-rkf-note">Non-ladder awards (knighthoods, titles&hellip;) always show.</p>
+                <div class="cp-rkf-foot">
+                    <button type="button" class="cp-btn-outline cp-btn-sm" onclick="cpRkfReset()">Reset</button>
+                    <button type="button" class="cp-btn-primary cp-btn-sm" onclick="cpRkfClose(true)">Done</button>
+                </div>
+            </div>
+            <?php endif; ?>
             <div class="cp-rm-controls">
                 <span class="cp-rm-sort-label">Sort:</span>
                 <button class="cp-rm-sort-btn active" id="cp-rm-s-az"   onclick="cpRmSort('az')"  >A → Z</button>
@@ -2609,6 +2700,7 @@ $_stat_html = function ($type) use ($_track_counts) {
                      data-mundane-id="<?= (int)$rec['MundaneId'] ?>"
                      data-ka-id="<?= (int)$rec['KingdomAwardId'] ?>"
                      data-rank="<?= (int)$rec['Rank'] ?>"
+                     data-ladder="<?= !empty($rec['IsLadderAward']) ? '1' : '0' ?>"
                      data-persona="<?= htmlspecialchars($rec['Persona'], ENT_QUOTES) ?>"
                      data-award="<?= htmlspecialchars($rec['AwardName'], ENT_QUOTES) ?>"
                      data-date="<?= $rec['DateRecommended'] ? date('Y-m-d', strtotime($rec['DateRecommended'])) : '' ?>"
@@ -2982,6 +3074,9 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     var uir      = '<?= UIR ?>';
     var courtId     = <?= (int)($court['CourtId'] ?? 0) ?>;
     var courtIsKingdom = <?= !empty($court['IsKingdomCourt']) ? 'true' : 'false' ?>;
+    // Server-decided (Court::canIssueForCourt); CourtAjax enforces it on every grant.
+    var cpCanIssueAwards = <?= $canIssueAwards ? 'true' : 'false' ?>;
+    var CP_NOT_ISSUER_MSG = 'This is a Kingdom Court: its awards are granted and finalized by kingdom officers.';
     var kidId       = <?= (int)($court['KingdomId'] ?? 0) ?>;
 
     // Config for the shared scoped player-search autocomplete (court-planner.js).
@@ -3792,7 +3887,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         }).length;
     };
 
-    // ---- Print Scrollery scrolls (N) and "Set these scrolls to complete?" ----
+    // ---- Print Scrollery scrolls (N) and "K of N printed. Complete those K?" ----
     // The toolbar count follows the model: cpRefreshStatusBar (every chip write and
     // every heartbeat reconcile), a skip/unskip and a removal all call this.
     var CP_SCROLLERY_EMPTY_TIP = 'Set a scroll chip to Scrollery Print to add it here.';
@@ -3802,6 +3897,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var n = window.cpScrolleryCount();
         var nEl = gid('cp-scrollery-print-n');
         if (nEl) nEl.textContent = n;
+        if (btn.hasAttribute('data-cannot-issue')) return;   // server-decided: never enabled
         if (cpPrintBusy) return;   // the preflight owns the disabled state until it answers
         btn.disabled = n === 0;
         if (n === 0) btn.setAttribute('data-tip', CP_SCROLLERY_EMPTY_TIP);
@@ -3809,8 +3905,12 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     }
 
     // The run the officer just printed: [{CourtAwardId, RowVersion}] from the
-    // preflight, exactly as printed. Yes completes these lines and no others.
+    // preflight, exactly as printed. Yes completes the ones of these the print log
+    // shows printed since cpPendingRunStart (the server's stamp from the preflight),
+    // and no others.
     var cpPendingRun = null;
+    var cpPendingRunStart = '';
+    var cpPrintedCount = 0;
     var cpPrintBusy  = false;
 
     // The officer's own guarded write to a printed line moves its row_version, and
@@ -3886,6 +3986,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             cpPendingRun = printable.map(function(p) {
                 return { CourtAwardId: parseInt(p.CourtAwardId, 10) || 0, RowVersion: parseInt(p.RowVersion, 10) || 0 };
             });
+            cpPendingRunStart = String(d.RunStart || '');
             cpShowPrintBar(printable.length, skipped, parseInt(d.Dropped, 10) || 0, opened ? '' : url);
         });
     };
@@ -3911,8 +4012,9 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             text.appendChild(a);
         }
         gid('cp-print-bar-actions').hidden = false;
-        gid('cp-print-bar-yes').disabled = false;
         gid('cp-print-bar-close').hidden = true;
+        // Nothing has printed yet: Yes waits for the print log (cpPrintProgressPoll).
+        cpSetPrintProgress(0);
 
         var sk = gid('cp-print-bar-skipped');
         sk.innerHTML = '';
@@ -3939,10 +4041,66 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         }
         note.hidden = !note.childNodes.length;
         bar.hidden = false;
+        cpStartPrintProgress();
     }
+
+    // "K of N printed." and Yes = "Complete those K?", enabled only once K >= 1.
+    var CP_PRINT_WAIT_TIP = 'Nothing from this run has printed yet. This updates when the scrolls are printed.';
+    function cpSetPrintProgress(k) {
+        cpPrintedCount = k;
+        var n = cpPendingRun ? cpPendingRun.length : 0;
+        var prog = gid('cp-print-bar-progress');
+        if (prog) prog.textContent = k + ' of ' + n + ' printed.';
+        var yes = gid('cp-print-bar-yes');
+        var label = gid('cp-print-bar-yes-label');
+        if (label) label.textContent = k > 0 ? 'Complete ' + cpPlural(k, 'that one', 'those ' + k) + '?' : 'Complete printed scrolls';
+        if (yes) {
+            yes.disabled = k < 1;
+            if (k < 1) yes.setAttribute('data-tip', CP_PRINT_WAIT_TIP);
+            else yes.removeAttribute('data-tip');
+        }
+    }
+
+    // Re-read K from the print log while the bar is open: on returning to this tab
+    // (focus / visibilitychange — Chrome pauses timers in hidden tabs, so those are
+    // what catch the officer coming back from the print tab) and on a light interval.
+    // A direct fetch rather than post(): post() counts every call as a write, which
+    // would make the heartbeat drop its reads while this one is in flight.
+    var cpPrintPollTimer = null, cpPrintPollBusy = false;
+    function cpPrintProgressPoll() {
+        var run = cpPendingRun;
+        if (!run || !run.length || cpPrintPollBusy || document.hidden) return;
+        cpPrintPollBusy = true;
+        var fd = new FormData();
+        fd.append('CourtId', courtId);
+        fd.append('Lines', JSON.stringify(run));
+        fd.append('RunStart', cpPendingRunStart);
+        fd.append('DryRun', '1');
+        fetch(uir + 'CourtAjax/complete_printed_scrolls', {
+            method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }).then(function(d) {
+            cpPrintPollBusy = false;
+            // Ignore an answer for a run that has since been completed or dismissed.
+            if (run !== cpPendingRun || !d || d.status !== 0 || !Array.isArray(d.Printed)) return;
+            var yes = gid('cp-print-bar-yes');
+            if (yes && yes.getAttribute('aria-busy') === 'true') return;
+            cpSetPrintProgress(d.Printed.length);
+        });
+    }
+    function cpStartPrintProgress() {
+        cpStopPrintProgress();
+        cpPrintPollTimer = setInterval(cpPrintProgressPoll, 5000);
+    }
+    function cpStopPrintProgress() {
+        if (cpPrintPollTimer) { clearInterval(cpPrintPollTimer); cpPrintPollTimer = null; }
+    }
+    window.addEventListener('focus', cpPrintProgressPoll);
+    document.addEventListener('visibilitychange', function() { if (!document.hidden) cpPrintProgressPoll(); });
 
     window.cpDismissPrintBar = function() {
         cpPendingRun = null;
+        cpPendingRunStart = '';
+        cpStopPrintProgress();
         var bar = gid('cp-print-bar');
         if (bar) bar.hidden = true;
     };
@@ -3950,20 +4108,26 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     window.cpCompletePrinted = function() {
         var run = cpPendingRun;
         var yes = gid('cp-print-bar-yes');
-        if (!run || !run.length || (yes && yes.disabled)) return;
-        if (yes) yes.disabled = true;
+        if (!run || !run.length || cpPrintedCount < 1 || (yes && yes.disabled)) return;
+        if (yes) { yes.disabled = true; yes.setAttribute('aria-busy', 'true'); }
         var fd = new FormData();
         fd.append('CourtId', courtId);
         fd.append('Lines', JSON.stringify(run));
+        fd.append('RunStart', cpPendingRunStart);
         post('CourtAjax/complete_printed_scrolls', fd).then(function(d) {
+            if (yes) yes.removeAttribute('aria-busy');
             if (!d || d.status !== 0) {
                 if (yes) yes.disabled = false;
                 if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not set the scrolls to complete.');
                 return;
             }
-            cpPendingRun = null;
             var done  = Array.isArray(d.Completed) ? d.Completed : [];
             var stale = Array.isArray(d.Stale) ? d.Stale : [];
+            var notPrinted = Array.isArray(d.NotPrinted) ? d.NotPrinted.map(function(x) { return parseInt(x, 10) || 0; }) : [];
+            // Lines not yet printed stay in the run, so printing the rest and pressing
+            // Yes again still completes them; everything else leaves it.
+            var remaining = run.filter(function(l) { return notPrinted.indexOf(l.CourtAwardId) !== -1; });
+            cpPendingRun = remaining.length ? remaining : null;
             // A line completes only when its row_version still matched the printed one,
             // and the write bumps it by exactly one, so the new token is printed + 1.
             var printedRv = {};
@@ -3972,13 +4136,27 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 var rv = printedRv[String(caid)];
                 cpSetLineTracking(caid, 'scroll', 2, rv != null ? rv + 1 : cpGetRowVersion(caid) + 1);
             });
-            if (!stale.length) {
+            var doneMsg = done.length + ' ' + cpPlural(done.length, 'scroll', 'scrolls') + ' set to Complete.';
+            if (!stale.length && !cpPendingRun) {
                 cpDismissPrintBar();
-                cpNotice(done.length + ' ' + cpPlural(done.length, 'scroll', 'scrolls') + ' set to Complete.');
+                cpNotice(doneMsg);
+                return;
+            }
+            if (!stale.length) {
+                // Some of the run is still unprinted: keep the bar on those.
+                cpNotice(doneMsg);
+                var m = cpPendingRun.length;
+                gid('cp-print-bar-text').textContent = m + ' Scrollery ' + cpPlural(m, 'scroll', 'scrolls') + ' from this run ' + cpPlural(m, "hasn't", "haven't") + ' printed yet.';
+                cpSetPrintProgress(0);
+                cpPrintProgressPoll();
                 return;
             }
             // Report what was left alone; the heartbeat brings those lines up to date.
-            gid('cp-print-bar-text').textContent = done.length + ' ' + cpPlural(done.length, 'scroll', 'scrolls') + ' set to Complete.';
+            var unprinted = cpPendingRun ? cpPendingRun.length : 0;
+            cpPendingRun = null;
+            cpStopPrintProgress();
+            gid('cp-print-bar-text').textContent = doneMsg;
+            gid('cp-print-bar-progress').textContent = '';
             gid('cp-print-bar-actions').hidden = true;
             gid('cp-print-bar-close').hidden = false;
             gid('cp-print-bar-skipped').hidden = true;
@@ -3989,6 +4167,11 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 'line changed since printing and was left as it was.',
                 'lines changed since printing and were left as they were.');
             note.appendChild(p);
+            if (unprinted) {
+                var p2 = document.createElement('p');
+                p2.textContent = unprinted + ' ' + cpPlural(unprinted, "line hadn't", "lines hadn't") + ' printed yet and ' + cpPlural(unprinted, 'was', 'were') + ' left as ' + cpPlural(unprinted, 'it was.', 'they were.');
+                note.appendChild(p2);
+            }
             note.hidden = false;
             cpHeartbeatPoll(true);
         });
@@ -4809,7 +4992,10 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     };
 
     // ---- Grant modal (spec §6.1) — stages on confirm, does NOT commit ----
-    window.cpGrantAward = function(caid) { cpOpenGrantModal(caid); };
+    window.cpGrantAward = function(caid) {
+        if (!cpCanIssueAwards) { cpAlert(CP_NOT_ISSUER_MSG, 'Grant award'); return; }
+        cpOpenGrantModal(caid);
+    };
 
     function cpBuildGiverPills() {
         var wrap = gid('cp-grant-giver-pills');
@@ -5120,6 +5306,146 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         cpRmFilter();
     };
 
+    // ---- Add from Recs: rank-range filter (the Recs Manager's popover UX) ----
+    // Stops 1..10 are ladder ranks, 10 = rank 10 and above. The range is contiguous:
+    // the first tap sets the start, the second the end (the same stop twice = one
+    // rank). Non-ladder recs always pass; a ladder rec follows
+    // Report::sqlRankRangePredicate (a rank below an open bottom end is out).
+    var CP_RKF_TOP = 10;
+    var cpRkf = { min: 1, max: CP_RKF_TOP }, cpRkfAnchor = null;
+    function cpRkfIsDefault() { return cpRkf.min === 1 && cpRkf.max === CP_RKF_TOP; }
+    function cpRkfLab(n) { return n === CP_RKF_TOP ? CP_RKF_TOP + '+' : String(n); }
+    function cpRkfRangeText() { return cpRkf.min === cpRkf.max ? cpRkfLab(cpRkf.min) : cpRkfLab(cpRkf.min) + '–' + cpRkfLab(cpRkf.max); }
+    function cpRkfMatch(row) {
+        if (cpRkfIsDefault() || row.dataset.ladder !== '1') return true;
+        var rank = parseInt(row.dataset.rank, 10) || 0;
+        if (cpRkf.min > 1 && rank < cpRkf.min) return false;
+        if (cpRkf.max < CP_RKF_TOP && rank > cpRkf.max) return false;
+        return true;
+    }
+    function cpRkfStops() { var p = gid('cp-rkf-pop'); return p ? [].slice.call(p.querySelectorAll('.cp-rkf-stop')) : []; }
+    function cpRkfPaint() {
+        var btn = gid('cp-rkf-btn');
+        if (!btn) return;
+        var stops = cpRkfStops(), pending = cpRkfAnchor !== null;
+        stops.forEach(function(b) {
+            var n = +b.getAttribute('data-stop');
+            var inR = pending ? n === cpRkfAnchor : (n >= cpRkf.min && n <= cpRkf.max);
+            b.classList.toggle('is-in', inR);
+            b.classList.toggle('is-end', !pending && (n === cpRkf.min || n === cpRkf.max));
+            b.classList.toggle('is-anchor', pending && n === cpRkfAnchor);
+            b.setAttribute('aria-pressed', inR ? 'true' : 'false');
+        });
+        // One capsule from the start stop's centre to the end stop's, padded by half a cap.
+        var pill = gid('cp-rkf-pill');
+        var a = pending ? cpRkfAnchor : cpRkf.min, z = pending ? cpRkfAnchor : cpRkf.max;
+        var sa = stops[a - 1], sz = stops[z - 1];
+        if (pill && sa && sz && sa.offsetWidth) {
+            var CAP = 15;
+            var c1 = sa.offsetLeft + sa.offsetWidth / 2, c2 = sz.offsetLeft + sz.offsetWidth / 2;
+            pill.style.left = (c1 - CAP) + 'px';
+            pill.style.width = (c2 - c1 + 2 * CAP) + 'px';
+            pill.hidden = false;
+        }
+        var active = !cpRkfIsDefault();
+        var d = active ? 'Ranks ' + cpRkfRangeText() + ', plus non-ladder' : 'All ranks';
+        gid('cp-rkf-status').textContent = d;
+        gid('cp-rkf-sum').textContent = active ? cpRkfRangeText() : 'All';
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-label', 'Filter by rank: ' + d);
+        gid('cp-rkf-hint').textContent = pending
+            ? 'Start ' + cpRkfLab(cpRkfAnchor) + ' — now tap the end rank (or the same one again).'
+            : 'Tap a start rank, then an end rank.';
+    }
+    function cpRkfPlace() {
+        var pop = gid('cp-rkf-pop'), btn = gid('cp-rkf-btn');
+        if (!pop || pop.hidden || !btn) return;
+        var r = btn.getBoundingClientRect();
+        var vw = document.documentElement.clientWidth, vh = window.innerHeight;
+        var w = pop.offsetWidth, h = pop.offsetHeight;
+        var top = r.bottom + 6;
+        if (top + h > vh - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
+        pop.style.left = Math.min(Math.max(8, r.right - w), Math.max(8, vw - w - 8)) + 'px';
+        pop.style.top = Math.max(8, top) + 'px';
+    }
+    function cpRkfOpen() {
+        var pop = gid('cp-rkf-pop'), btn = gid('cp-rkf-btn');
+        if (!pop || !btn) return;
+        cpRkfAnchor = null;
+        pop.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        cpRkfPaint();
+        cpRkfPlace();
+        var stops = cpRkfStops();
+        var first = pop.querySelector('.cp-rkf-stop.is-end') || stops[0];
+        stops.forEach(function(b) { b.tabIndex = b === first ? 0 : -1; });
+        if (first) first.focus();
+    }
+    window.cpRkfClose = function(returnFocus) {
+        var pop = gid('cp-rkf-pop'), btn = gid('cp-rkf-btn');
+        if (!pop || pop.hidden) return;
+        // Closing mid-pick keeps the single stop that was tapped.
+        if (cpRkfAnchor !== null) { cpRkf.min = cpRkf.max = cpRkfAnchor; cpRkfAnchor = null; }
+        pop.hidden = true;
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        cpRkfPaint();
+        cpRmFilter();
+        if (returnFocus && btn) btn.focus();
+    };
+    window.cpRkfToggle = function() {
+        var pop = gid('cp-rkf-pop');
+        if (!pop) return;
+        if (pop.hidden) cpRkfOpen(); else cpRkfClose(true);
+    };
+    window.cpRkfReset = function() {
+        cpRkfAnchor = null; cpRkf.min = 1; cpRkf.max = CP_RKF_TOP;
+        cpRkfPaint();
+        cpRmFilter();
+    };
+    (function() {
+        var pop = gid('cp-rkf-pop');
+        if (!pop) return;
+        var stops = cpRkfStops();
+        stops.forEach(function(b, i) {
+            b.addEventListener('click', function() {
+                var n = +b.getAttribute('data-stop');
+                if (cpRkfAnchor === null) { cpRkfAnchor = n; cpRkfPaint(); return; }
+                cpRkf.min = Math.min(cpRkfAnchor, n); cpRkf.max = Math.max(cpRkfAnchor, n);
+                cpRkfAnchor = null;
+                cpRkfPaint();
+                cpRmFilter();
+            });
+            // Roving tabindex: one Tab stop for the scale, arrows move along it.
+            b.addEventListener('keydown', function(e) {
+                var j = null;
+                if (e.key === 'ArrowRight' || e.key === 'ArrowUp') j = Math.min(stops.length - 1, i + 1);
+                else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') j = Math.max(0, i - 1);
+                else if (e.key === 'Home') j = 0;
+                else if (e.key === 'End') j = stops.length - 1;
+                if (j === null) return;
+                e.preventDefault();
+                stops.forEach(function(s) { s.tabIndex = -1; });
+                stops[j].tabIndex = 0; stops[j].focus();
+            });
+        });
+        document.addEventListener('pointerdown', function(e) {
+            if (pop.hidden) return;
+            var btn = gid('cp-rkf-btn');
+            if (pop.contains(e.target) || (btn && btn.contains(e.target))) return;
+            cpRkfClose(false);
+        }, true);
+        // Capture phase, ahead of the page's Escape handler, so Escape closes only the
+        // popover and not the whole Add from Recs modal.
+        document.addEventListener('keydown', function(e) {
+            if ((e.key === 'Escape' || e.key === 'Esc') && !pop.hidden) {
+                e.stopPropagation();
+                cpRkfClose(true);
+            }
+        }, true);
+        window.addEventListener('resize', function() { if (!pop.hidden) { cpRkfPaint(); cpRkfPlace(); } });
+        window.addEventListener('scroll', cpRkfPlace, true);
+    })();
+
     window.cpRmFilter = function() {
         var q = (gid('cp-rm-filter').value || '').toLowerCase().trim();
         // EVERY whitespace-separated term must appear, in any order, rather than
@@ -5135,14 +5461,14 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         rows.forEach(function(row) {
             var inView = cpRmViewMatch(row, cpRmCurrentView);
             var hay    = row.dataset.search || '';
-            var match  = inView && (!terms.length || terms.every(function(t) { return hay.indexOf(t) !== -1; }));
+            var match  = inView && cpRkfMatch(row) && (!terms.length || terms.every(function(t) { return hay.indexOf(t) !== -1; }));
             row.style.display = match ? '' : 'none';
             if (match) visible++;
         });
         var empty = gid('cp-rm-empty');
         if (empty) {
             if (visible === 0) {
-                empty.textContent = q ? 'No recommendations match your filter.'
+                empty.textContent = (q || !cpRkfIsDefault()) ? 'No recommendations match your filter.'
                                      : (cpRmCurrentView === 'open'    ? 'No open recommendations. Try a different view.'
                                      :  cpRmCurrentView === 'snoozed' ? 'Nothing snoozed.'
                                      :  cpRmCurrentView === 'already' ? 'No one already has this award.'
@@ -5162,6 +5488,11 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         document.querySelectorAll('.cp-rm-view-btn').forEach(function(b) {
             b.classList.toggle('active', b.dataset.view === 'open');
         });
+        // A fresh open starts unfiltered, like the search box and view above.
+        cpRkfAnchor = null; cpRkf.min = 1; cpRkf.max = CP_RKF_TOP;
+        var rkfPop = gid('cp-rkf-pop');
+        if (rkfPop) { rkfPop.hidden = true; gid('cp-rkf-btn').setAttribute('aria-expanded', 'false'); }
+        cpRkfPaint();
         cpRmSort(cpRmCurrentSort);
         cpRmFilter();
         cpRmUpdateCount();
@@ -6204,6 +6535,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     }
 
     window.cpOpenCompleteModal = function() {
+        if (!cpCanIssueAwards) { cpAlert(CP_NOT_ISSUER_MSG, 'Complete Court'); return; }
         var unresolved = 0, staged = 0, stagedRows = [];
         courtAwards.forEach(function(a) {
             if (a.Status === 'planned' || a.Status === 'announced') unresolved++;

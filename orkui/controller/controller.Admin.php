@@ -1167,6 +1167,9 @@ class Controller_Admin extends Controller
                                 header('X-Ork-Rec-Error: ' . preg_replace('/[^\x20-\x7E]/', ' ', (string)$r['RecError']));
                             }
                         }
+                        if ((int)($r['Status'] ?? 1) === 0) {
+                            $this->emit_award_grant_followups($r, (int)$id, $sourceRec);
+                        }
                         break;
                     case 'deleteaward':
                         $r = $this->Player->delete_player_award(array(
@@ -2686,6 +2689,69 @@ class Controller_Admin extends Controller
             // Header values are a single line of ASCII; the messages here are literals,
             // but strip control characters rather than trusting that to stay true.
             header('X-Award-Error: ' . preg_replace('/[^\x20-\x7E]/', ' ', $message));
+        }
+    }
+
+    /**
+     * After a successful addaward: tell knDoSave / pkDoSave (which read headers, the
+     * body being a rendered page) what they need for print-after-grant and for the
+     * court lines the grant settled.
+     *
+     *  X-Ork-Awards-Id / X-Ork-Printable — the row just written, and whether THIS
+     *    officer may print its scroll (Model_Scrollery::award_is_printable, the render
+     *    route's own gate), so the modal never offers a dead link.
+     *  X-Ork-Print-Chunk — Scroll::PRINT_CHUNK, the most scrolls one print tab takes;
+     *    the modal's "Print these N scrolls" splits a long run into windows that size.
+     *  X-Ork-Court-Lines — open court lines drawn from the source rec that were marked
+     *    given (the same reconcile PlayerAjax::grantaward runs), so a later finalize
+     *    cannot grant the award a second time.
+     *
+     * Everything here runs AFTER the permanent award row is committed, so nothing may
+     * throw out of it: a 500 would read as "Save failed" and a retry would write a
+     * second award (AddAward has no duplicate guard).
+     */
+    private function emit_award_grant_followups(array $r, int $recipientId, int $sourceRec): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+        $awardsId = (int)($r['AwardsId'] ?? 0);
+        if ($awardsId > 0) {
+            $printable = false;
+            try {
+                $this->load_model('Scrollery');
+                $printable = $this->Scrollery->award_is_printable($awardsId, (int)$this->session->user_id);
+            } catch (\Throwable $e) {
+                error_log('Admin::addaward printable check failed (award ' . $awardsId . '): ' . $e->getMessage());
+            }
+            header('X-Ork-Awards-Id: ' . $awardsId);
+            header('X-Ork-Printable: ' . ($printable ? '1' : '0'));
+            if ($printable) {
+                header('X-Ork-Print-Chunk: ' . (int)Scroll::PRINT_CHUNK);
+            }
+        }
+        // Only once the rec is closed as granted: a rec left open (the award does not
+        // back it) must keep its court line open too.
+        if ($sourceRec > 0 && !empty($r['RecClosed'])) {
+            $courtLines = 0;
+            try {
+                $this->load_model('Court');
+                // The acting officer scopes the reconcile: only lines on courts they can
+                // manage, never on a completed court (see Court::reconcileGrantForRecommendation).
+                $courtLines = (int)$this->Court->reconcile_grant_for_recommendation(
+                    $sourceRec,
+                    $awardsId,
+                    (int)$this->request->Admin_player->GivenById,
+                    (int)$this->request->Admin_player->Rank,
+                    $recipientId,
+                    (int)$this->request->Admin_player->KingdomAwardId,
+                    'leave',
+                    (int)$this->session->user_id
+                );
+            } catch (\Throwable $e) {
+                error_log('Admin::addaward court reconcile failed (award ' . $awardsId . ', rec ' . $sourceRec . '): ' . $e->getMessage());
+            }
+            header('X-Ork-Court-Lines: ' . $courtLines);
         }
     }
 

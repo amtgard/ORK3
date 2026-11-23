@@ -4,8 +4,11 @@
  *
  * The file never leaves the browser. It is read here, cropped on a canvas and shown
  * through an object URL, so nothing reaches the server. A reload starts without it,
- * with one exception: the reload a Heraldry change makes carries the crop across in
- * sessionStorage for that one load (keepForReload, below).
+ * with two exceptions: the reload a Heraldry or Version change makes carries the crop
+ * across in sessionStorage for that one load (keepForReload, below), and a BATCHED run
+ * (bulk, `mine`, a court) keeps it in localStorage under the run's key for RUN_TTL, so
+ * batches 2..N — each its own tab, opened noopener — draw the signature uploaded in
+ * batch 1 (storeRun / readRun, below). Expired run entries are swept on every load.
  *
  * The typed signer stays in the page, hidden, because the fit measures it and because
  * Remove has to bring it back. The image's box is stored in percentages of its
@@ -30,19 +33,108 @@
     var observer = null;
     var kept   = null;  // { canvas, transparent } — the crop, for carrying across a reload.
 
-    /* One-reload carry. A Heraldry change reloads the page (Scrollery_render.tpl), and
-       the object URL dies with it, so the crop rides in sessionStorage as a data URL
+    /* One-reload carry. A Heraldry or Version change reloads the page (Scrollery_render.tpl),
+       and the object URL dies with it, so the crop rides in sessionStorage as a data URL
        for exactly that one load, keyed to the run: the path plus the query string
-       without the three parameters the reload itself changes. A different run in the
+       without the parameters the reload itself changes. A different run in the
        same tab never picks it up, and it is removed the moment it is read. */
     var KEEP_KEY = 'sc-sig-keep';
 
     function runKey() {
         var s = window.location.search.replace(/^\?/, '').split('&').filter(function (part) {
             var name = part.split('=')[0];
-            return part !== '' && name !== 'heraldry' && name !== 'print' && name !== 'configure';
+            return part !== '' && name !== 'heraldry' && name !== 'variant' && name !== 'print' && name !== 'configure';
         });
         return window.location.pathname + '?' + s.join('&');
+    }
+
+    /* The batched-run carry. data-sc-sig-run on <body> is the run's key
+       (Scrollery_render.tpl: &sigrun= from bulk / `mine`, or the court id), shared by
+       every batch tab of the run. localStorage rather than sessionStorage because each
+       batch opens noopener in a tab of its own, which starts an empty session store. */
+    var RUN          = document.body.getAttribute('data-sc-sig-run') || '';
+    var RUN_PREFIX   = 'sc-sig-run:';
+    var RUN_TTL      = 2 * 60 * 60 * 1000;  // A sitting of printing, not a keepsake.
+    var RUN_MAX_SIDE = 1600;  // Still sharper than the line prints; keeps the entry inside quota.
+    var runNote      = document.getElementById('sc-sig-run-note');
+
+    function local() {
+        try { return window.localStorage || null; } catch (e) { return null; }
+    }
+
+    /* Drop every run entry that is past its time (or unreadable), from any run. */
+    function sweepRuns() {
+        var ls = local();
+        if (!ls) { return; }
+        try {
+            var now = Date.now(), dead = [];
+            for (var i = 0; i < ls.length; i++) {
+                var k = ls.key(i);
+                if (!k || k.indexOf(RUN_PREFIX) !== 0) { continue; }
+                var entry = null;
+                try { entry = JSON.parse(ls.getItem(k)); } catch (e) { entry = null; }
+                if (!entry || typeof entry.exp !== 'number' || entry.exp < now) { dead.push(k); }
+            }
+            dead.forEach(function (k) { ls.removeItem(k); });
+        } catch (e) { /* storage refused: nothing to sweep */ }
+    }
+
+    function shrinkForRun(canvas) {
+        var scale = Math.min(1, RUN_MAX_SIDE / Math.max(canvas.width, canvas.height));
+        if (scale >= 1) { return canvas; }
+        var out = document.createElement('canvas');
+        out.width  = Math.max(1, Math.round(canvas.width * scale));
+        out.height = Math.max(1, Math.round(canvas.height * scale));
+        out.getContext('2d').drawImage(canvas, 0, 0, out.width, out.height);
+        return out;
+    }
+
+    /* Keep an uploaded signature for the rest of this run. When the image itself
+       cannot be stored (quota), a small marker is, so the later batches can say the
+       signature was lost rather than silently printing the typed signer. */
+    function storeRun(canvas, transparent) {
+        var ls = RUN ? local() : null;
+        if (!ls) { return; }
+        var key = RUN_PREFIX + RUN, exp = Date.now() + RUN_TTL;
+        try {
+            ls.setItem(key, JSON.stringify({ exp: exp, data: shrinkForRun(canvas).toDataURL('image/png'), transparent: !!transparent }));
+        } catch (e) {
+            try { ls.setItem(key, JSON.stringify({ exp: exp, failed: true })); } catch (e2) { /* nothing more to try */ }
+        }
+    }
+
+    /* Remove, not a page leaving: the next batch should print the typed signer. */
+    function dropRun() {
+        var ls = RUN ? local() : null;
+        if (!ls) { return; }
+        try { ls.removeItem(RUN_PREFIX + RUN); } catch (e) { /* nothing stored to drop */ }
+    }
+
+    /* This run's entry: null when nothing was uploaded, {failed:true} when one was and
+       cannot be brought back. */
+    function readRun() {
+        var ls = RUN ? local() : null;
+        if (!ls) { return null; }
+        var raw = null;
+        try { raw = ls.getItem(RUN_PREFIX + RUN); } catch (e) { return null; }
+        if (raw === null) { return null; }
+        try {
+            var entry = JSON.parse(raw);
+            return entry && typeof entry === 'object' ? entry : { failed: true };
+        } catch (e) { return { failed: true }; }
+    }
+
+    function noteRunLost() {
+        var msg = 'Signature image was used in batch 1; upload again.';
+        if (runNote) {
+            runNote.textContent = msg + ' It could not be carried into this tab — use Upload Signature before printing.';
+            runNote.hidden = false;
+        }
+        say(msg, true);
+    }
+
+    function hideRunNote() {
+        if (runNote) { runNote.hidden = true; runNote.textContent = ''; }
     }
 
     function dataUrlToBlob(dataUrl) {
@@ -166,6 +258,7 @@
 
     function apply(blob, transparent, canvas) {
         clear();
+        hideRunNote();
         kept = canvas ? { canvas: canvas, transparent: transparent } : null;
         url = URL.createObjectURL(blob);
         var signed = signatories();
@@ -218,7 +311,10 @@
                 input.value = '';
                 return;
             }
-            result.canvas.toBlob(function (blob) { apply(blob, result.transparent, result.canvas); }, 'image/png');
+            result.canvas.toBlob(function (blob) {
+                apply(blob, result.transparent, result.canvas);
+                storeRun(result.canvas, result.transparent);
+            }, 'image/png');
         };
         image.onerror = function () {
             URL.revokeObjectURL(source);
@@ -234,6 +330,8 @@
     });
     remove.addEventListener('click', function () {
         clear();
+        dropRun();
+        hideRunNote();
         say('', false);
     });
     window.addEventListener('beforeprint', fitAll);
@@ -255,36 +353,60 @@
                 return true;
             } catch (e) {
                 try { window.sessionStorage.removeItem(KEEP_KEY); } catch (e2) { /* nothing to undo */ }
-                return false;
+                // A batched run's own entry brings it back on the reload anyway.
+                var entry = readRun();
+                return !!(entry && !entry.failed && typeof entry.data === 'string');
             }
         }
     };
 
+    /* Draw a stored crop ({data, transparent}); onFail when it cannot be. */
+    function restoreSaved(saved, onFail) {
+        var fail = function () { if (onFail) { onFail(); } };
+        try {
+            if (!saved || typeof saved.data !== 'string' ||
+                saved.data.indexOf('data:image/png;base64,') !== 0) { fail(); return; }
+            var blob = dataUrlToBlob(saved.data);
+            var image = new Image();
+            image.onload = function () {
+                var canvas = document.createElement('canvas');
+                canvas.width = image.naturalWidth;
+                canvas.height = image.naturalHeight;
+                canvas.getContext('2d').drawImage(image, 0, 0);
+                apply(blob, !!saved.transparent, canvas);
+            };
+            image.onerror = fail;
+            image.src = saved.data;
+        } catch (e) { fail(); }
+    }
+
     /* Bring a carried signature back, after the autofit pass so the first fit
-       measures the finished layout. */
+       measures the finished layout. This tab's own reload carry first (it is the
+       signature on screen a moment ago), else the run's. */
+    sweepRuns();
     var carried = null;
     try {
         carried = window.sessionStorage.getItem(KEEP_KEY);
         if (carried !== null) { window.sessionStorage.removeItem(KEEP_KEY); }
     } catch (e) { carried = null; }
+
+    var restore = null;
     if (carried) {
-        var restore = function () {
-            try {
-                var saved = JSON.parse(carried);
-                if (!saved || saved.run !== runKey() || typeof saved.data !== 'string' ||
-                    saved.data.indexOf('data:image/png;base64,') !== 0) { return; }
-                var blob = dataUrlToBlob(saved.data);
-                var image = new Image();
-                image.onload = function () {
-                    var canvas = document.createElement('canvas');
-                    canvas.width = image.naturalWidth;
-                    canvas.height = image.naturalHeight;
-                    canvas.getContext('2d').drawImage(image, 0, 0);
-                    apply(blob, !!saved.transparent, canvas);
-                };
-                image.src = saved.data;
-            } catch (e) { /* a mangled entry is simply not restored */ }
-        };
+        var saved = null;
+        try { saved = JSON.parse(carried); } catch (e) { saved = null; }
+        if (saved && saved.run === runKey()) {
+            restore = function () { restoreSaved(saved, null); };
+        }
+    }
+    if (!restore && RUN) {
+        var entry = readRun();
+        if (entry && entry.failed) {
+            restore = noteRunLost;
+        } else if (entry) {
+            restore = function () { restoreSaved(entry, noteRunLost); };
+        }
+    }
+    if (restore) {
         var fitted = window.ScrolleryAutofit && window.ScrolleryAutofit.ready;
         if (fitted && typeof fitted.then === 'function') { fitted.then(restore, restore); } else { restore(); }
     }

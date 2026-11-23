@@ -513,6 +513,9 @@ class Controller_KingdomAjax extends Controller
             $offset = max(0, (int)($_POST['Offset'] ?? $_GET['Offset'] ?? 0));
             $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'Limit' => $limit, 'Offset' => $offset, 'Token' => $this->session->token]);
             $recs = is_array($recs) ? array_values($recs) : [];
+            // Granted rows offer View/Print scroll only where this viewer may print it.
+            $this->load_model('Scrollery');
+            $recs = $this->Scrollery->flag_printable_granted_recs($recs, $uid);
             echo json_encode([
                 'status'          => 0,
                 'recommendations' => $recs,

@@ -310,6 +310,10 @@ class Controller_Park extends Controller
         $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant($uid, (int)$park_id);
         $this->data['CanAdminPark']  = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
+        // The Scrolls links ask Scrollery's own issuing gate (AUTH_EDIT), the one
+        // Scrollery/create and /bulk enforce, not CanAdminPark's AUTH_CREATE.
+        $this->load_model('Scrollery');
+        $this->data['CanIssueScrolls'] = $uid > 0 && $this->Scrollery->may_issue_for($uid, 'park', (int)$park_id);
         // Park admins can merge two players who both belong to THIS park.
         // Cross-park or cross-kingdom merges still need higher rights and are
         // performed from the kingdom profile. The server-side MergePlayer

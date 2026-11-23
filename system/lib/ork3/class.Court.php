@@ -226,6 +226,43 @@ class Court
         return (int)$park_id === 0 || (string)$issued_by === 'kingdom';
     }
 
+    /**
+     * The body a court's awards and scrolls issue FROM, as [scopeType, scopeId]:
+     * the kingdom for a Kingdom Court (even one held at a park), else its park.
+     * $court is a getCourtDetail()/getCourtAwardForGrant() row. A park court whose
+     * park id is somehow 0 falls back to the kingdom.
+     *
+     * @return array{0: string, 1: int}
+     */
+    public static function issuingScope(array $court)
+    {
+        $parkId = (int)($court['ParkId'] ?? 0);
+        $kingdomCourt = array_key_exists('IsKingdomCourt', $court)
+            ? (bool)$court['IsKingdomCourt']
+            : self::isKingdomCourt($parkId, $court['IssuedBy'] ?? '');
+        if ($kingdomCourt || $parkId <= 0) {
+            return ['kingdom', (int)($court['KingdomId'] ?? 0)];
+        }
+        return ['park', $parkId];
+    }
+
+    /**
+     * May $uid put this court's awards on the permanent record (grant, finalize)?
+     * canManage() over the ISSUING scope rather than the court's place: a Kingdom
+     * Court held at a park issues in the kingdom's name, so its host park's officers
+     * may run the planner but not grant or finalize. Same rule update_court applies
+     * to flipping a court to Kingdom Court.
+     */
+    public function canIssueForCourt($uid, array $court)
+    {
+        [$scopeType] = self::issuingScope($court);
+        return $this->canManage(
+            $uid,
+            (int)($court['KingdomId'] ?? 0),
+            $scopeType === 'park' ? (int)$court['ParkId'] : 0
+        );
+    }
+
     /** The planner's browser-tab title: "{name} Court Plan", without a doubled "Court". */
     public static function planPageTitle($name)
     {
@@ -1462,6 +1499,7 @@ class Court
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
                     ca.notes, ca.status,
                     c.court_date, c.kingdom_id AS c_kingdom_id, c.park_id AS c_park_id,
+                    c.issued_by AS c_issued_by,
                     c.event_calendardetail_id, c.status AS court_status
              FROM ' . DB_PREFIX . 'court_award ca
              JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
@@ -1480,6 +1518,8 @@ class Court
             'CourtDate'             => $ca->court_date,
             'KingdomId'             => (int)$ca->c_kingdom_id,
             'ParkId'                => (int)$ca->c_park_id,
+            'IssuedBy'              => (string)$ca->c_issued_by,
+            'IsKingdomCourt'        => self::isKingdomCourt($ca->c_park_id, $ca->c_issued_by),
             'EventCalendarDetailId' => (int)$ca->event_calendardetail_id,
             'CourtStatus'           => $ca->court_status,
         ];
@@ -2073,7 +2113,8 @@ class Court
                 Ork3::$Lib->player->resolve_court_line_recommendation(
                     (int)$row['RecommendationsId'],
                     (int)$row['MundaneId'],
-                    (int)Ork3::$Lib->authorization->IsAuthorized($ctx['Token'] ?? '')
+                    (int)Ork3::$Lib->authorization->IsAuthorized($ctx['Token'] ?? ''),
+                    $award_id
                 );
             } catch (\Throwable $e) { /* best-effort */
             }
@@ -3035,6 +3076,9 @@ class Court
                 'KingdomAwardId'    => (int)$r['KingdomAwardId'],
                 'AwardName'         => $r['AwardName'],
                 'IsLadder'          => (int)($r['Rank'] ?? 0) > 0,  // proxy: only used for "Rank N" suffix display
+                // Report's authoritative ladder flag: what the Add from Recs rank filter
+                // classifies on (Report::sqlRankRangePredicate's truth table).
+                'IsLadderAward'     => !empty($r['IsLadder']),
                 'Rank'              => (int)$r['Rank'],
                 'Reason'            => $r['Reason'],
                 'DateRecommended'   => $r['DateRecommended'],
@@ -3088,7 +3132,8 @@ class Court
 
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT ca.recommendations_id AS rid, ca.court_award_id, c.court_id, c.name, c.court_date, c.status
+            'SELECT ca.recommendations_id AS rid, ca.court_award_id, c.court_id, c.name, c.court_date, c.status,
+                    ca.scroll_status, ca.regalia_status, ca.scroll_maker_id, ca.regalia_maker_id
                FROM ' . DB_PREFIX . 'court_award ca
                JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
               WHERE ca.recommendations_id > 0
@@ -3107,6 +3152,12 @@ class Court
                     'Name'         => $rs->name,
                     'CourtDate'    => $rs->court_date,
                     'Status'       => $rs->status,
+                    // Line tracking (Court::SCROLL_* / REGALIA_* values), so the Recs
+                    // Manager badge can show whether the scroll / regalia is in hand.
+                    'ScrollStatus'   => (int)$rs->scroll_status,
+                    'RegaliaStatus'  => (int)$rs->regalia_status,
+                    'ScrollMakerId'  => (int)$rs->scroll_maker_id,
+                    'RegaliaMakerId' => (int)$rs->regalia_maker_id,
                 ];
             }
         }

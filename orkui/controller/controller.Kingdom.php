@@ -384,6 +384,10 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // The Scrolls links ask Scrollery's own issuing gate (AUTH_EDIT), the one
+        // Scrollery/create and /bulk enforce, not CanManageKingdom's AUTH_CREATE.
+        $this->load_model('Scrollery');
+        $this->data['CanIssueScrolls'] = $uid > 0 && $this->Scrollery->may_issue_for($uid, 'kingdom', (int)$kingdom_id);
         // Bonus Credits button + modal: kingdom EDIT hands credits out, CREATE
         // also defines them, and a named manager does both with no kingdom row.
         $this->load_model('BonusCredit');

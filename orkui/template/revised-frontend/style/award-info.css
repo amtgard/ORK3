@@ -1,0 +1,42 @@
+/* Award Info modal body (revised-frontend/_award_info_modal.tpl, script/award-info-modal.js).
+   Loaded by the partial on every page that includes it — the player, Kingdom and Park
+   profiles and the Recommendations Manager — so it lives outside revised.css (which the
+   Manager does not load). Only global --ork-* tokens (orkui.css / tokens.css), which
+   carry their own dark values. The modal SHELL is the page's own: .pn-overlay /
+   .pn-modal-box on the revised pages (revised.css), .rm-modal on the Manager
+   (recs-manager.css). */
+.pn-modal-box.pn-ai-box { width:560px; max-width:calc(100vw - 32px); }
+.pn-ai-body { display:flex; flex-direction:column; gap:18px; overflow-wrap:anywhere; }
+.pn-ai-body a { color:var(--ork-link); text-decoration:none; }
+.pn-ai-body a:hover { text-decoration:underline; }
+.pn-ai-section .pn-ai-h {
+    margin:0 0 8px; padding:0 0 6px; font-size:13px; font-weight:700; letter-spacing:.02em;
+    text-transform:uppercase; color:var(--ork-text-secondary);
+    background:none; border:none; border-bottom:1px solid var(--ork-divider); border-radius:0; text-shadow:none;
+}
+.pn-ai-section .pn-ai-h i { color:var(--ork-text-muted); margin-right:4px; }
+.pn-ai-empty { margin:0; font-size:13px; color:var(--ork-text-muted); font-style:italic; }
+.pn-ai-empty.pn-ai-error { color:var(--ork-red-danger); font-style:normal; }
+.pn-ai-recs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.pn-ai-rec { background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:8px; padding:8px 10px; }
+.pn-ai-rec-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:4px 12px; font-size:13px; }
+.pn-ai-rec-who { font-weight:600; color:var(--ork-text); }
+.pn-ai-rec-meta { display:inline-flex; align-items:center; gap:10px; font-size:12px; color:var(--ork-text-muted); white-space:nowrap; }
+.pn-ai-seconds { display:inline-flex; align-items:center; gap:4px; }
+.pn-ai-rec-reason { margin-top:4px; font-size:13px; line-height:1.45; color:var(--ork-text-secondary); white-space:pre-line; }
+.pn-ai-anon { color:var(--ork-text-muted); font-style:italic; font-weight:normal; }
+.pn-ai-rows { display:grid; grid-template-columns:max-content 1fr; gap:6px 14px; font-size:13px; }
+.pn-ai-row { display:contents; }
+.pn-ai-label { color:var(--ork-text-muted); }
+.pn-ai-value { color:var(--ork-text); min-width:0; }
+.pn-ai-note { margin:10px 0 0; font-size:12px; color:var(--ork-text-muted); }
+.pn-ai-scroll-state { margin:0; font-size:13px; color:var(--ork-text); }
+.pn-ai-scroll-state i { color:var(--ork-text-muted); margin-right:4px; }
+.pn-ai-citation {
+    margin:10px 0 0; padding:6px 10px; border-left:3px solid var(--ork-border-dark);
+    font-size:13px; font-style:italic; line-height:1.45; color:var(--ork-text-secondary); background:none;
+}
+@media (max-width: 600px) {
+    .pn-ai-rows { grid-template-columns:1fr; gap:0; }
+    .pn-ai-label { margin-top:8px; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+}

@@ -258,9 +258,9 @@ class Model_Scrollery extends Model
      * supplying the date and the issuing body, exactly as the court will when it
      * commits the grant.
      *
-     * NOT AN AUTHORITY CHECK. The caller has already decided the viewer may manage
-     * this court (Model_Court::can_manage(), the print route's whole gate by
-     * decision); $viewerId is passed to getCourtAwards() only so a Monarchy Only
+     * NOT AN AUTHORITY CHECK. The caller has already decided the viewer may issue
+     * for this court (may_issue_for_court(), the print route's whole gate);
+     * $viewerId is passed to getCourtAwards() only so a Monarchy Only
      * rec's reason is withheld from a viewer who may not see it.
      *
      * Which lines take part, silently: Scroll::CourtRunLines() (lines on another
@@ -288,6 +288,10 @@ class Model_Scrollery extends Model
      * 'auto' draws the court's own arms exactly as before; a source draws the court's
      * park, the court's kingdom or the line's recipient, with run_heraldry()'s fallback.
      *
+     * $variant is the print page's run-level Version (&variant=), as for
+     * scrolls_for_awards_ids(): BuildScroll() applies it only to an order that lists
+     * it and draws every other line's first plate.
+     *
      * @param array<int, mixed> $courtAwardIds
      * @return array{Scrolls: array<int, array>, Skipped: array<int, string>, Dropped: int,
      *               Lines: array<int, array{Persona: string, AwardName: string, RowVersion: int}>}
@@ -296,7 +300,8 @@ class Model_Scrollery extends Model
         int $courtId,
         array $courtAwardIds,
         int $viewerId,
-        string $heraldry = Scroll::HERALDRY_AUTO
+        string $heraldry = Scroll::HERALDRY_AUTO,
+        string $variant = ''
     ): array {
         $heraldry = Scroll::NormaliseRunHeraldry($heraldry);
         $empty = ['Scrolls' => [], 'Skipped' => [], 'Dropped' => 0, 'Lines' => []];
@@ -388,6 +393,7 @@ class Model_Scrollery extends Model
                     'mundaneId'   => (int) $line['MundaneId'],
                     'scopeType'   => $scopeType,
                     'scopeId'     => $scopeId,
+                    'variant'     => $variant,
                 ];
                 if ($heraldry !== Scroll::HERALDRY_AUTO) {
                     // Automatic stays the court's own arms above, with no design key.
@@ -568,11 +574,11 @@ class Model_Scrollery extends Model
      * NOT CACHED, for the same reason the print gate is not: an authority
      * decision keyed on anything less than the viewer is a cross-tenant disclosure.
      *
-     * Known residual: a parent-kingdom officer holding authority over a principality
-     * gets their own kingdom's door but not the child kingdom's, because the
-     * candidate list is what the authorization table literally says. Closing that
-     * means walking ork_kingdom.parent_kingdom_id here the way
-     * Authorization::HasAuthority() does — flagged rather than guessed at.
+     * Principalities: HasAuthority() lets kingdom authority flow down
+     * ork_kingdom.parent_kingdom_id, so a parent-kingdom officer may issue for a
+     * principality their authorization rows never name. Its active child kingdoms
+     * (ScrollQuery::ChildKingdomScopes()) are added as candidates after the held
+     * kingdoms, and each still has to pass may_issue_for() like every other door.
      *
      * @return list<array{Type: string, Id: int, Name: string}>
      */
@@ -582,9 +588,29 @@ class Model_Scrollery extends Model
             return [];
         }
 
-        $scopes = [];
+        $held = $this->scroll_query()->IssuableScopes($mundaneId);
 
-        foreach ($this->scroll_query()->IssuableScopes($mundaneId) as $scope) {
+        // Children go after the held kingdoms and before the parks, keeping the
+        // chooser's kingdoms-then-parks order.
+        $heldKingdoms = [];
+        $candidates   = [];
+        $parks        = [];
+        foreach ($held as $scope) {
+            if ($scope['Type'] === 'kingdom') {
+                $heldKingdoms[(int) $scope['Id']] = true;
+                $candidates[] = $scope;
+            } else {
+                $parks[] = $scope;
+            }
+        }
+        foreach ($this->scroll_query()->ChildKingdomScopes(array_keys($heldKingdoms)) as $child) {
+            if (!isset($heldKingdoms[(int) $child['Id']])) {
+                $candidates[] = $child;
+            }
+        }
+
+        $scopes = [];
+        foreach (array_merge($candidates, $parks) as $scope) {
             if ($this->may_issue_for($mundaneId, $scope['Type'] === 'kingdom' ? 'kingdom' : 'park', (int) $scope['Id'])) {
                 $scopes[] = $scope;
             }
@@ -618,6 +644,20 @@ class Model_Scrollery extends Model
             $scopeId,
             AUTH_EDIT
         );
+    }
+
+    /**
+     * may_issue_for() over a court's ISSUING scope (Court::issuingScope): the
+     * kingdom for a Kingdom Court, even one held at a park, else the court's park.
+     * The court print route and the planner's print preflight/complete both ask
+     * here, so a host-park officer cannot print scrolls headed in the kingdom's name.
+     * $court is a getCourtDetail() row.
+     */
+    public function may_issue_for_court(int $viewerId, array $court): bool
+    {
+        [$scopeType, $scopeId] = Court::issuingScope($court);
+
+        return $this->may_issue_for($viewerId, $scopeType, $scopeId);
     }
 
     /**
@@ -692,19 +732,19 @@ class Model_Scrollery extends Model
 
     /**
      * Log a court run (Scrollery/court). The CALLER has already run
-     * Model_Court::can_manage() — the court route's whole gate; this re-reads the
+     * may_issue_for_court() — the court route's whole gate; this re-reads the
      * court so only its own, still-Scrollery-Print lines are logged. A finalized
      * line is logged against its award row (see ScrollPrintLog::RecordPrints()).
      *
      * @param array<int, mixed> $courtAwardIds
      */
-    public function log_court_prints(int $courtId, array $courtAwardIds, int $viewerId, string $heraldry): int
+    public function log_court_prints(int $courtId, array $courtAwardIds, int $viewerId, string $heraldry, string $variant = ''): int
     {
         if ($courtId <= 0 || $viewerId <= 0) {
             return 0;
         }
 
-        $run     = $this->scrolls_for_court_awards($courtId, $courtAwardIds, $viewerId, $heraldry);
+        $run     = $this->scrolls_for_court_awards($courtId, $courtAwardIds, $viewerId, $heraldry, $variant);
         $entries = [];
         foreach ($run['Scrolls'] as $caId => $scroll) {
             $entries[] = $this->print_log_entry($scroll, $viewerId, [
@@ -718,11 +758,65 @@ class Model_Scrollery extends Model
     }
 
     /**
+     * The start stamp of a Court Planner print run, on the print log's own clock
+     * (printed_at is written with PHP's date(), not MySQL's NOW()).
+     */
+    public function print_run_stamp(): string
+    {
+        return date('Y-m-d H:i:s');
+    }
+
+    /** A print_run_stamp() as the client handed it back, or '' when it is not one. */
+    public function valid_print_run_stamp(string $stamp): string
+    {
+        $d = DateTime::createFromFormat('Y-m-d H:i:s', $stamp);
+
+        return ($d && $d->format('Y-m-d H:i:s') === $stamp) ? $stamp : '';
+    }
+
+    /**
+     * Which of these Court Planner lines were printed at or after $since (a
+     * print_run_stamp()): the lines a print run has actually sent to the printer.
+     * $courtId > 0 counts only prints logged against that court (the ids are
+     * client-supplied).
+     *
+     * @param array<int, mixed> $courtAwardIds
+     * @return array<int, int> court_award_ids, in input order
+     */
+    public function court_lines_printed_since(array $courtAwardIds, string $since, int $courtId = 0): array
+    {
+        if ($this->valid_print_run_stamp($since) === '') {
+            return [];
+        }
+        // (Read first: it loads ScrollPrintLog, whose constant is used below.)
+        $last  = Ork3::$Lib->scrollprintlog->LastPrintedForCourtAwards($courtAwardIds, $courtId);
+        // Reach back one dedupe window: a reprint by the same officer inside it writes
+        // no row (ScrollPrintLog::RecordPrints), so a line reprinted in a run started
+        // right after an earlier print is only visible as that earlier row.
+        $since = date('Y-m-d H:i:s', strtotime($since) - ScrollPrintLog::DEDUPE_WINDOW_SECONDS);
+        $out   = [];
+        foreach ($courtAwardIds as $id) {
+            $id = (int) $id;
+            // Same-format 'Y-m-d H:i:s' strings compare chronologically.
+            if (isset($last[$id]) && strcmp($last[$id], $since) >= 0 && !in_array($id, $out, true)) {
+                $out[] = $id;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Log a composed certificate (Scrollery/compose). The CALLER has already run
      * may_issue_for(); the composition is re-run so a refused one logs nothing.
      *
      * The playerId parameter is client-supplied, so it is only recorded when it
      * names a real player; otherwise the row's mundane_id is 0.
+     *
+     * awardsId (a composer opened from an award's Customize link) is client-supplied
+     * too, so it is logged only when this viewer may print that award AND the
+     * certificate is still that award's order for its recipient — an officer who
+     * swapped the recipient or the award composed a different certificate.
      *
      * @param array<string, mixed> $params the compose page's query parameters
      */
@@ -742,10 +836,138 @@ class Model_Scrollery extends Model
             $playerId = 0;
         }
 
-        return $this->record_prints([$this->print_log_entry($composed['Scroll'], $viewerId, [
+        $extra = [
             'MundaneId' => max(0, $playerId),
             'AuthBasis' => 'compose',
-        ])]);
+        ];
+        $awardsId = (int) ($params['awardsId'] ?? 0);
+        if ($awardsId > 0 && $playerId > 0) {
+            $row   = $this->award_row($awardsId);
+            $order = $row !== null ? Scroll::OrderForAwardRow($row) : null;
+            if ($row !== null && (int) ($row['MundaneId'] ?? 0) === $playerId
+                && (string) ($order['id'] ?? '') === (string) ($composed['Scroll']['order'] ?? '')
+                && Scroll::PrintDecision($row, $viewerId)['Allowed']) {
+                $extra['AwardsId'] = $awardsId;
+            }
+        }
+
+        return $this->record_prints([$this->print_log_entry($composed['Scroll'], $viewerId, $extra)]);
+    }
+
+    /**
+     * The composer's opening values for one existing award — the profile's Customize
+     * link (Scrollery/create/{scope}/{id}&awards=N). Null when this viewer may not
+     * print the award (Scroll::PrintDecision(), the render route's own gate), so the
+     * composer then opens blank rather than disclosing the row.
+     *
+     * AwardId / KingdomAwardName pick the composer's catalogue option (several
+     * kingdomawards can share a base award id, so the name is part of the match);
+     * CustomName fills the typed name of a Custom Award / Custom Title.
+     *
+     * @return array{AwardsId:int, AwardId:int, KingdomAwardId:int, KingdomAwardName:string, CustomName:string,
+     *               Rank:int, Date:string, Reason:string, GivenBy:string, PlayerId:int,
+     *               Player:string, Title:string}|null
+     */
+    public function compose_prefill_for_award(int $awardsId, int $viewerId): ?array
+    {
+        if ($awardsId <= 0 || $viewerId <= 0) {
+            return null;
+        }
+        $row = $this->award_row($awardsId);
+        if ($row === null || !Scroll::PrintDecision($row, $viewerId)['Allowed']) {
+            return null;
+        }
+
+        $mundaneId = (int) ($row['MundaneId'] ?? 0);
+        $recipient = $mundaneId > 0 ? $this->scroll_recipient($mundaneId) : [];
+        $date      = substr((string) ($row['Date'] ?? ''), 0, 10);
+
+        return [
+            'AwardsId'         => $awardsId,
+            'AwardId'          => (int) ($row['AwardId'] ?? 0),
+            // The composer matches its catalogue option on this first (the name is
+            // only the fallback for a row whose kingdomaward is not in the catalogue).
+            'KingdomAwardId'   => (int) ($row['KingdomAwardId'] ?? 0),
+            'KingdomAwardName' => (string) ($row['KingdomAwardName'] ?? ''),
+            'CustomName'       => trim((string) ($row['CustomAwardName'] ?? '')),
+            'Rank'             => (int) ($row['Rank'] ?? 0),
+            'Date'             => preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) && $date !== '0000-00-00' ? $date : '',
+            'Reason'           => (string) ($row['Note'] ?? ''),
+            'GivenBy'          => (string) ($row['GivenBy'] ?? ''),
+            'PlayerId'         => $mundaneId,
+            'Player'           => (string) ($recipient['Persona'] ?? ($row['Persona'] ?? '')),
+            'Title'            => Scroll::ResolveTitle($row),
+        ];
+    }
+
+    /**
+     * Where a Customize link for this award should compose, for this viewer: the
+     * body the certificate names (Scroll::IssuerScopeForRow()) when the viewer may
+     * issue for it, else the other body the award carries (a park officer whose
+     * kingdom-ranked grant was given at their park). Null when neither passes
+     * may_issue_for().
+     *
+     * @return array{Type:string, Id:int}|null
+     */
+    public function compose_scope_for_award(int $awardsId, int $viewerId): ?array
+    {
+        $row = $awardsId > 0 ? $this->award_row($awardsId) : null;
+
+        return $row === null ? null : $this->compose_scope_for_row($row, $viewerId);
+    }
+
+    /**
+     * compose_scope_for_award() over a row already in hand. $memo, when the caller
+     * passes one, holds may_issue_for() answers for THIS viewer within one call.
+     *
+     * @param array<string, bool> $memo
+     * @return array{Type:string, Id:int}|null
+     */
+    private function compose_scope_for_row(array $row, int $viewerId, array &$memo = []): ?array
+    {
+        if ($viewerId <= 0) {
+            return null;
+        }
+        $ids   = ['park' => (int) ($row['ParkId'] ?? 0), 'kingdom' => (int) ($row['KingdomId'] ?? 0)];
+        $first = Scroll::IssuerScopeForRow($row) === 'kingdom' ? 'kingdom' : 'park';
+        foreach ([$first, $first === 'park' ? 'kingdom' : 'park'] as $type) {
+            if ($ids[$type] <= 0) {
+                continue;
+            }
+            $memo[$type . ':' . $ids[$type]] ??= $this->may_issue_for($viewerId, $type, $ids[$type]);
+            if ($memo[$type . ':' . $ids[$type]]) {
+                return ['Type' => $type, 'Id' => $ids[$type]];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Stamps ScrollCustomizeUrl on each profile award row this viewer may both print
+     * (CanPrintScroll, already narrowed by flag_viewer_printable_awards()) and compose
+     * — the profile's Customize link. A recipient who may print their own award but
+     * issues for no body gets no link, rather than one that opens the denial page.
+     * The may_issue_for() answers are memoised for this call and this viewer only.
+     *
+     * @param array<int|string, mixed> $rows
+     * @return array<int|string, mixed>
+     */
+    public function flag_viewer_customizable_awards(array $rows, int $viewerId): array
+    {
+        $memo = [];
+        foreach ($rows as $i => $row) {
+            if (!is_array($row) || empty($row['CanPrintScroll']) || $viewerId <= 0) {
+                continue;
+            }
+            $scope = $this->compose_scope_for_row($row, $viewerId, $memo);
+            if ($scope !== null) {
+                $rows[$i]['ScrollCustomizeUrl'] = 'Scrollery/create/' . $scope['Type'] . '/' . $scope['Id']
+                    . '&awards=' . (int) ($row['AwardsId'] ?? 0);
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -1233,7 +1455,9 @@ class Model_Scrollery extends Model
             $shaped['PrettyDate'] = Scroll::FormatDate($shaped['Date']);
 
             if (Scroll::IsPrintableRow($shaped)) {
-                $printable[] = $shaped;
+                // Order and plate variants, as the reprint list carries them, so the
+                // bulk table can offer a Version per row (Owl, Battle).
+                $printable[] = Scroll::ReprintDesign($shaped) + $shaped;
             } else {
                 $excluded[] = $shaped;
             }
@@ -1751,5 +1975,65 @@ class Model_Scrollery extends Model
         $row = $this->award_row($awardsId);
 
         return $row !== null && Scroll::PrintDecision($row, $viewerId)['Allowed'];
+    }
+
+    /**
+     * award_is_printable() for a list: the subset of $awardsIds this viewer may
+     * print, as awards_id => true. The same gate (Scroll::PrintDecision: permission
+     * where GIVEN, then art), but one awards query for the batch and a per-call
+     * permission memo, so a 200-row closed-recs page is not 200 lookups.
+     *
+     * @param list<int> $awardsIds
+     * @return array<int, true>
+     */
+    public function printable_awards_ids(array $awardsIds, int $viewerId): array
+    {
+        $ids = [];
+        foreach ($awardsIds as $id) {
+            if ((int) $id > 0) {
+                $ids[(int) $id] = true;
+            }
+        }
+        if ($ids === [] || $viewerId <= 0) {
+            return [];
+        }
+
+        $isAdmin = Scroll::IsPrintAdmin($viewerId);
+        $memo    = [];
+        $out     = [];
+        // awards_for_ids() stops at Scroll::MAX_PRINT_RUN ids, and a Recs Manager
+        // page holds up to 500 granted rows: chunk, or every row past the cap would
+        // silently lose its View/Print links.
+        foreach (array_chunk(array_keys($ids), Scroll::MAX_PRINT_RUN) as $chunk) {
+            foreach ($this->award_rows_by_id($chunk) as $id => $row) {
+                if ($this->memoised_print_permission($row, $viewerId, $isAdmin, $memo)['Allowed'] && Scroll::HasArt($row)) {
+                    $out[(int) $id] = true;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Stamps 'Printable' on closed-recs panel rows (Report::DeletedAwardRecommendations
+     * shape): true only for a granted rec whose GrantedAwardsId this viewer may print,
+     * so the panel's View/Print scroll links never open a refusal.
+     *
+     * @param list<array<string, mixed>> $recs
+     * @return list<array<string, mixed>>
+     */
+    public function flag_printable_granted_recs(array $recs, int $viewerId): array
+    {
+        $ids = [];
+        foreach ($recs as $r) {
+            $ids[] = (int) ($r['GrantedAwardsId'] ?? 0);
+        }
+        $printable = $this->printable_awards_ids($ids, $viewerId);
+        foreach ($recs as $i => $r) {
+            $recs[$i]['Printable'] = !empty($printable[(int) ($r['GrantedAwardsId'] ?? 0)]);
+        }
+
+        return $recs;
     }
 }

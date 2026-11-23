@@ -1,6 +1,6 @@
 <?php
 /**
- * "Print a new scroll" — an officer composes one certificate by hand.
+ * "Print a Scroll" — an officer composes one certificate by hand.
  *
  * Controls on the left, live preview on the right. Only order, rank and variant
  * need a round trip (they change which art layers are drawn); the text fields
@@ -28,6 +28,32 @@ $choices = is_array($Awards ?? null) ? $Awards : [];
 $css     = DIR_TEMPLATE . 'revised-frontend/style/scrollery.css';
 $reports = DIR_TEMPLATE . 'default/style/reports.css';
 $today   = date('Y-m-d');
+
+/*
+ * &awards=N — opened from an award's Customize link. Model_Scrollery::
+ * compose_prefill_for_award() has already decided the viewer may print it; the
+ * fields below open on the award's own values and stay editable. The catalogue
+ * option is matched by kingdomaward first, then by base award id and name, since
+ * several kingdomawards can share a base award id.
+ */
+$prefill        = is_array($Prefill ?? null) ? $Prefill : null;
+$prefillRefused = !empty($PrefillRefused);
+$prefillKaId    = 0;
+if ($prefill !== null) {
+    $byName = 0;
+    foreach ($choices as $c) {
+        if ((int) ($c['KingdomAwardId'] ?? 0) > 0 && (int) $c['KingdomAwardId'] === (int) ($prefill['KingdomAwardId'] ?? 0)) {
+            $prefillKaId = (int) $c['KingdomAwardId'];
+            break;
+        }
+        if ($byName === 0 && (int) $c['AwardId'] === (int) $prefill['AwardId']
+            && strcasecmp(trim((string) $c['Name']), trim((string) $prefill['KingdomAwardName'])) === 0) {
+            $byName = (int) ($c['KingdomAwardId'] ?? 0);
+        }
+    }
+    $prefillKaId = $prefillKaId ?: $byName;
+}
+$pre = static fn (string $key, string $fallback = ''): string => $prefill !== null ? (string) ($prefill[$key] ?? $fallback) : $fallback;
 
 /*
  * The custom scroll's composable vocabulary. Taken from the controller when it
@@ -141,10 +167,11 @@ $awardLumAttr = static function (string $order, array $variants) use ($groundLum
 };
 
 // CustomKind ('' | 'award' | 'title') is Scroll::CustomNameKind(), set by the model.
-$awardOption = static function (array $c) use ($awardLumAttr): string {
+$awardOption = static function (array $c) use ($awardLumAttr, $prefillKaId): string {
     $kind = (string) ($c['CustomKind'] ?? '');
 
     return '<option value="' . (int) $c['AwardId'] . '"'
+        . ($prefillKaId > 0 && (int) ($c['KingdomAwardId'] ?? 0) === $prefillKaId ? ' selected' : '')
         . ' data-order="' . scroll_e($c['Order']) . '"'
         . ' data-min="' . (int) $c['MinRank'] . '"'
         . ' data-max="' . (int) $c['MaxRank'] . '"'
@@ -170,6 +197,10 @@ $awardOption = static function (array $c) use ($awardLumAttr): string {
    page has neither, so the header closes its own corners and the body keeps the gap. */
 .sc-wrap > .rp-header             { border-radius: 8px; }
 .sc-wrap > .rp-header + .rp-body  { margin-top: 16px; }
+/* The Customize-link note between the header and the body; .rp-context carries the
+   surface and both themes' colours. */
+.sc-wrap > .sc-prefill-note       { margin-top: 16px; border-radius: 8px; text-align: left; }
+.sc-wrap > .sc-prefill-note + .rp-body { margin-top: 16px; }
 .sc-field       { margin-bottom: 11px; position: relative; }
 .sc-field:last-child { margin-bottom: 0; }
 /* .sc-field-label is the same slot for a group that has no labelable control to
@@ -379,7 +410,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
         <div class="rp-header-left">
             <div class="rp-header-icon-title">
                 <i class="fa-solid fa-scroll rp-header-icon"></i>
-                <h1 class="rp-header-title">Print a new scroll</h1>
+                <h1 class="rp-header-title">Print a Scroll</h1>
             </div>
             <?php /* The chip becomes a SWITCHER for an officer who holds more than one
                      scope — otherwise the only way from a park's composer to their
@@ -410,6 +441,21 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
             </a>
         </div>
     </div>
+
+    <?php if ($prefill !== null): ?>
+        <div class="rp-context sc-prefill-note" role="status">
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+            <span>Customizing the scroll for
+                <strong><?= scroll_e(trim($pre('Title')) !== '' ? $pre('Title') : 'this award') ?></strong><?= $pre('Player') !== '' ? ' &mdash; ' . scroll_e($pre('Player')) : '' ?>.
+                The fields start from the award record; change anything before you print.
+                <?php if ($prefillKaId > 0): ?>While the recipient and award stay the same, the print is recorded against this award.<?php else: ?>That award is not in this kingdom&rsquo;s catalogue, so choose the award to print.<?php endif; ?></span>
+        </div>
+    <?php elseif ($prefillRefused): ?>
+        <div class="rp-context sc-prefill-note" role="status">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+            <span>That award&rsquo;s scroll is not one you can print, so the composer opened blank.</span>
+        </div>
+    <?php endif; ?>
 
     <div class="rp-body">
         <div class="rp-sidebar rp-sidebar-wide">
@@ -450,6 +496,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                     <div class="sc-field" id="sc-customname-field" style="display:none">
                         <label for="sc-customname" id="sc-customname-label">Award name</label>
                         <input type="text" id="sc-customname" class="adm-input" autocomplete="off"
+                               value="<?= scroll_e($pre('CustomName')) ?>"
                                maxlength="<?= (int) Scroll::CUSTOM_NAME_MAX_LENGTH ?>"
                                aria-describedby="sc-customname-hint">
                         <p class="sc-hint" id="sc-customname-hint"></p>
@@ -696,8 +743,9 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
 
                     <div class="sc-field">
                         <label for="sc-player">Recipient</label>
-                        <input type="text" id="sc-player" class="adm-input" autocomplete="off" placeholder="Search players…">
-                        <input type="hidden" id="sc-player-id">
+                        <input type="text" id="sc-player" class="adm-input" autocomplete="off" placeholder="Search players…"
+                               value="<?= scroll_e($pre('Player')) ?>">
+                        <input type="hidden" id="sc-player-id" value="<?= (int) $pre('PlayerId', '0') > 0 ? (int) $pre('PlayerId') : '' ?>">
                         <div id="sc-player-ac" class="kn-ac-results"></div>
                     </div>
 
@@ -718,7 +766,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                         <span class="sc-field-label" id="sc-rank-label">Rank</span>
                         <div class="sc-rank-pills-wrap" id="sc-rank-pills" role="group"
                              aria-labelledby="sc-rank-label" aria-describedby="sc-rank-hint"></div>
-                        <input type="hidden" id="sc-rank" value="0">
+                        <input type="hidden" id="sc-rank" value="<?= (int) $pre('Rank', '0') ?>">
                         <div class="sc-rank-legend" id="sc-rank-legend" hidden>
                             <?php /* A shape as well as a colour: the two keys were a green dot
                                      and a blue dot, which is the state carried in colour alone
@@ -755,7 +803,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
 
                     <div class="sc-field">
                         <label for="sc-reason">Reason</label>
-                        <textarea id="sc-reason" class="adm-textarea" rows="2" placeholder="Left blank to hand-write"></textarea>
+                        <textarea id="sc-reason" class="adm-textarea" rows="2" placeholder="Left blank to hand-write"><?= scroll_e($pre('Reason')) ?></textarea>
                     </div>
 
                     <?php /* The ruled writing lines behind the citation. Next to the
@@ -773,11 +821,12 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                     <div class="sc-row">
                         <div class="sc-field">
                             <label for="sc-date">Date</label>
-                            <input type="date" id="sc-date" class="adm-input" value="<?= $today ?>">
+                            <input type="date" id="sc-date" class="adm-input" value="<?= scroll_e($pre('Date') !== '' ? $pre('Date') : $today) ?>">
                         </div>
                         <div class="sc-field">
                             <label for="sc-givenby">Given by</label>
-                            <input type="text" id="sc-givenby" class="adm-input" placeholder="Left blank to hand-sign">
+                            <input type="text" id="sc-givenby" class="adm-input" placeholder="Left blank to hand-sign"
+                                   value="<?= scroll_e($pre('GivenBy')) ?>">
                         </div>
                     </div>
 
@@ -968,7 +1017,16 @@ window.ScConfig = {
     matchScreens: <?= json_encode(is_array($MatchScreens ?? null) ? $MatchScreens : Scroll::MatchScreens(), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
     matchScreenMinLuminance: <?= json_encode(Scroll::MATCH_SCREEN_MIN_LUMINANCE) ?>,
     designDefaults:    <?= json_encode(is_array($DesignDefaults ?? null) ? $DesignDefaults : Scroll::DEFAULT_DESIGN, JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-    heraldryAvailable: <?= json_encode(is_array($HeraldryAvailable ?? null) ? $HeraldryAvailable : new stdClass()) ?>
+    heraldryAvailable: <?= json_encode(is_array($HeraldryAvailable ?? null) ? $HeraldryAvailable : new stdClass()) ?>,
+    /* Opened from an award's Customize link: the award row the print logs against
+       while the award and recipient below are still that award's, and the option
+       and recipient it opened on. null for a blank composer. */
+    prefill: <?= json_encode($prefill === null || $prefillKaId <= 0 ? null : [
+        'awardsId' => (int) $prefill['AwardsId'],
+        'awardId'  => (int) $prefill['AwardId'],
+        'title'    => (string) (array_values(array_filter($choices, static fn ($c) => (int) ($c['KingdomAwardId'] ?? 0) === $prefillKaId))[0]['Name'] ?? ''),
+        'playerId' => (int) $prefill['PlayerId'],
+    ], JSON_HEX_TAG | JSON_HEX_AMP) ?>
 };
 </script>
 

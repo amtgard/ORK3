@@ -324,8 +324,11 @@ class ScrollPrintLog extends Ork3
      *
      * The read half the scribe's "not yet printed" filter and the Release Feature
      * Utilization report will both build on.
+     *
+     * $courtAwardId also counts prints logged against the award's Court Planner line:
+     * a scroll printed before its court was finalized has no awards_id to log against.
      */
-    public function LastPrintedAt(int $awardsId): string
+    public function LastPrintedAt(int $awardsId, int $courtAwardId = 0): string
     {
         if ($awardsId <= 0) {
             return '';
@@ -336,6 +339,7 @@ class ScrollPrintLog extends Ork3
             $rs = $this->db->DataSet(
                 'SELECT MAX(printed_at) AS last_printed FROM ' . DB_PREFIX . 'scroll_print
                   WHERE awards_id = ' . $awardsId
+                  . ($courtAwardId > 0 ? ' OR court_award_id = ' . $courtAwardId : '')
             );
             if (!is_object($rs) || $rs->Size() < 1 || !$rs->Next()) {
                 return '';
@@ -351,10 +355,13 @@ class ScrollPrintLog extends Ork3
      * When each of these Court Planner lines was last printed, in one read:
      * court_award_id => 'Y-m-d H:i:s'. A line never printed is absent from the map.
      *
+     * $courtId > 0 keeps only prints logged against that court, so a caller holding
+     * client-supplied line ids learns nothing about another court's lines.
+     *
      * @param array<int, mixed> $courtAwardIds
      * @return array<int, string>
      */
-    public function LastPrintedForCourtAwards(array $courtAwardIds): array
+    public function LastPrintedForCourtAwards(array $courtAwardIds, int $courtId = 0): array
     {
         $ids = array_values(array_unique(array_filter(
             array_map('intval', $courtAwardIds),
@@ -369,7 +376,8 @@ class ScrollPrintLog extends Ork3
             $this->db->Clear();
             $rs = $this->db->DataSet(
                 'SELECT court_award_id, MAX(printed_at) AS last_printed FROM ' . DB_PREFIX . 'scroll_print
-                  WHERE court_award_id IN (' . implode(',', $ids) . ')
+                  WHERE court_award_id IN (' . implode(',', $ids) . ')'
+                  . ($courtId > 0 ? ' AND court_id = ' . $courtId : '') . '
                   GROUP BY court_award_id'
             );
             if (is_object($rs) && $rs->Size() > 0) {

@@ -1660,6 +1660,61 @@ html[data-theme="dark"] .pn-award-print-icon:hover {
     white-space: normal !important;
     max-width: 220px !important;
 }
+/* Kingdom / park Enter Awards modals: the same icon sits left of the Add buttons, so
+   its tip stays centred and only needs to wrap. */
+#kn-award-print-link[data-tip]:hover::after,
+#pk-award-print-link[data-tip]:hover::after {
+    white-space: normal !important;
+    max-width: 220px !important;
+}
+/* Kingdom / park Enter Awards modals: "also on a court; marked given" after a grant
+   from a rec, and the "Print these N scrolls" run. Neither is on the success
+   banner's timer — they stay while the modal is open. */
+.ork-award-court-note,
+.ork-award-print-run {
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.ork-award-court-note {
+    background: #ebf8ff;
+    border: 1px solid #90cdf4;
+    color: #2c5282;
+}
+.ork-award-print-run {
+    background: var(--ork-surface-light, #edf2f7);
+    border: 1px solid var(--ork-border, #cbd5e0);
+    color: var(--ork-text-secondary, #4a5568);
+}
+.ork-award-print-run-link,
+.ork-award-print-run-link:link,
+.ork-award-print-run-link:visited {
+    display: inline-block;
+    margin-right: 12px;
+    color: #2c5282 !important;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.ork-award-print-run-link:hover { text-decoration: underline; }
+html[data-theme="dark"] .ork-award-court-note {
+    background: rgba(66,153,225,0.15);
+    border-color: #4299e1;
+    color: #bee3f8;
+}
+html[data-theme="dark"] .ork-award-print-run {
+    background: var(--ork-bg-secondary, #2d3748);
+    border-color: var(--ork-border, #4a5568);
+    color: var(--ork-text-secondary, #cbd5e0);
+}
+/* !important beats the global dark `a` tint, as .pn-award-print-icon does above. */
+html[data-theme="dark"] .ork-award-print-run-link,
+html[data-theme="dark"] .ork-award-print-run-link:link,
+html[data-theme="dark"] .ork-award-print-run-link:visited {
+    color: #90cdf4 !important;
+}
 .pn-btn-ghost,
 .kn-btn-ghost { background:transparent; border:1px solid transparent; color:var(--ork-text-secondary); padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
 .pn-btn-ghost:hover { background:#f7fafc; border-color:#e2e8f0; }
@@ -6178,10 +6233,20 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pn-award-action-btn.pn-award-del-btn:hover  { color:#e53e3e; }
 /* Scrollery print and view are <a>, not <button> — normalise them into the row of icons. */
 .pn-award-action-btn.pn-award-print-btn,
-.pn-award-action-btn.pn-award-view-btn { display:inline-block; text-decoration:none; line-height:1.2; }
+.pn-award-action-btn.pn-award-view-btn,
+.pn-award-action-btn.pn-award-customize-btn { display:inline-block; text-decoration:none; line-height:1.2; }
 .pn-award-action-btn.pn-award-print-btn:hover { color:#b8860b; }
 .pn-award-action-btn.pn-award-view-btn:hover { color:#2b6cb0; }
+.pn-award-action-btn.pn-award-customize-btn:hover { color:#6b46c1; }
 html[data-theme="dark"] .pn-award-action-btn.pn-award-view-btn:hover { color:#63b3ed; }
+/* default.theme's dark #theme_container a (1,1,2) would tint these <a> icons
+   cyan beside their grey <button> siblings; !important as elsewhere for that rule. */
+html[data-theme="dark"] a.pn-award-action-btn.pn-award-print-btn,
+html[data-theme="dark"] a.pn-award-action-btn.pn-award-view-btn,
+html[data-theme="dark"] a.pn-award-action-btn.pn-award-customize-btn { color:#a0aec0 !important; }
+html[data-theme="dark"] a.pn-award-action-btn.pn-award-view-btn:hover { color:#63b3ed !important; }
+html[data-theme="dark"] a.pn-award-action-btn.pn-award-print-btn:hover { color:#ecc94b !important; }
+html[data-theme="dark"] a.pn-award-action-btn.pn-award-customize-btn:hover { color:#b794f4 !important; }
 .pn-awards-action-col { white-space:nowrap; text-align:right; }
 .pn-award-actions-cell { white-space:nowrap; text-align:right; }
 /* .pn-tabs is overflow:hidden for its rounded corners and this is the last column
@@ -6200,38 +6265,17 @@ html[data-theme="dark"] .pn-award-action-btn.pn-award-view-btn:hover { color:#63
 .pn-award-action-btn.pn-award-info-btn { font-size:14px; }
 .pn-award-action-btn.pn-award-info-btn:hover { color:var(--ork-link); }
 html[data-theme="dark"] .pn-award-action-btn:hover { background:var(--ork-bg-tertiary); }
-.pn-modal-box.pn-ai-box { width:560px; max-width:calc(100vw - 32px); }
-.pn-ai-body { display:flex; flex-direction:column; gap:18px; overflow-wrap:anywhere; }
-.pn-ai-body a { color:var(--ork-link); text-decoration:none; }
-.pn-ai-body a:hover { text-decoration:underline; }
-.pn-ai-section .pn-ai-h {
-    margin:0 0 8px; padding:0 0 6px; font-size:13px; font-weight:700; letter-spacing:.02em;
-    text-transform:uppercase; color:var(--ork-text-secondary);
-    background:none; border:none; border-bottom:1px solid var(--ork-divider); border-radius:0; text-shadow:none;
-}
-.pn-ai-section .pn-ai-h i { color:var(--ork-text-muted); margin-right:4px; }
-.pn-ai-empty { margin:0; font-size:13px; color:var(--ork-text-muted); font-style:italic; }
-.pn-ai-empty.pn-ai-error { color:var(--ork-red-danger); font-style:normal; }
-.pn-ai-recs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-.pn-ai-rec { background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:8px; padding:8px 10px; }
-.pn-ai-rec-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:4px 12px; font-size:13px; }
-.pn-ai-rec-who { font-weight:600; color:var(--ork-text); }
-.pn-ai-rec-meta { display:inline-flex; align-items:center; gap:10px; font-size:12px; color:var(--ork-text-muted); white-space:nowrap; }
-.pn-ai-seconds { display:inline-flex; align-items:center; gap:4px; }
-.pn-ai-rec-reason { margin-top:4px; font-size:13px; line-height:1.45; color:var(--ork-text-secondary); white-space:pre-line; }
-.pn-ai-anon { color:var(--ork-text-muted); font-style:italic; font-weight:normal; }
-.pn-ai-rows { display:grid; grid-template-columns:max-content 1fr; gap:6px 14px; font-size:13px; }
-.pn-ai-row { display:contents; }
-.pn-ai-label { color:var(--ork-text-muted); }
-.pn-ai-value { color:var(--ork-text); min-width:0; }
-.pn-ai-note { margin:10px 0 0; font-size:12px; color:var(--ork-text-muted); }
-.pn-ai-citation {
-    margin:10px 0 0; padding:6px 10px; border-left:3px solid var(--ork-border-dark);
-    font-size:13px; font-style:italic; line-height:1.45; color:var(--ork-text-secondary); background:none;
-}
+/* The modal BODY (.pn-ai-*) lives in style/award-info.css, loaded by
+   _award_info_modal.tpl, so the Recommendations Manager (no revised.css) shares it. */
+/* The modal's View/Print scroll links are <a> buttons: keep orkui.css's a:hover
+   underline off, and in dark mode beat default.theme's #theme_container a tint
+   (1,1,2), which would paint #63b3ed text on the primary button's blue fill. */
+#pn-award-info-view:hover, #pn-award-info-print:hover { text-decoration:none; }
+html[data-theme="dark"] #pn-award-info-view,
+html[data-theme="dark"] #pn-award-info-view:hover { color:var(--ork-text) !important; }
+html[data-theme="dark"] #pn-award-info-print,
+html[data-theme="dark"] #pn-award-info-print:hover { color:#fff !important; }
 @media (max-width: 600px) {
-    .pn-ai-rows { grid-template-columns:1fr; gap:0; }
-    .pn-ai-label { margin-top:8px; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
     .pn-award-action-btn.pn-award-info-btn { min-width:36px; min-height:36px; }
 }
 .pn-edit-award-name-display { font-size:14px; font-weight:600; color:var(--ork-text); padding:8px 10px; background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:6px; min-height:36px; }
@@ -6673,6 +6717,53 @@ table.dataTable.pk-recs-table { width: 100% !important; }
 .kn-rec-filter-popover dl { margin:0; }
 .kn-rec-filter-popover dt { font-weight:600; color:#2b6cb0; margin-top:8px; }
 .kn-rec-filter-popover dd { margin:2px 0 0; color:var(--ork-text-secondary); line-height:1.4; }
+
+/* Rank-range filter on the Kingdom/Park recs panels (_recs_rank_filter.tpl; revised.js).
+   Same scale as the Recs Manager's .rm-rankf-* popover, on the --ork-* tokens.
+   --rkf-accent is the pill fill, --rkf-on the numbers drawn on it (dark flips both). */
+.rkf-root { display:inline-flex; position:relative; --rkf-accent:var(--ork-link); --rkf-on:#fff; }
+html[data-theme="dark"] .rkf-root { --rkf-accent:var(--ork-link-bright); --rkf-on:#10161d; }
+.rkf-btn { padding:4px 12px; border-radius:20px; border:1.5px solid var(--ork-input-border); background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.rkf-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
+.rkf-btn.is-active { background:var(--rkf-accent); border-color:var(--rkf-accent); color:var(--rkf-on); }
+.rkf-btn:focus-visible { outline:2px solid var(--rkf-accent); outline-offset:2px; }
+html[data-theme="dark"] .rkf-btn { background:var(--ork-bg-secondary); border-color:var(--ork-border); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .rkf-btn:hover { border-color:var(--ork-link-bright); color:var(--ork-link-bright); }
+html[data-theme="dark"] .rkf-btn.is-active { background:var(--rkf-accent); border-color:var(--rkf-accent); color:var(--rkf-on); }
+.rkf-pop { position:fixed; z-index:1000; width:340px; max-width:calc(100vw - 16px); box-sizing:border-box; padding:12px; border:1px solid var(--ork-input-border); border-radius:8px; background:var(--ork-card-bg); color:var(--ork-text); box-shadow:var(--ork-shadow-dropdown); font-size:13px; font-weight:400; }
+.rkf-pop[hidden] { display:none; }
+.rkf-head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.rkf-title { font-weight:700; }
+.rkf-status { color:var(--ork-text-muted); font-size:12px; text-align:right; }
+.rkf-stops { position:relative; display:flex; border-radius:999px; background:var(--ork-bg-secondary); box-shadow:inset 0 0 0 1px var(--ork-border); }
+.rkf-div { position:absolute; top:9px; bottom:9px; left:calc(100% * 10 / 11); width:1px; background:var(--ork-text-muted); opacity:.6; }
+.rkf-pill { position:absolute; top:50%; height:30px; margin-top:-15px; border-radius:999px; background:var(--rkf-accent); transition:left .12s ease, width .12s ease; }
+.rkf-pill[hidden] { display:none; }
+.rkf-stop { position:relative; z-index:1; flex:1 1 0; min-width:0; min-height:34px; padding:0; display:flex; align-items:center; justify-content:center; cursor:pointer; border:0; border-radius:999px; background:transparent; color:var(--ork-text); font-size:12px; font-weight:600; font-variant-numeric:tabular-nums; }
+.rkf-num { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:999px; }
+.rkf-stop:hover .rkf-num { box-shadow:inset 0 0 0 1px currentColor; }
+.rkf-stop.is-in .rkf-num { color:var(--rkf-on); }
+.rkf-stop.is-end .rkf-num,
+.rkf-stop.is-anchor .rkf-num { box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0.55); }
+html[data-theme="dark"] .rkf-stop.is-end .rkf-num,
+html[data-theme="dark"] .rkf-stop.is-anchor .rkf-num { box-shadow:inset 0 0 0 1.5px rgba(16,22,29,0.45); }
+.rkf-stop:focus-visible { outline:none; }
+.rkf-stop:focus-visible .rkf-num { box-shadow:0 0 0 2px var(--ork-card-bg), 0 0 0 4px var(--rkf-accent); }
+.rkf-hint { margin:8px 0 10px; font-size:12px; color:var(--ork-text-muted); }
+.rkf-nl { display:flex; flex-wrap:wrap; align-items:center; gap:4px; cursor:pointer; }
+.rkf-sub { color:var(--ork-text-muted); font-size:12px; }
+.rkf-foot { display:flex; justify-content:space-between; gap:8px; margin-top:12px; }
+.rkf-fbtn { padding:6px 14px; border-radius:6px; border:1.5px solid var(--ork-input-border); background:transparent; color:var(--ork-text); font-size:12px; font-weight:600; cursor:pointer; }
+.rkf-fbtn:hover { border-color:var(--rkf-accent); }
+.rkf-fbtn-primary { background:var(--rkf-accent); border-color:var(--rkf-accent); color:var(--rkf-on); }
+/* Phones: pin the popover to the viewport (same as the filter-help popover below) so
+   the 11-stop scale always fits a 390px screen; grow the hit targets. */
+@media (max-width: 600px) {
+    .rkf-pop { left:8px !important; right:8px; top:auto !important; bottom:8px; width:auto; max-height:80vh; overflow:auto; }
+    .rkf-stop { min-height:44px; }
+    .rkf-fbtn { min-height:44px; padding:6px 18px; }
+    .rkf-btn { min-height:32px; }
+}
 .pk-rec-has-tip { position:relative; display:inline-block; margin-left:4px; color:#3182ce; cursor:default; font-size:12px; }
 .pk-rec-has-tip::after { content:attr(title); position:absolute; bottom:calc(100% + 5px); left:50%; transform:translateX(-50%); background:#2d3748; color:#fff; font-size:11px; font-weight:600; white-space:nowrap; padding:3px 8px; border-radius:4px; pointer-events:none; opacity:0; transition:opacity 0s; z-index:var(--z-tooltip); }
 .pk-rec-has-tip::before { content:''; position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#2d3748; pointer-events:none; opacity:0; transition:opacity 0s; z-index:var(--z-tooltip); }
@@ -6740,7 +6831,18 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 .pk-closed-pill-granted { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .pk-closed-pill-dismissed { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
 .pk-deleted-recs-table .pk-closed-verb { color: var(--ork-text-muted); }
-.pk-deleted-recs-table .pk-closed-noaction { color: var(--ork-text-muted); padding: 0 10px; }
+/* Granted rows: profile / Award Info / scroll icon actions (revised.js grantedActions). */
+.pk-deleted-recs-table .pk-closed-act {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; margin-left: 2px;
+    padding: 0 6px; border-radius: 4px; border: 1px solid transparent; background: none;
+    color: var(--ork-text-secondary); font-size: 13px; cursor: pointer; text-decoration: none;
+}
+.pk-deleted-recs-table .pk-closed-act:hover { border-color: var(--ork-border-dark); color: var(--ork-link); text-decoration: none; }
+html[data-theme="dark"] .pk-deleted-recs-table .pk-closed-act { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-deleted-recs-table .pk-closed-act:hover { border-color: var(--ork-border); color: var(--ork-link-bright, var(--ork-link)); }
+@media (max-width: 768px) {
+    .pk-deleted-recs-table .pk-closed-act { min-width: 36px; height: 36px; }
+}
 
 /* ---- Tournament table delete button ---- */
 .kn-tournament-del-btn { background:none; border:none; color:#a0aec0; font-size:16px; line-height:1; cursor:pointer; padding:2px 6px; border-radius:4px; transition:color 0.15s,background 0.15s; }
@@ -9673,6 +9775,25 @@ html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #
 html[data-theme="dark"] [data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):not(.kn-draft-pill):not(.pk-draft-pill):not(.pn-acct-help-tip):hover::after {
     background: #f7fafc; color: #1a202c;
 }
+
+/* data-tip inside a DataTables scrollX body. .dataTables_scrollBody is overflow:auto on
+   both axes, so a pseudo-element tip is clipped above the first row and below the last,
+   and no offset can fix both. The pseudo is suppressed here and revised.js
+   (ornScrollTip) shows the text in one position:fixed node on <body> instead. content:none
+   !important beats every scoped rule, none of which marks content !important. */
+.dataTables_scrollBody [data-tip]::after,
+.dataTables_scrollBody [data-tip]::before { content: none !important; }
+.orn-fixed-tip {
+    position: fixed; top: 0; left: 0;
+    background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4; text-align: left;
+    padding: 6px 10px; border-radius: 4px; white-space: pre-line;
+    width: max-content; max-width: 240px;
+    pointer-events: none; z-index: var(--z-tooltip, 500);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    opacity: 0; visibility: hidden; transition: opacity 0.08s;
+}
+.orn-fixed-tip.is-visible { opacity: 1; visibility: visible; }
+html[data-theme="dark"] .orn-fixed-tip { background: #f7fafc; color: #1a202c; }
 
 /* The feast (meal) card uses overflow:hidden for its rounded corners, so the
    default upward tooltip on its header edit/remove icons gets clipped by the

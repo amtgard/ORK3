@@ -23,6 +23,19 @@ class Model_Court extends Model
         return $this->_court()->canManage($uid, $kingdom_id, $park_id);
     }
 
+    // Granting/finalizing: can_manage over the court's ISSUING scope (the kingdom
+    // for a Kingdom Court held at a park). $court is a get_court_detail() row.
+    public function can_issue_for_court($uid, array $court)
+    {
+        return $this->_court()->canIssueForCourt($uid, $court);
+    }
+
+    // [scopeType, scopeId] the court's awards and scrolls issue from.
+    public function issuing_scope(array $court)
+    {
+        return Court::issuingScope($court);
+    }
+
     // -----------------------------------------------------------------------
     // Courts
     // -----------------------------------------------------------------------

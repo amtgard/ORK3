@@ -179,6 +179,47 @@ final class ScrollPrintLogTest extends TestCase
         $this->assertSame([], $this->log->LastPrintedForCourtAwards([]));
     }
 
+    /**
+     * The planner's "K of N printed. Complete those K?" counts only the run's lines
+     * printed at or after the stamp the preflight issued — a line printed before the
+     * run, or not at all, is not K. A malformed stamp counts nothing.
+     */
+    public function testCourtLinesPrintedSinceTheRunStart(): void
+    {
+        $line = static fn (int $caId): array => ['CourtId' => 77, 'CourtAwardId' => $caId, 'AuthBasis' => 'court-manager',
+            'MundaneId' => 11, 'PrintedById' => self::PRINTER, 'ScopeType' => 'kingdom', 'ScopeId' => 4,
+            'OrderId' => 'rose', 'Rank' => 1];
+        $model = new Model_Scrollery();
+
+        $this->log->RecordPrint($line(990001));
+        // Back-date that print an hour, so it predates the run.
+        global $DB;
+        $DB->Clear();
+        $DB->Execute('UPDATE ' . DB_PREFIX . "scroll_print SET printed_at = '" . date('Y-m-d H:i:s', time() - 3600)
+            . "' WHERE printed_by_id = " . self::PRINTER . ' AND court_award_id = 990001');
+
+        $start = $model->print_run_stamp();
+        $this->assertSame($start, $model->valid_print_run_stamp($start));
+        $this->assertSame([], $model->court_lines_printed_since([990001, 990002, 990003], $start));
+
+        $this->log->RecordPrint($line(990002));
+        $this->assertSame([990002], $model->court_lines_printed_since([990001, 990002, 990003, 990002], $start));
+
+        // A print inside the dedupe window before the run counts: a reprint in the
+        // run would have been deduped into that row and written nothing of its own.
+        $this->log->RecordPrint($line(990003));
+        $DB->Clear();
+        $DB->Execute('UPDATE ' . DB_PREFIX . "scroll_print SET printed_at = '" . date('Y-m-d H:i:s', strtotime($start) - 10)
+            . "' WHERE printed_by_id = " . self::PRINTER . ' AND court_award_id = 990003');
+        $this->assertSame([990002, 990003], $model->court_lines_printed_since([990001, 990002, 990003], $start));
+        // Scoped to a court, another court's lines are invisible.
+        $this->assertSame([990002, 990003], $model->court_lines_printed_since([990002, 990003], $start, 77));
+        $this->assertSame([], $model->court_lines_printed_since([990002, 990003], $start, 78));
+
+        $this->assertSame('', $model->valid_print_run_stamp("2026-13-45 99:00:00' OR 1"));
+        $this->assertSame([], $model->court_lines_printed_since([990002], 'not a stamp'));
+    }
+
     /** auth_basis is a closed vocabulary. */
     public function testAuthBasisIsNormalised(): void
     {
@@ -259,6 +300,17 @@ final class ScrollPrintLogTest extends TestCase
         $this->assertSame('', $this->log->LastPrintedAt(424242));
         $this->assertSame('', $this->log->LastPrintedAt(0));
         $this->assertSame('', $this->log->LastPrintedAt(-1));
+    }
+
+    /** A scroll printed off a Court Planner line before finalize carries no awards_id. */
+    public function testLastPrintedAtCountsAPrintLoggedAgainstTheCourtLine(): void
+    {
+        $line = 987654321;
+        $this->log->RecordPrint($this->entry(['AwardsId' => 0, 'CourtAwardId' => $line]));
+
+        $this->assertSame('', $this->log->LastPrintedAt(424242), 'awards_id alone cannot see a line-only print');
+        $this->assertNotSame('', $this->log->LastPrintedAt(424242, $line));
+        $this->assertSame('', $this->log->LastPrintedAt(0, $line), 'no award, no answer');
     }
 
     /** @return list<array<string, mixed>> */

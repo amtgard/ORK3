@@ -98,6 +98,33 @@ final class ScrolleryCourtPrintTest extends TestCase
         $this->assertSame($this->kid, $run['Scrolls'][$first]['scopeId']);
     }
 
+    /** The print sheet's run-level Version (&variant=) reaches a court run's plates. */
+    public function testTheRunLevelVariantReachesAMultiPlateOrder(): void
+    {
+        $ka = 0;
+        $variants = [];
+        foreach ($this->model->printable_award_choices($this->kid) as $choice) {
+            if ($choice['KingdomAwardId'] > 0 && count($choice['Variants']) > 1) {
+                $ka       = $choice['KingdomAwardId'];
+                $variants = $choice['Variants'];
+                break;
+            }
+        }
+        if ($ka === 0) {
+            $this->markTestSkipped('No multi-plate order in kingdom ' . $this->kid . '.');
+        }
+        $line = $this->scrolleryLine($ka);
+
+        $default = $this->model->scrolls_for_court_awards($this->courtId, [], $this->playerId);
+        $chosen  = $this->model->scrolls_for_court_awards($this->courtId, [], $this->playerId, Scroll::HERALDRY_AUTO, $variants[1]);
+        $unknown = $this->model->scrolls_for_court_awards($this->courtId, [], $this->playerId, Scroll::HERALDRY_AUTO, 'nosuchplate');
+
+        $this->assertSame($variants[0], $default['Scrolls'][$line]['variant']);
+        $this->assertSame($variants[1], $chosen['Scrolls'][$line]['variant']);
+        // BuildScroll() falls back to the first plate rather than refusing.
+        $this->assertSame($variants[0], $unknown['Scrolls'][$line]['variant']);
+    }
+
     public function testRequestedIdsNarrowTheRun(): void
     {
         $ka = $this->printableKa();

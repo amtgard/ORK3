@@ -42,6 +42,10 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl'; ?>
 				<?php if (!empty($ViewerHasCircle)): ?>
 				<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
 				<?php endif; ?>
+				<?php if ($CanManageKingdom ?? false) { /* officers only; the partial also hides itself when no ladder recs */
+					$rkfRecs = $AwardRecommendations; $rkfTable = 'kn-rec-table'; $rkfCol = 3; $rkfManage = '.kn-manage-recs';
+					include __DIR__ . '/_recs_rank_filter.tpl';
+				} ?>
 				<span class="kn-rec-filter-info">
 					<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 					<div class="kn-rec-filter-popover">
@@ -92,7 +96,7 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl'; ?>
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 						<td><?php if (!empty($rec['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$rec['ParkId'] ?>"><?= htmlspecialchars($rec['ParkName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['AwardName']) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="rm-inline-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?><?= ork_monarchy_only_badge((int)($rec['MonarchyOnlyLevel'] ?? 0)) ?></td>
-						<td style="white-space:nowrap" data-order="<?= max(0, (int)$rec['Rank']) ?>">
+						<td style="white-space:nowrap" data-order="<?= max(0, (int)$rec['Rank']) ?>" data-ladder="<?= (array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? '1' : '0' ?>" data-master="<?= !empty($rec['IsMaster']) ? '1' : '0' ?>">
 							<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 							<?php if (!empty($rec['AlreadyHas'])): ?>
 							<span class="pk-rec-has-tip"

@@ -120,6 +120,11 @@
      */
     var heldRanks   = {};
     var rankTouched = false;   // has the officer picked a rank by hand?
+    /* Opened from an award's Customize link: the rank is that award's, so the held-rank
+       default must not replace it. Not rankTouched, which would also make a Custom
+       Award read as ranked (rankChosen) where the stored grant does not. */
+    var prefill      = cfg.prefill || null;
+    var rankFromAward = !!prefill;
 
     function heldForCurrentAward() {
         var opt = selected();
@@ -269,7 +274,7 @@
         // Until the officer picks one by hand, the certificate being printed is
         // almost always for the rank the recipient now HOLDS — so once we know it,
         // open on it rather than on the bottom of the range.
-        if (!rankTouched) {
+        if (!rankTouched && !rankFromAward) {
             var held = heldForCurrentAward();
             if (held >= min && held <= max) { rankEl.value = held; }
         }
@@ -1720,6 +1725,7 @@
         // rank the recipient holds HERE. Where they hold none it still falls back
         // to carrying the old rank over, as it always did.
         rankTouched = false;
+        rankFromAward = false;
         syncRankAndVariant();
         syncCustomName();
         syncWithPhrase();
@@ -1885,6 +1891,14 @@
         qs.set('customName',  customName());
         var wpq = withPhrase();
         if (wpq !== null) { qs.set('titlePhrase', wpq); }
+        /* Opened from an award's Customize link: log the print against that award while
+           it is still that award for that recipient. The server re-checks both, and
+           that the viewer may print it, before it records the id. */
+        if (prefill && prefill.awardsId && String(opt.value) === String(prefill.awardId)
+            && (opt.dataset.name || '') === prefill.title
+            && String(playerId.value) === String(prefill.playerId)) {
+            qs.set('awardsId', prefill.awardsId);
+        }
         qs.set('print',       '1');
         /*
          * The hand goes with it, so the sheet that prints is lettered like the preview
@@ -1954,4 +1968,7 @@
     // even when the very first preview fetch fails.
     syncSummary();
     reload();
+    // A recipient the page opened with (a Customize link) gets the same held-rank
+    // annotation a picked one does; rankFromAward keeps their award's own rank.
+    if (playerId.value) { loadHeldRanks(playerId.value); }
 }());

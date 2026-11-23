@@ -111,7 +111,7 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
               $dTip = $granted
                   ? 'Granted' . $dWho . $dWhen . '. The award was given, so this recommendation is closed. To undo a grant, revoke or delete the award on the player\'s profile.'
                   : 'Dismissed' . $dWho . $dWhen . '. Dismissed recommendations are kept, not deleted — Restore returns this to the pending list.';
-          ?><span class="rm-badge <?= $granted ? 'rm-badge-granted' : 'rm-badge-dismissed' ?>" data-tip="<?= htmlspecialchars($dTip) ?>"><?= $granted ? 'granted' : 'dismissed' ?></span><?php } ?>
+          ?><span class="rm-badge <?= $granted ? 'rm-badge-granted' : 'rm-badge-dismissed' ?>" data-tip="<?= htmlspecialchars($dTip) ?>"><?= $granted ? 'Granted' : 'Dismissed' ?></span><?php } ?>
         </td>
         <td class="rm-col-rank">
           <?php if ($isLad) { ?><span class="ladder-rank" data-lvl="<?= min($gRank, 10) ?>"><?= $gRank ?></span><?php } else { ?><span class="rm-rank rm-nonladder">non-ladder</span><?php } ?>
@@ -135,13 +135,26 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
           <?php } else { ?><span class="rm-empty">0</span><?php } ?>
         </td>
         <td class="rm-col-court">
-          <?php if (count($gcourts)) { $c0 = $gcourts[0]; ?>
-            <a class="rm-courtbadge" href="<?= UIR ?>Court/detail/<?= (int)$c0['CourtId'] ?>"><?= htmlspecialchars($c0['Name']) ?><?php if (count($gcourts) > 1) { ?> <span class="rm-courtmore">+<?= count($gcourts) - 1 ?></span><?php } ?></a>
+          <?php if (count($gcourts)) { $c0 = $gcourts[0];
+                // Scroll/regalia progress of the first court's line (not on a finalized
+                // court, and not when the line needs neither).
+                $trk = rmCourtTracking($c0, $TrackingDefs ?? []); ?>
+            <a class="rm-courtbadge" href="<?= UIR ?>Court/detail/<?= (int)$c0['CourtId'] ?>"<?php if ($trk) { ?> data-tip="<?= htmlspecialchars($trk['tip']) ?>"<?php } ?>><?php if ($trk) { ?><span class="rm-trk-dot rm-trk-<?= $trk['state'] ?>" role="img" aria-label="<?= htmlspecialchars(str_replace(' · ', ', ', $trk['tip'])) ?>"></span><?php } ?><?= htmlspecialchars($c0['Name']) ?><?php if (count($gcourts) > 1) { ?> <span class="rm-courtmore">+<?= count($gcourts) - 1 ?></span><?php } ?></a>
           <?php } else { ?><span class="rm-empty">&mdash;</span><?php } ?>
         </td>
         <td class="rm-col-act">
-          <?php if ($granted) { ?>
-          <span class="rm-empty" data-tip="Granted recommendations cannot be restored. To undo a grant, revoke or delete the award on the player's profile.">&mdash;</span>
+          <?php if ($granted) {
+              // Granted is history, but not a dead end: the recipient's profile, the
+              // award it was granted as (Award Info modal) and, where this viewer may
+              // print it (Model_Scrollery::printable_awards_ids), its scroll.
+              $gAwId = (int)($group['GrantedAwardsId'] ?? 0); ?>
+          <a class="rm-act rm-act-link" href="<?= UIR ?>Player/profile/<?= $gMid ?>" data-tip="Open the recipient's profile &mdash; to undo a grant, revoke or delete the award there" aria-label="Open the profile of <?= $rowLabelEsc ?>"><i class="fas fa-user" aria-hidden="true"></i></a>
+          <?php if ($gAwId > 0) { ?>
+          <button type="button" class="rm-act pn-award-info-btn" data-awards-id="<?= $gAwId ?>" data-award-name="<?= htmlspecialchars($group['AwardName'] ?? '', ENT_QUOTES) ?>" data-tip="Award details" aria-label="Award details for <?= $rowLabelEsc ?>"><i class="fas fa-info-circle" aria-hidden="true"></i></button>
+          <?php if (!empty($GrantedPrintable[$gAwId])) { ?>
+          <a class="rm-act rm-act-link" href="<?= UIR ?>Scrollery/render&amp;awards=<?= $gAwId ?>" target="_blank" rel="noopener" data-tip="View scroll" aria-label="View scroll for <?= $rowLabelEsc ?>"><i class="fas fa-eye" aria-hidden="true"></i></a>
+          <a class="rm-act rm-act-link" href="<?= UIR ?>Scrollery/render&amp;awards=<?= $gAwId ?>&amp;print=1" target="_blank" rel="noopener" data-tip="Print scroll" aria-label="Print scroll for <?= $rowLabelEsc ?>"><i class="fas fa-print" aria-hidden="true"></i></a>
+          <?php } } ?>
           <?php } elseif ($dismissed) { ?>
           <button type="button" class="rm-act rm-act-undelete" data-tip="Restore &mdash; return this recommendation to the pending list" aria-label="Restore recommendation"><i class="fas fa-undo"></i></button>
           <?php } else { ?>

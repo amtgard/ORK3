@@ -75,7 +75,17 @@
     </select>
     <?php } ?>
     <label class="rm-fcheck"><input type="checkbox" id="rm-filter-passlocal"> Passed to local</label>
-    <label class="rm-fcheck" data-tip="Closed recommendations are kept, not deleted: granted ones (the award was given) and dismissed ones. Turn this on to see them and restore any dismissed by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show granted &amp; dismissed</label>
+    <?php /* Open vs closed is a server-side filter (?status=), so paging and the total
+             stay exact. Closed recs are kept, not deleted: granted (the award was given)
+             and dismissed (restorable). */ ?>
+    <label class="rm-fstatus" data-tip="Closed recommendations are kept, not deleted: Granted ones (the award was given) and Dismissed ones, which you can restore.">
+      <select id="rm-filter-status" class="rm-fsel" aria-label="Recommendation status">
+        <option value="open" selected>Open</option>
+        <option value="granted">Granted</option>
+        <option value="dismissed">Dismissed</option>
+        <option value="closed">All closed</option>
+      </select>
+    </label>
     <!-- The table header (and its Rank filter icon) is hidden below 1250px, where
          rows render as cards — this button opens the same popover there. -->
     <button type="button" class="rm-fbtn rm-rankf-mbtn" id="rm-rankf-mbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="rm-rankf-pop"><i class="fas fa-filter" aria-hidden="true"></i> Rank: <span id="rm-rankf-msum">All</span></button>
@@ -214,7 +224,7 @@
         <div class="rm-field-hint">Defaults to you. For an association (e.g. a Knight taking a Squire), set the granter here.</div>
       </div>
       <div class="rm-field">
-        <label for="rm-grant-givenat">Given at <span class="rm-field-hint-inline">(optional)</span></label>
+        <label for="rm-grant-givenat">Given at</label>
         <div class="rm-ac-wrap">
           <input type="text" id="rm-grant-givenat" class="rm-input" autocomplete="off" placeholder="Search park, kingdom, or event&hellip;">
           <div class="rm-ac-results" id="rm-grant-givenat-results"></div>
@@ -241,6 +251,10 @@
 </div>
 </div>
 
+<?php // Award Info modal for the Granted rows' (i), in this page's own modal shell.
+$aiShell = 'rm';
+include __DIR__ . '/_award_info_modal.tpl'; ?>
+
 <script>
 window.RmConfig = {
   uir: '<?= UIR ?>',
@@ -255,6 +269,8 @@ window.RmConfig = {
   bulkUrl:    '<?= UIR ?>Recommendations/bulk/<?= $Context ?>/<?= $Context === 'park' ? (int)$ParkId : (int)$KingdomId ?>',
   exportUrl:  '<?= UIR ?>Recommendations/export/<?= $Context ?>/<?= $Context === 'park' ? (int)$ParkId : (int)$KingdomId ?>',
   total:      <?= (int)($Total ?? 0) ?>,
+  // Rank range the page opened with (carried from the Kingdom/Park panels' Rank filter).
+  rankInit:   <?= json_encode($RankInit ?? ['min' => 1, 'max' => 11, 'nl' => true]) ?>,
   hasMore:    <?= !empty($HasMore) ? 'true' : 'false' ?>,
   nextOffset: <?= (int)($NextOffset ?? 0) ?>
 };
@@ -352,8 +368,11 @@ var RM = { rows: function () { return Array.from(document.querySelectorAll('#rm-
 
 var rmState = {
 	search: '', elig: 'open', court: 'all', park: 'all', passlocal: false,
+	// Server-side status view: open | granted | dismissed | closed (#rm-filter-status).
+	status: 'open',
 	// Rank range: stops 1..10 are ladder ranks, 11 = "M" (Master award); nl = include non-ladder.
-	rmin: 1, rmax: 11, nl: true,
+	rmin: (RmConfig.rankInit || {}).min || 1, rmax: (RmConfig.rankInit || {}).max || 11,
+	nl: (RmConfig.rankInit || {}).nl !== false,
 	sort: 'date', dir: 'desc',
 	offset: RmConfig.nextOffset || 0, total: RmConfig.total || 0,
 	hasMore: !!RmConfig.hasMore, loading: false, seen: {},
@@ -371,7 +390,12 @@ function rmReadFilters() {
 	rmState.court  = document.getElementById('rm-filter-court').value;
 	var pk = document.getElementById('rm-filter-park'); rmState.park = pk ? pk.value : 'all';
 	rmState.passlocal = document.getElementById('rm-filter-passlocal').checked;
-	rmState.dismissed = document.getElementById('rm-filter-dismissed').checked;
+	var stEl = document.getElementById('rm-filter-status');
+	rmState.status = stEl ? stEl.value : 'open';
+	// Eligibility is a triage question about open recs; the server ignores it for the
+	// closed views, so the control says so instead of looking like it applies.
+	var eligEl = document.getElementById('rm-filter-elig');
+	if (eligEl) eligEl.disabled = rmState.status !== 'open';
 }
 function rmRowKey(tr) { return tr.getAttribute('data-rec-cluster') || tr.getAttribute('data-rec-id'); }
 /* Empty / error state. A completed fetch that matched nothing used to leave the
@@ -423,7 +447,7 @@ function rmClearFilters() {
     var ct = document.getElementById('rm-filter-court'); if (ct) ct.value = 'all';
     var pk = document.getElementById('rm-filter-park'); if (pk) pk.value = 'all';
     var plc = document.getElementById('rm-filter-passlocal'); if (plc) plc.checked = false;
-    var dis = document.getElementById('rm-filter-dismissed'); if (dis) dis.checked = false;
+    var st = document.getElementById('rm-filter-status'); if (st) st.value = 'open';
     rmState.rmin = 1; rmState.rmax = 11; rmState.nl = true;
     if (typeof rmRankMarkApplied === 'function') { rmRankMarkApplied(); rmRankPaint(); }
     rmReadFilters();
@@ -440,7 +464,7 @@ function rmFetch(reset) {
 	var q = new URLSearchParams({
 		search: rmState.search, elig: rmState.elig, court: rmState.court,
 		park: rmState.park, passlocal: rmState.passlocal ? '1' : '',
-		dismissed: rmState.dismissed ? '1' : '', sort: rmState.sort,
+		status: rmState.status || 'open', sort: rmState.sort,
 		dir: rmState.dir, offset: String(rmState.offset),
 		rmin: String(rmState.rmin), rmax: String(rmState.rmax), nl: rmState.nl ? '1' : '0'
 	});
@@ -506,7 +530,7 @@ rmIndexSeen();
 if (!RM.rows().length) rmShowStateRow('empty');
 // filter inputs (debounced search) -> reset fetch
 var rmDeb;
-['rm-search', 'rm-filter-elig', 'rm-filter-court', 'rm-filter-park', 'rm-filter-dismissed'].forEach(function (idv) {
+['rm-search', 'rm-filter-elig', 'rm-filter-court', 'rm-filter-park', 'rm-filter-status'].forEach(function (idv) {
 	var el = document.getElementById(idv); if (!el) return;
 	el.addEventListener('input', function () { rmReadFilters(); clearTimeout(rmDeb); rmDeb = setTimeout(function () { rmFetch(true); }, 250); });
 	el.addEventListener('change', function () { rmReadFilters(); clearTimeout(rmDeb); rmFetch(true); });
@@ -530,7 +554,7 @@ if (rmExportBtn) rmExportBtn.addEventListener('click', function () {
 	var q = new URLSearchParams({
 		search: rmState.search, elig: rmState.elig, court: rmState.court,
 		park: rmState.park, passlocal: rmState.passlocal ? '1' : '',
-		dismissed: rmState.dismissed ? '1' : '',
+		status: rmState.status || 'open',
 		sort: rmState.sort, dir: rmState.dir,
 		rmin: String(rmState.rmin), rmax: String(rmState.rmax), nl: rmState.nl ? '1' : '0'
 	});
@@ -822,12 +846,28 @@ function rmToastRegion() {
     return r;
 }
 rmToastRegion();
-function rmToast(msg, isErr) {
+// link = { href, text } adds one action link (Print scroll after a grant). A toast
+// with a link stays up longer: 2.6s is enough to read, not to reach for it.
+function rmToast(msg, isErr, link) {
     var t = document.createElement('div');
     t.className = 'rm-toast' + (isErr ? ' rm-toast-err' : '');
     t.textContent = msg;
+    if (link && link.href) {
+        var a = document.createElement('a');
+        a.className = 'rm-toast-link';
+        a.href = link.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        var ic = document.createElement('i');
+        ic.className = 'fas fa-print';
+        ic.setAttribute('aria-hidden', 'true');
+        a.appendChild(ic);
+        a.appendChild(document.createTextNode(' ' + (link.text || 'Open')));
+        t.appendChild(document.createTextNode(' '));
+        t.appendChild(a);
+    }
     rmToastRegion().appendChild(t);
-    setTimeout(function () { t.classList.add('rm-toast-out'); setTimeout(function () { t.remove(); }, 400); }, 2600);
+    setTimeout(function () { t.classList.add('rm-toast-out'); setTimeout(function () { t.remove(); }, 400); }, link && link.href ? 9000 : 2600);
 }
 // Build the snooze/dismiss endpoint base for the current scope.
 function rmRecAjaxBase(action) {
@@ -946,7 +986,7 @@ function rmRecLabel(tr) {
     return who + ' (' + what + (rank > 0 ? ', rank ' + rank : '') + ')';
 }
 // Both dismiss paths say the same thing about what dismissal is.
-var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show granted & dismissed” to see them and restore any dismissed by mistake.';
+var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — switch the status filter to “Dismissed” to see them and restore any dismissed by mistake.';
 // The first member of the cluster — its reason is the one a grant would offer as
 // the public note (the row no longer duplicates it in data-rec).
 function rmFirstMember(tr) {
@@ -1058,9 +1098,9 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
             rmToast(okN ? 'Restored ' + okN + ', ' + (ids.length - okN) + ' failed.' : 'Failed.', true);
             return;
         }
-        // serverGone=false: with "Show dismissed" on, the row was already part of the
-        // current result set — it changes category, it does not leave the set.
-        rmRemoveRow(tr, false);
+        // Restore only renders in the Dismissed / All closed views; the row is open
+        // again, so it leaves this server-side result set (total and offset move).
+        rmRemoveRow(tr);
         rmToast('Restored.');
     }).catch(function () {
         ud.disabled = false;
@@ -1328,6 +1368,7 @@ function rmTodayYMD() {
 function rmDoGrant(rec, tr, opts) {
     opts = opts || {};
     var granted = false;
+    var printLink = null; // { href, text } once a printable award has landed
     // Rebuildable: a confirmed duplicate is re-POSTed with ConfirmDuplicate=1, and a
     // FormData that has already been sent cannot be reused safely.
     function rmGrantForm(confirmDuplicate) {
@@ -1378,6 +1419,11 @@ function rmDoGrant(rec, tr, opts) {
         .then(function (j) {
             if (!rmJsonOk(j)) { var e = new Error(j && j.error ? j.error : 'Could not grant the award.'); e.granted = false; throw e; }
             granted = true;
+            // Scrollery: printable is the server's call for THIS officer, so the
+            // toast never offers a link the render route would refuse.
+            if (j.printable && j.awardsId) {
+                printLink = { href: RmConfig.uir + 'Scrollery/render&awards=' + (parseInt(j.awardsId, 10) || 0) + '&print=1', text: 'Print scroll' };
+            }
             // Advisory shape: if the server instead lets the grant through and reports
             // the duplicate as a warning, surface it rather than blocking anything.
             if (j.duplicateWarning) { rmToast(j.duplicateWarning, true); }
@@ -1394,9 +1440,11 @@ function rmDoGrant(rec, tr, opts) {
             // (say a lower rank than the rec asked for); j.error says so.
             if (!rmJsonOk(j)) { var e = new Error('resolve cluster failed'); e.granted = true; e.recError = (j && j.error) ? String(j.error) : ''; throw e; }
             rmRemoveRow(tr);
-            rmToast('Granted.');
+            rmToast('Granted.', false, printLink);
         }).catch(function (err) {
             err.granted = (typeof err.granted === 'boolean') ? err.granted : granted;
+            // The award stands even when the rec could not be cleared; keep its print link.
+            if (err.granted && printLink) err.printLink = printLink;
             throw err;
         });
 }
@@ -1430,6 +1478,10 @@ var rmGrantFp = null;
 function rmSetGrantDate(ymd) {
     if (rmGrantFp) { rmGrantFp.setDate(ymd, false); return; }
     rmGid('rm-grant-date').value = ymd;
+}
+function rmGrantHasGivenAt() {
+    return (parseInt(rmGid('rm-grant-park-id').value, 10) > 0)
+        || (parseInt(rmGid('rm-grant-kingdom-id').value, 10) > 0);
 }
 function rmGrantErr(msg) {
     var box = rmGid('rm-grant-error');
@@ -1517,6 +1569,14 @@ rmGid('rm-grant-submit').addEventListener('click', function () {
     var note = rmGid('rm-grant-note').value;
     if (!date) { rmGrantErr('Please choose a date.'); return; }
     if (!givenById) { rmGrantErr('Please choose who granted this award (pick from the search).'); return; }
+    // "Given at" is required: Player::AddAward refuses a grant with no park or
+    // kingdom. Typing in the field zeroes both ids until a result is picked, so free
+    // text never passes (the same rule as knHasGivenAt on the kingdom profile).
+    if (!rmGrantHasGivenAt()) {
+        rmGrantErr('Where was this award given? Choose a location from the list.');
+        var gaEl = rmGid('rm-grant-givenat'); if (gaEl) gaEl.focus();
+        return;
+    }
     rmGrantErr('');
     var submitBtn = rmGid('rm-grant-submit');
     submitBtn.disabled = true;
@@ -1551,7 +1611,7 @@ rmGid('rm-grant-submit').addEventListener('click', function () {
                 rmCloseGrantModal();
                 rmToast(err.recError && err.recError.indexOf('left open') !== -1
                     ? 'Granted. ' + err.recError.replace(/^[^:]*:\s*(?=The recommendation)/, '') + ' Refresh to see it.'
-                    : 'Granted — but the recommendation could not be cleared. Refresh to confirm; do not grant it again.', true);
+                    : 'Granted — but the recommendation could not be cleared. Refresh to confirm; do not grant it again.', true, err.printLink);
             } else {
                 submitBtn.disabled = false;
                 rmGrantErr((err && err.message) ? err.message : 'Grant failed.');
@@ -1770,9 +1830,9 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
 document.querySelector('.rm-bulk-undelete').addEventListener('click', function () {
     var rows = rmSelectedDismissed();
     rmBulkRun('undelete', rows, {
-        // The row rejoins the live list. serverGone=false: with "Show dismissed" on
-        // it was already inside the current result set, so total must not move.
-        apply: function (tr) { rmRemoveRow(tr, false); },
+        // The row rejoins the live list, so it leaves the closed view it was listed
+        // in: total and offset move with it.
+        apply: function (tr) { rmRemoveRow(tr); },
         msg: function (ok, fail) { return 'Restored ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; }
     });
 });
@@ -1922,11 +1982,23 @@ function rmSyncReasonExpanders() {
 (function () {
     var params = new URLSearchParams(window.location.search);
     var pl = document.getElementById('rm-filter-passlocal');
+    var st = document.getElementById('rm-filter-status');
     rmReadFilters();
+    var refetch = false;
     if (params.get('passlocal') === '1' && pl) {
         pl.checked = true;
+        refetch = true;
+    }
+    // ?status=granted|dismissed|closed opens a closed view (e.g. linked from the
+    // Kingdom/Park closed-recs panels); ?dismissed=1 is the old checkbox's link.
+    var stParam = params.get('status') || (params.get('dismissed') === '1' ? 'closed' : '');
+    if (st && ['granted', 'dismissed', 'closed'].indexOf(stParam) !== -1) {
+        st.value = stParam;
+        refetch = true;
+    }
+    if (refetch) {
         rmReadFilters();
-        rmFetch(true); // re-query server-side with the pass-to-local filter applied
+        rmFetch(true); // re-query server-side with the handed-over filters applied
     }
 })();
 rmSyncReasonExpanders();

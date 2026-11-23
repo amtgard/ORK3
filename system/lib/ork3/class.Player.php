@@ -4944,9 +4944,10 @@ class Player extends Ork3
      * A grant and a dismissal are both soft deletes; `resolution` is what tells them
      * apart ('granted' / 'dismissed'), so the closed-recs views can label a granted
      * rec as granted and refuse to Restore it (see RestoreAwardRecommendation).
-     * Only grant_recommendation may pass $granted = true.
+     * Only grant_recommendation may pass $granted = true, with the backing award as
+     * $granted_awards_id (stored so the closed-recs views can link the award).
      */
-    private function soft_dismiss_recommendation($awardRec, int $actor, bool $granted, array $request, string $fn)
+    private function soft_dismiss_recommendation($awardRec, int $actor, bool $granted, array $request, string $fn, int $granted_awards_id = 0)
     {
         $prior_rec = [
             'recommendations_id' => (int)$awardRec->recommendations_id,
@@ -4972,6 +4973,7 @@ class Player extends Ork3
         $awardRec->deleted_by = $actor;
         $awardRec->deleted_at = $cascade_at;
         $awardRec->resolution = $granted ? self::REC_RESOLUTION_GRANTED : self::REC_RESOLUTION_DISMISSED;
+        $awardRec->granted_awards_id = $granted ? max(0, $granted_awards_id) : 0;
         $awardRec->save();
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
         // Cascade soft-delete to any active seconds on this recommendation.
@@ -5048,6 +5050,13 @@ class Player extends Ork3
     {
         $closed = (int)$awardRec->deleted_by > 0;
         if ($closed && (string)$awardRec->resolution === self::REC_RESOLUTION_GRANTED) {
+            // A grant recorded before granted_awards_id existed (and missed by the
+            // backfill) picks up its award link the next time it is granted again.
+            if ((int)$awardRec->granted_awards_id <= 0 && ($backing = $this->backing_award_id($awardRec, $only_awards_id)) > 0) {
+                $this->db->Clear();
+                $this->db->Execute('UPDATE ' . DB_PREFIX . 'recommendations SET granted_awards_id = ' . (int)$backing
+                    . ' WHERE recommendations_id = ' . (int)$awardRec->recommendations_id . ' AND granted_awards_id = 0');
+            }
             return ['ok' => true, 'changed' => false, 'error' => ''];
         }
         $backing = $this->backing_award_id($awardRec, $only_awards_id);
@@ -5056,7 +5065,7 @@ class Player extends Ork3
         }
         $auditRequest['BackingAwardsId'] = $backing;
         if (!$closed) {
-            $this->soft_dismiss_recommendation($awardRec, $actor, true, $auditRequest, $fn);
+            $this->soft_dismiss_recommendation($awardRec, $actor, true, $auditRequest, $fn, $backing);
             return ['ok' => true, 'changed' => true, 'error' => ''];
         }
 
@@ -5073,7 +5082,7 @@ class Player extends Ork3
         $this->db->Clear();
         $this->db->Execute(
             "UPDATE " . DB_PREFIX . "recommendations
-			    SET resolution = '" . self::REC_RESOLUTION_GRANTED . "', deleted_by = " . (int)$actor . ", deleted_at = '" . date('Y-m-d H:i:s') . "'
+			    SET resolution = '" . self::REC_RESOLUTION_GRANTED . "', granted_awards_id = " . (int)$backing . ", deleted_by = " . (int)$actor . ", deleted_at = '" . date('Y-m-d H:i:s') . "'
 			  WHERE recommendations_id = " . $rec_id . "
 			    AND deleted_by > 0
 			    AND (resolution IS NULL OR resolution <> '" . self::REC_RESOLUTION_GRANTED . "')"
@@ -5095,10 +5104,13 @@ class Player extends Ork3
      * only when it is about the line's recipient. Goes through grant_recommendation, so
      * it needs a backing award, and relabels a rec dismissed before the court granted
      * it. Siblings still go through the token-authorized ResolveRecommendationCluster.
+     * $line_awards_id is the award the line just committed: tried first so the rec
+     * links to THAT award, falling back to any backing award on the record.
      * Returns true when the rec is (now) granted.
      */
-    public function resolve_court_line_recommendation($rec_id, $line_mundane_id, $actor_uid)
+    public function resolve_court_line_recommendation($rec_id, $line_mundane_id, $actor_uid, $line_awards_id = 0)
     {
+        $line_awards_id  = (int)$line_awards_id;
         $rec_id          = (int)$rec_id;
         $line_mundane_id = (int)$line_mundane_id;
         $actor_uid       = (int)$actor_uid;
@@ -5111,9 +5123,14 @@ class Player extends Ork3
         if (!$awardRec->find() || (int)$awardRec->mundane_id !== $line_mundane_id) {
             return false;
         }
-        $res = $this->grant_recommendation($awardRec, $actor_uid, [
-            'RecommendationsId' => $rec_id, 'Source' => 'CourtCommit',
-        ], __FUNCTION__);
+        $audit = ['RecommendationsId' => $rec_id, 'Source' => 'CourtCommit'];
+        if ($line_awards_id > 0) {
+            $res = $this->grant_recommendation($awardRec, $actor_uid, $audit + ['AwardsId' => $line_awards_id], __FUNCTION__, $line_awards_id);
+            if ($res['ok']) {
+                return true;
+            }
+        }
+        $res = $this->grant_recommendation($awardRec, $actor_uid, $audit, __FUNCTION__);
         return $res['ok'];
     }
 
@@ -5296,7 +5313,7 @@ class Player extends Ork3
         // Yapo's null-binding doesn't reliably emit SQL NULL on TIMESTAMP columns; use a raw UPDATE.
         $this->db->Clear();
         $this->db->Execute(
-            "UPDATE " . DB_PREFIX . "recommendations SET deleted_at = NULL, deleted_by = NULL, resolution = NULL WHERE recommendations_id = " . (int)$awardRec->recommendations_id
+            "UPDATE " . DB_PREFIX . "recommendations SET deleted_at = NULL, deleted_by = NULL, resolution = NULL, granted_awards_id = 0 WHERE recommendations_id = " . (int)$awardRec->recommendations_id
         );
 
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);

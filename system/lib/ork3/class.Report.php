@@ -577,6 +577,20 @@ class Report extends Ork3
     }
 
     /**
+     * LEFT JOIN of the award a granted rec was granted as (recs.granted_awards_id),
+     * kept only while it is still live on the recipient's record: a revoked award is
+     * flagged and moved off mundane_id, a deleted one is gone, and either way the
+     * closed-recs views must not link to it. Select "$ga.awards_id" (NULL = none).
+     */
+    private static function grantedAwardJoin(string $recs, string $ga): string
+    {
+        return 'LEFT JOIN ' . DB_PREFIX . "awards $ga ON $recs.granted_awards_id > 0"
+            . " AND $ga.awards_id = $recs.granted_awards_id"
+            . " AND $ga.mundane_id = $recs.mundane_id"
+            . " AND COALESCE($ga.revoked, 0) = 0";
+    }
+
+    /**
      * Collapse parallel recommendations into one row per (recipient, kingdomaward, rank)
      * cluster. Pure transform of the row array returned by PlayerAwardRecommendations.
      * Returns array_values of the grouped rows (same shape the Manager template expects).
@@ -642,6 +656,7 @@ class Report extends Ork3
                     'RepRecId'       => (int)($rec['RecommendationsId'] ?? 0),
                     'IsDismissed'        => false,
                     'IsGranted'          => false,
+                    'GrantedAwardsId'    => 0,
                     'DismissedAt'        => null,
                     'DismissedByPersona' => '',
                     '_advocates'     => [],
@@ -671,6 +686,13 @@ class Report extends Ork3
                 if (($recGranted && !$g['IsGranted']) || ($recGranted === $g['IsGranted'] && $later)) {
                     $g['DismissedAt']        = $rec['DismissedAt'] ?? null;
                     $g['DismissedByPersona'] = $rec['DismissedByPersona'] ?? '';
+                    // The award follows the grant the row names; an older linked grant
+                    // still fills it when the newest one has no award on record.
+                    if ($recGranted && (int)($rec['GrantedAwardsId'] ?? 0) > 0) {
+                        $g['GrantedAwardsId'] = (int)$rec['GrantedAwardsId'];
+                    }
+                } elseif ($recGranted && $g['GrantedAwardsId'] === 0) {
+                    $g['GrantedAwardsId'] = (int)($rec['GrantedAwardsId'] ?? 0);
                 }
                 if ($recGranted) {
                     $g['IsGranted'] = true;
@@ -707,6 +729,7 @@ class Report extends Ork3
             // Only a closed cluster can be granted (dismissed members of a live
             // cluster were dropped above, so this is already false for live ones).
             $groups[$k]['IsGranted']     = $groups[$k]['IsDismissed'] && $g['IsGranted'];
+            $groups[$k]['GrantedAwardsId'] = $groups[$k]['IsGranted'] ? (int)$g['GrantedAwardsId'] : 0;
             $groups[$k]['IsSnoozed']     = $g['_allSnoozed'];
             $groups[$k]['PassedToLocal'] = $g['_allPassed'];
             $groups[$k]['MonarchyOnlyLevel'] = $g['_moMax'];
@@ -811,6 +834,7 @@ class Report extends Ork3
 			recs.deleted_at,
 			recs.deleted_by,
 			recs.resolution,
+			ga.awards_id as granted_awards_id,
 			dbm.persona as deleted_by_persona,
 			recs.snoozed_monarch_id,
 			recs.snoozed_regent_id,
@@ -844,6 +868,7 @@ class Report extends Ork3
 			LEFT join " . DB_PREFIX . "mundane m on m.mundane_id = recs.mundane_id
 			LEFT join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = recs.recommended_by_id
 			LEFT join " . DB_PREFIX . "mundane dbm on dbm.mundane_id = recs.deleted_by
+			" . self::grantedAwardJoin('recs', 'ga') . "
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 			WHERE $dismissedClause
@@ -921,6 +946,7 @@ class Report extends Ork3
                     'deleted_at'         => $r->deleted_at,
                     'deleted_by_persona' => $r->deleted_by_persona,
                     'resolution'         => (string)$r->resolution,
+                    'granted_awards_id'  => (int)$r->granted_awards_id,
                 ];
                 $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
                 if (isset($ladderMap[$recAwardId])) {
@@ -1030,6 +1056,8 @@ class Report extends Ork3
                     // A grant is a close too: IsDismissed stays "closed" (it gates the
                     // live-vs-closed split everywhere), IsGranted says why it closed.
                     'IsGranted'          => !empty($row->deleted_by) && $row->resolution === Player::REC_RESOLUTION_GRANTED,
+                    // The award a granted rec was granted as (0 = none on record).
+                    'GrantedAwardsId'    => (!empty($row->deleted_by) && $row->resolution === Player::REC_RESOLUTION_GRANTED) ? $row->granted_awards_id : 0,
                     'DismissedAt'        => $row->deleted_at,
                     'DismissedByPersona' => $row->deleted_by_persona,
                     'RecommendedByName' => $row->recommended_by_persona,
@@ -1038,6 +1066,9 @@ class Report extends Ork3
                     'KingdomAwardId' => $row->ka_kaward_id,
                     // Authoritative ladder flag. Consumers must use this, never `Rank > 0`.
                     'IsLadder' => (bool)$effIsLadder,
+                    // The Master peerage (e.g. Master Rose): the "M" stop of the rank-range
+                    // filter on the Kingdom/Park recs panels, which cannot infer it from rank.
+                    'IsMaster' => isset($masterIdSet[(int)$recAwardId]),
                     'AwardId' => $recAwardId,
                     'ParkId' => $row->park_id,
                     'KingdomId' => $row->kingdom_id,
@@ -1141,6 +1172,43 @@ class Report extends Ork3
     }
 
     /**
+     * Recs Manager status views: live recs, one kind of closed rec, every closed rec,
+     * or 'all' (live + closed: the old "Show granted & dismissed" checkbox, kept for
+     * IncludeDismissed callers; the Manager's own filter no longer offers it).
+     */
+    public const RECS_MANAGER_STATUSES = ['open', 'granted', 'dismissed', 'closed', 'all'];
+
+    /**
+     * The Recs Manager status a request asks for: Status, defaulting to open, or
+     * 'all' for a legacy IncludeDismissed caller.
+     */
+    public static function recsManagerStatus(array $request): string
+    {
+        $status = strtolower((string)($request['Status'] ?? ''));
+        if (in_array($status, self::RECS_MANAGER_STATUSES, true)) {
+            return $status;
+        }
+        return !empty($request['IncludeDismissed']) ? 'all' : 'open';
+    }
+
+    /**
+     * SQL predicate for a Recs Manager status on the recs alias. Closed = soft
+     * deleted (deleted_by > 0, see Player::LiveRecommendationClause); a close with no
+     * resolution (pre-backfill) reads as dismissed, as everywhere else.
+     */
+    private static function recsManagerStatusClause(string $status, string $a): string
+    {
+        $granted = "'" . Player::REC_RESOLUTION_GRANTED . "'";
+        switch ($status) {
+            case 'granted':   return "($a.deleted_by > 0 AND $a.resolution = $granted)";
+            case 'dismissed': return "($a.deleted_by > 0 AND ($a.resolution IS NULL OR $a.resolution <> $granted))";
+            case 'closed':    return "($a.deleted_by > 0)";
+            case 'all':       return '1 = 1';
+            default:          return Player::LiveRecommendationClause($a);
+        }
+    }
+
+    /**
      * One 500-row (cluster) page of Manager recommendations, fully server-side
      * filtered/sorted. Never selects the full set. Returns:
      *   ['Groups' => [...≤Limit grouped rows...], 'Total' => int, 'HasMore' => bool]
@@ -1161,13 +1229,12 @@ class Report extends Ork3
             : null;
         $skipCount = ($knownTotal === null) && !empty($request['SkipCount']);
 
-        // "Show dismissed": relax the soft-delete filter. It has to move in BOTH the
-        // paging query and the hydration id lookup below, or dismissed clusters would
-        // be counted and paged but then hydrate to nothing.
-        $includeDismissed     = !empty($request['IncludeDismissed']);
-        $pageDismissedClause  = $includeDismissed
-            ? '1 = 1'
-            : '(recs.deleted_by IS NULL OR recs.deleted_by = 0)';
+        // Status: which recs the page is about. It has to move in BOTH the paging query
+        // and the hydration id lookup below, or closed clusters would be counted and
+        // paged but then hydrate to nothing. Server-side, so Total stays exact.
+        $status               = self::recsManagerStatus($request);
+        $includeDismissed     = $status !== 'open';
+        $pageDismissedClause  = self::recsManagerStatusClause($status, 'recs');
 
         $scope = '';
         if (valid_id($request['KingdomId'] ?? 0)) {
@@ -1260,6 +1327,13 @@ class Report extends Ork3
         $undecidableExpr = '(' . $customExpr . ' OR (' . $ladderExpr . ' = 1 AND COALESCE(recs.rank,0) = 0))';
 
         $elig = (string)($request['Eligibility'] ?? 'open');
+        // Eligibility (already holds it / below / snoozed) is a triage question about
+        // OPEN recs. A granted rec almost always "already has" its award, so the
+        // default 'open' bucket would hide nearly every one; closed views take all.
+        // ('all' = live + closed keeps the eligibility filter, as the old checkbox did.)
+        if ($status !== 'open' && $status !== 'all') {
+            $elig = 'all';
+        }
         if ($elig === 'snoozed') {
             $where[] = $snoozedExpr;
         } elseif ($elig === 'nonladder') {
@@ -1686,6 +1760,7 @@ class Report extends Ork3
 			recs.deleted_at,
 			recs.deleted_by,
 			recs.resolution,
+			ga.awards_id as granted_awards_id,
 			dm.persona as deleted_by_persona,
 			ka.award_id as ka_award_id,
 			ka.kingdomaward_id as ka_kaward_id
@@ -1695,6 +1770,7 @@ class Report extends Ork3
 			LEFT join " . DB_PREFIX . "mundane m on m.mundane_id = recs.mundane_id
 			LEFT join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = recs.recommended_by_id
 			LEFT join " . DB_PREFIX . "mundane dm on dm.mundane_id = recs.deleted_by
+			" . self::grantedAwardJoin('recs', 'ga') . "
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 			WHERE recs.deleted_at IS NOT NULL $location_clause $visClause
@@ -1729,6 +1805,9 @@ class Report extends Ork3
                     // (NULL) reads as dismissed, the conservative label: it keeps
                     // Restore available rather than hiding a real dismissal.
                     'Resolution'        => $r->resolution === Player::REC_RESOLUTION_GRANTED ? Player::REC_RESOLUTION_GRANTED : Player::REC_RESOLUTION_DISMISSED,
+                    // The award a granted rec was granted as (0 = dismissed, or no live
+                    // award on record): lets the panel open its Award Info / scroll.
+                    'GrantedAwardsId'   => $r->resolution === Player::REC_RESOLUTION_GRANTED ? (int)$r->granted_awards_id : 0,
                 ];
             }
             $response['Status'] = Success();

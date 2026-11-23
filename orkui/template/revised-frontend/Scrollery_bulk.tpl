@@ -1,6 +1,6 @@
 <?php
 /**
- * "Print bulk scrolls" — an event's or a date range's awards in one pass.
+ * "Print Scrolls in Bulk" — an event's or a date range's awards in one pass.
  *
  * Awards without certificate artwork are listed separately rather than dropped
  * silently, so an officer is never handed fewer scrolls than they selected without
@@ -34,6 +34,16 @@ $maxRun    = (int) ($MaxRun ?? 200);
 $chunk     = max(1, (int) ($PrintChunk ?? 25));
 $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($ScopeId ?? 0);
 $scopeWord = htmlspecialchars((string) ($ScopeType ?? 'park'), ENT_QUOTES, 'UTF-8');
+
+/* The Version column, as on `mine`: drawn only when some row's order ships more than
+   one plate (Owl, Battle) — for most selections it would be a column of dashes. */
+$hasVariants = false;
+foreach ($printable as $r) {
+    if (count(is_array($r['Variants'] ?? null) ? $r['Variants'] : []) > 1) {
+        $hasVariants = true;
+        break;
+    }
+}
 
 /*
  * Paging. $Total is the TRUE printable count for the filter, not the size of this
@@ -103,6 +113,9 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
 .sc-event-more > summary:hover,
 .sc-event-more > summary:focus-visible { color: #2b6cb0; }
 .sc-event-more[open] > summary { margin-bottom: 8px; }
+
+/* The per-row Version picker, sized as on `mine`. */
+.sc-variant  { font-size: 12px; padding: 3px 6px; max-width: 150px; }
 html[data-theme="dark"] .sc-event-more > summary:hover,
 html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4; }
 
@@ -114,7 +127,7 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
         <div class="rp-header-left">
             <div class="rp-header-icon-title">
                 <i class="fa-solid fa-layer-group rp-header-icon"></i>
-                <h1 class="rp-header-title">Print bulk scrolls</h1>
+                <h1 class="rp-header-title">Print Scrolls in Bulk</h1>
             </div>
             <?php /* Scope switcher — see the note on the same block in Scrollery_create.tpl.
                      Every target has already been through the controller's may_issue_for(). */ ?>
@@ -272,7 +285,7 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
                     <strong><?= count($excluded) ?></strong>
                     award<?= count($excluded) === 1 ? '' : 's' ?> in this selection
                     <?= count($excluded) === 1 ? 'is' : 'are' ?> not listed below &mdash;
-                    Scrollery either has no certificate for
+                    Scrollery either has no scroll for
                     <?= count($excluded) === 1 ? 'it' : 'them' ?> or deliberately does not
                     print <?= count($excluded) === 1 ? 'it' : 'them' ?>:
                     <?php
@@ -296,7 +309,7 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
                 </div>
             <?php elseif ($error === ''): ?>
                 <?php if ($printable === []): ?>
-                    <div class="sc-empty">No awards with certificate artwork matched that selection.</div>
+                    <div class="sc-empty">No awards with scroll artwork matched that selection.</div>
                 <?php else: ?>
                     <table class="sc-table">
                         <thead>
@@ -311,6 +324,7 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
                                 <th>Rank</th>
                                 <th>Awarded</th>
                                 <th>Given by</th>
+                                <?php if ($hasVariants): ?><th>Version</th><?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
@@ -353,6 +367,25 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
                                 <td><?= (int) $r['Rank'] > 0 ? (int) $r['Rank'] : '&mdash;' ?></td>
                                 <td><?= htmlspecialchars((string) $r['PrettyDate'], ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= htmlspecialchars((string) $r['GivenBy'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <?php if ($hasVariants): ?>
+                                    <?php $rowVariants = is_array($r['Variants'] ?? null) ? $r['Variants'] : []; ?>
+                                    <td>
+                                        <?php if (count($rowVariants) > 1): ?>
+                                            <?php /* The same control as `mine`. One render URL carries one
+                                                     &variant=, so the run opens a batch per version chosen. */ ?>
+                                            <label class="rp-sr-only" for="sc-variant-<?= (int) $r['AwardsId'] ?>">
+                                                Version of <?= htmlspecialchars((string) $r['Title'], ENT_QUOTES, 'UTF-8') ?> for <?= htmlspecialchars((string) $r['Recipient'], ENT_QUOTES, 'UTF-8') ?>
+                                            </label>
+                                            <select class="adm-select sc-variant" id="sc-variant-<?= (int) $r['AwardsId'] ?>" data-sc-variant data-sc-order="<?= htmlspecialchars((string) $r['Title'], ENT_QUOTES, 'UTF-8') ?>">
+                                                <?php foreach ($rowVariants as $v): ?>
+                                                    <option value="<?= htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(ucfirst((string) $v), ENT_QUOTES, 'UTF-8') ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        <?php else: ?>
+                                            <span class="sc-hint">&mdash;</span>
+                                        <?php endif; ?>
+                                    </td>
+                                <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
@@ -389,8 +422,10 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
                         Tick a row, then shift-click another to select everything between them.
                         Printing opens a preview first &mdash; nothing reaches the printer until
                         you choose Print there. Runs of more than <?= $chunk ?> open in
-                        batches of <?= $chunk ?>, one tab each: a full page of certificates is
+                        batches of <?= $chunk ?>, one tab each: a full page of scrolls is
                         a large image and browsers stop rendering them past about that many.
+                        <?php if ($hasVariants): ?>Rows set to different versions open in
+                        separate batches, one version per batch.<?php endif; ?>
                     </p>
                 <?php endif; ?>
             <?php endif; ?>
@@ -508,7 +543,7 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
         return boxes.filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
     }
 
-    function plural(n) { return n === 1 ? 'certificate' : 'certificates'; }
+    function plural(n) { return n === 1 ? 'scroll' : 'scrolls'; }
 
     function sync() {
         var n = picks().length;
@@ -570,9 +605,16 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
      *
      * The render route re-checks permission for every id it is given, so a
      * hand-edited list cannot print someone else's award.
+     *
+     * &variant= is ONE value per render URL, so the run is split by the Version each
+     * row asks for: every batch holds one version, and a batch never mixes them.
+     * &sigrun= is the run's key, shared by every batch, so a signature image uploaded
+     * in batch 1 is restored in the others (scrollery-sig-upload.js).
      */
-    function batchUrl(ids) {
-        var url = <?= json_encode(UIR) ?> + 'Scrollery/render&awards=' + ids.join(',');
+    function batchUrl(b, run) {
+        var url = <?= json_encode(UIR) ?> + 'Scrollery/render&awards=' + b.ids.join(',')
+                + (b.variant ? '&variant=' + encodeURIComponent(b.variant) : '')
+                + (run ? '&sigrun=' + run : '');
 
         /* Read at call time, not captured: the officer may change the hand between
            finding the awards and opening the run. A no-op if the module did not load,
@@ -582,20 +624,72 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
         return url;
     }
 
-    function openRun(ids) {
+    /* The row's Version picker, or null for a row with none to choose. */
+    function variantSelFor(id) {
+        var box = boxes.filter(function (c) { return c.value === id; })[0];
+        return box ? box.closest('tr').querySelector('[data-sc-variant]') : null;
+    }
+
+    /* A short random key for this run; letters and digits only, as the render page
+       accepts. */
+    function newRunKey() {
+        return (Math.random().toString(36).slice(2, 10) + Date.now().toString(36)).replace(/[^a-z0-9]/g, '');
+    }
+
+    /*
+     * Group by version, then chunk each group. BuildScroll() ignores a variant its
+     * order does not list and draws the order's FIRST plate, so a row still on its
+     * first plate fits any group whose version its order does not offer (an Owl on
+     * parchment rides with a Battle on martial), and a row with no version to choose
+     * fits any group. Deliberate choices make the groups first, so the defaults
+     * cost no extra batch — a plain "select all" opens one run, not one per order.
+     */
+    function planBatches(ids) {
+        var groups = [], defaults = [], plain = [];
+        var fits = function (variant, row) {
+            return variant === row.v || (row.v === row.plates[0] && row.plates.indexOf(variant) === -1);
+        };
+        var place = function (row) {
+            var g = groups.filter(function (x) { return fits(x.variant, row); })[0];
+            if (!g) { g = { variant: row.v, ids: [], orders: [] }; groups.push(g); }
+            g.ids.push(row.id);
+            // Orders this version actually applies to, for the batch label: a batch also
+            // carries other orders on their own default version.
+            if (row.plates.indexOf(g.variant) !== -1 && g.orders.indexOf(row.order) === -1) { g.orders.push(row.order); }
+        };
+        ids.forEach(function (id) {
+            var sel = variantSelFor(id);
+            if (!sel) { plain.push(id); return; }
+            var row = { id: id, v: sel.value, order: sel.getAttribute('data-sc-order') || '', plates: Array.prototype.map.call(sel.options, function (o) { return o.value; }) };
+            if (row.v === row.plates[0]) { defaults.push(row); } else { place(row); }
+        });
+        defaults.forEach(place);
+        if (plain.length) {
+            if (groups.length) { groups[0].ids = groups[0].ids.concat(plain); } else { groups.push({ variant: '', ids: plain, orders: [] }); }
+        }
         var batches = [];
-        for (var i = 0; i < ids.length; i += CHUNK) { batches.push(ids.slice(i, i + CHUNK)); }
+        groups.forEach(function (g) {
+            for (var i = 0; i < g.ids.length; i += CHUNK) {
+                batches.push({ variant: g.variant, orders: g.orders, ids: g.ids.slice(i, i + CHUNK) });
+            }
+        });
+        return batches;
+    }
+
+    function openRun(ids) {
+        var batches = planBatches(ids),
+            run     = newRunKey();
 
         // The first batch opens on the click that asked for it. The rest do NOT get
         // opened in the same loop: every browser blocks all but the first popup from
         // one gesture, so a 100-certificate run would silently produce one tab and
         // three swallowed ones. They are offered as links instead — one gesture each,
         // nothing blocked, and the officer can work through them at printer speed.
-        window.open(batchUrl(batches[0]), '_blank', 'noopener');
-        renderBatches(batches);
+        window.open(batchUrl(batches[0], run), '_blank', 'noopener');
+        renderBatches(batches, run);
     }
 
-    function renderBatches(batches) {
+    function renderBatches(batches, run) {
         if (!batchBar) { return; }
         batchBar.innerHTML = '';
         if (!batches.length) { return; }
@@ -611,15 +705,21 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
             : 'Batch 1 of ' + batches.length + ' opened in a new tab (if your browser blocked it, use its link). Open the rest one at a time:';
         batchBar.appendChild(intro);
 
+        var versions = batches.filter(function (b) { return b.variant; }).length > 0
+            && batches.some(function (b) { return b.variant !== batches[0].variant; });
         batches.forEach(function (b, i) {
-            var a = document.createElement('a');
+            var a = document.createElement('a'),
+                n = b.ids.length;
             a.className = 'adm-btn adm-btn-ghost';
             a.target = '_blank';
             a.rel = 'noopener';
-            a.href = batchUrl(b);
-            a.textContent = batches.length === 1
-                ? 'Open the preview — ' + b.length + ' ' + plural(b.length)
-                : 'Batch ' + (i + 1) + ' — ' + b.length + ' ' + plural(b.length);
+            a.href = batchUrl(b, run);
+            // Name the version only when the run holds more than one.
+            a.textContent = (batches.length === 1
+                ? 'Open the preview — ' + n + ' ' + plural(n)
+                : 'Batch ' + (i + 1) + ' — ' + n + ' ' + plural(n))
+                + (versions && b.variant ? ' (' + (b.orders && b.orders.length ? b.orders.join(', ') + ': ' : '')
+                    + b.variant.charAt(0).toUpperCase() + b.variant.slice(1) + ')' : '');
             batchBar.appendChild(a);
         });
     }
@@ -637,7 +737,8 @@ html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4;
         if (refusal) { refusal.textContent = ''; }
 
         if (ids.length > CONFIRM_OVER && typeof window.orkConfirm === 'function') {
-            var n = Math.ceil(ids.length / CHUNK);
+            // planBatches(), not ids / CHUNK: a run with two versions splits sooner.
+            var n = planBatches(ids).length;
             window.orkConfirm(
                 'This opens a preview of ' + ids.length + ' ' + plural(ids.length) +
                 ' — one page each' +

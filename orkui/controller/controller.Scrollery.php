@@ -54,12 +54,12 @@ class Controller_Scrollery extends Controller
         // before that, so a long selection opens in windows of PRINT_CHUNK.
         $this->data['MaxRun']     = Scroll::MAX_PRINT_RUN;
         $this->data['PrintChunk'] = Scroll::PRINT_CHUNK;
-        $this->data['page_title'] = 'My Scrolls';
+        $this->data['page_title'] = 'Print My Scrolls';
         $this->template           = '../revised-frontend/Scrollery_mine.tpl';
     }
 
     /**
-     * "Print a new scroll" — an officer composes one certificate by hand.
+     * "Print a Scroll" — an officer composes one certificate by hand.
      *
      * Route is Scrollery/create/<park|kingdom>/<id>. Everything past the third
      * segment collapses into one string, so $action arrives as "park/123" and is
@@ -75,11 +75,31 @@ class Controller_Scrollery extends Controller
             exit;
         }
 
+        // &awards=N — the profile's Customize link: compose an existing award with the
+        // design controls only the composer has. The link names the body the
+        // certificate issues from; when the viewer cannot issue there but can for the
+        // award's other body, move to that one rather than refuse.
+        $fromAwardsId = (int) ($_GET['awards'] ?? 0);
+        if ($fromAwardsId > 0 && ($scopeId <= 0 || !$this->may_issue_for($viewerId, $scopeType, $scopeId))) {
+            $alt = $this->Scrollery->compose_scope_for_award($fromAwardsId, $viewerId);
+            if ($alt !== null) {
+                header('Location: ' . UIR . 'Scrollery/create/' . $alt['Type'] . '/' . $alt['Id'] . '&awards=' . $fromAwardsId);
+                exit;
+            }
+        }
+
         if ($scopeId <= 0 || !$this->may_issue_for($viewerId, $scopeType, $scopeId)) {
             $this->no_authorization('Scrollery/create/' . $scopeType . '/' . $scopeId);
             $this->template = '../revised-frontend/Scrollery_denied.tpl';
             return;
         }
+
+        // Null when the award is not this viewer's to print: the composer then opens
+        // blank with a note, never with the row's details.
+        $this->data['Prefill']        = $fromAwardsId > 0
+            ? $this->Scrollery->compose_prefill_for_award($fromAwardsId, $viewerId)
+            : null;
+        $this->data['PrefillRefused'] = $fromAwardsId > 0 && $this->data['Prefill'] === null;
 
         $scope = $this->Scrollery->scope_context($scopeType, $scopeId);
 
@@ -125,12 +145,12 @@ class Controller_Scrollery extends Controller
             static fn (string $u): bool => $u !== '',
             $this->Scrollery->heraldry_sources($scopeType, $scopeId, 0)
         );
-        $this->data['page_title'] = 'Print a new scroll';
+        $this->data['page_title'] = 'Print a Scroll';
         $this->template           = '../revised-frontend/Scrollery_create.tpl';
     }
 
     /**
-     * "Print bulk scrolls" — an event's or a date range's awards, in one pass.
+     * "Print Scrolls in Bulk" — an event's or a date range's awards, in one pass.
      *
      * Route is Scrollery/bulk/<park|kingdom>/<id>, with an optional event or date
      * range in the query string.
@@ -229,7 +249,7 @@ class Controller_Scrollery extends Controller
         $this->data['Excluded']   = $result['Excluded'];
         // Same switcher as create() — see the note there.
         $this->data['OtherScopes'] = $this->other_scopes($viewerId, $scopeType, $scopeId);
-        $this->data['page_title'] = 'Print bulk scrolls';
+        $this->data['page_title'] = 'Print Scrolls in Bulk';
         $this->template           = '../revised-frontend/Scrollery_bulk.tpl';
     }
 
@@ -457,9 +477,11 @@ class Controller_Scrollery extends Controller
      * re-reads the court, drops ids that are not this court's, and drops lines a peer
      * has since moved off Scrollery Print or cancelled.
      *
-     * AUTHORITY IS Model_Court::can_manage() ALONE — whoever may run the court may
-     * print its scrolls. That is a deliberate decision, not an omission: Scrollery's
-     * own may_issue_for() is not layered on top. Session only, no print token: the
+     * AUTHORITY IS Scrollery's one issuing rule, may_issue_for(), over the court's
+     * ISSUING scope (Model_Scrollery::may_issue_for_court): the kingdom for a Kingdom
+     * Court, even one held at a park, else the court's park. Managing the court is
+     * not enough — a host-park officer may run a Kingdom Court's planner, but its
+     * scrolls are headed in the kingdom's name. Session only, no print token: the
      * planner is a signed-in surface, and a court line has no awards_id for a token
      * to sign.
      *
@@ -482,12 +504,13 @@ class Controller_Scrollery extends Controller
 
         $this->load_model('Court');
         $court = $courtId > 0 ? $this->Court->get_court_detail($courtId) : null;
-        if (!is_array($court) || !$this->Court->can_manage($viewerId, $court['KingdomId'], $court['ParkId'])) {
+        if (!is_array($court) || !$this->Scrollery->may_issue_for_court($viewerId, $court)) {
             // One sentence for "no such court" and "not yours": telling the two apart
             // would confirm which court ids exist to someone who cannot run them.
             $this->deny(
                 'You do not have permission to print scrolls for that court. Printing a court\'s '
-                . 'scrolls is open to the officers who can manage the court.',
+                . 'scrolls is open to the officers of the body it issues from — the kingdom, '
+                . 'for a Kingdom Court.',
                 'Scrollery/court/' . $courtId
             );
             return;
@@ -497,7 +520,9 @@ class Controller_Scrollery extends Controller
 
         // &heraldry= as on render(): 'auto' (the default) is the court's own arms.
         $heraldry = $this->Scrollery->normalise_run_heraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
-        $run      = $this->Scrollery->scrolls_for_court_awards($courtId, $lineIds, $viewerId, $heraldry);
+        // &variant= — the options sheet's run-level Version, as on render().
+        $variant  = $this->requested_variant();
+        $run      = $this->Scrollery->scrolls_for_court_awards($courtId, $lineIds, $viewerId, $heraldry, $variant);
         $planner  = 'Court/detail/' . $courtId;
 
         if ($run['Scrolls'] === []) {
@@ -569,6 +594,7 @@ class Controller_Scrollery extends Controller
                 // Exactly this batch's lines, so a print of batch 2 logs batch 2.
                 'courtLines' => implode(',', array_map('intval', array_keys($batchLines))),
                 'heraldry'   => $heraldry,
+                'variant'    => $variant,
             ]),
             'Dropped'   => (int) $run['Dropped'],
             'MaxRun'    => Scroll::MAX_PRINT_RUN,
@@ -762,7 +788,9 @@ class Controller_Scrollery extends Controller
 
         // The composition's own parameters, minus the route and the page-only
         // switches, so the log endpoint can re-run exactly this composition. A
-        // composed certificate has no award row, so the log records it without one.
+        // composed certificate has no award row, so the log records it without one —
+        // unless it carries a Customize link's &awardsId=, which log_compose_print()
+        // re-verifies before recording.
         $composeParams = [];
         foreach ($_GET as $key => $value) {
             if (is_string($key) && is_scalar($value)

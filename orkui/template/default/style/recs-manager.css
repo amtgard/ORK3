@@ -75,6 +75,10 @@ html[data-theme="dark"] .rm-modal-overlay {
 .rm-search::placeholder { color: var(--rm-muted); }
 .rm-fcheck { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--rm-fg); cursor: pointer; }
 .rm-fcheck input { margin: 0; }
+/* Status view (Open / Granted / Dismissed / All closed); the label only carries the tip. */
+.rm-fstatus { display: inline-flex; }
+/* Eligibility is ignored in the closed views, so it reads as off there. */
+.rm-fsel:disabled { opacity: 0.55; cursor: not-allowed; }
 /* Export button — right-aligned in the filter bar. */
 .rm-fbtn {
     margin-left: auto;
@@ -296,6 +300,24 @@ html[data-theme="dark"] .rm-passlocal-tip, html[data-theme="dark"] .rm-snooze-ti
 }
 .rm-courtbadge:hover { opacity: 0.9; }
 .rm-courtmore { font-weight: 700; }
+/* Scroll/regalia progress of the rec's court line (rmCourtTracking): worst state
+   wins. Ringed so each hue reads against the steel-blue badge in both themes. */
+.rm-trk-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 5px;
+    border-radius: 50%;
+    vertical-align: middle;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+}
+.rm-trk-pending { background: #f6ad55; }
+.rm-trk-working { background: #faf089; }
+.rm-trk-done    { background: #68d391; }
+html[data-theme="dark"] .rm-trk-dot { box-shadow: 0 0 0 1.5px rgba(16, 22, 29, 0.7); }
+html[data-theme="dark"] .rm-trk-pending { background: #ed8936; }
+html[data-theme="dark"] .rm-trk-working { background: #ecc94b; }
+html[data-theme="dark"] .rm-trk-done    { background: #48bb78; }
 
 /* Action buttons */
 .rm-act {
@@ -311,6 +333,9 @@ html[data-theme="dark"] .rm-passlocal-tip, html[data-theme="dark"] .rm-snooze-ti
 }
 .rm-act:hover { border-color: var(--rm-accent); background: var(--rm-bg2); }
 .rm-act-dismiss:hover { border-color: var(--rm-danger); }
+/* Granted rows' profile / scroll links wear the button look; two classes beat the
+   app's global link colour. */
+.rm-col-act a.rm-act { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: var(--rm-fg); }
 
 .rm-loading { text-align:center; padding:14px; color:var(--rm-muted); font-size:13px; }
 
@@ -459,6 +484,19 @@ html[data-theme="dark"] .rm-bulkbar { background: #23557f; border-color: #16344d
 .rm-toast-out { opacity: 0; }
 html[data-theme="dark"] .rm-toast { background: #2a2f37; }
 html[data-theme="dark"] .rm-toast-err { background: #3a2424; }
+/* A toast's action link (Print scroll after a grant). The region is click-through
+   (pointer-events:none), so the link opts back in. The toast is dark in both themes,
+   hence one light colour; !important beats the global dark `a` tint. */
+.rm-toast-link,
+.rm-toast-link:link,
+.rm-toast-link:visited {
+    pointer-events: auto;
+    color: #bee3f8 !important;
+    font-weight: 600;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+.rm-toast-link:hover { color: #fff !important; }
 
 .rm-error {
     padding: 16px;
@@ -578,6 +616,20 @@ html[data-theme="dark"] .rm-modal-title {
 }
 .rm-btn-primary:hover { opacity: 0.92; }
 .rm-btn-primary:disabled { opacity: 0.55; cursor: default; }
+/* Award Info modal (_award_info_modal.tpl, $aiShell = 'rm'): this page's modal shell
+   around the shared .pn-ai-* body (award-info.css). Wider than the form modals, and
+   the body scrolls so the actions stay on screen. */
+.rm-modal.pn-ai-box { max-width: 560px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+.rm-ai-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.rm-ai-close { flex: 0 0 auto; width: 32px; height: 32px; border: 0; border-radius: 4px; background: transparent; color: var(--rm-muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.rm-ai-close:hover { background: var(--rm-bg2); color: var(--rm-fg); }
+.rm-ai-body { overflow-y: auto; min-height: 0; }
+.rm-ai-overlay .rm-modal-actions { margin-top: 16px; flex-wrap: wrap; }
+/* The View/Print links are <a> buttons: beat the global link colour and underline
+   (default.theme tints links in dark mode). */
+.rm-ai-overlay a.rm-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.rm-ai-overlay a.rm-btn-ghost, .rm-ai-overlay a.rm-btn-ghost:hover { color: var(--rm-fg) !important; }
+.rm-ai-overlay a.rm-btn-primary, .rm-ai-overlay a.rm-btn-primary:hover { color: #fff !important; }
 /* Grant Award modal fields */
 .rm-field { margin-bottom: 12px; }
 .rm-field > label { display: block; font-size: 12px; font-weight: 600; color: var(--rm-fg); margin-bottom: 4px; }
@@ -706,6 +758,7 @@ html[data-theme="dark"] .rm-rank-pill.rm-rank-held { background: #38a169; border
 
   .rm-filterbar { flex-wrap: wrap; gap: 8px; }
   .rm-filterbar .rm-fsel, .rm-filterbar .rm-search { flex: 1 1 100%; min-height: 44px; }
+  .rm-filterbar .rm-fstatus { flex: 1 1 100%; }
   .rm-bulkbar { position: fixed; left: 0; right: 0; bottom: 0; border-radius: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
   .rm-bulkbar .rm-bulk { min-height: 44px; }
 

@@ -124,6 +124,42 @@ if ($scrollery_heraldry_choice && $scrollery_heraldry !== Scroll::HERALDRY_AUTO)
 }
 
 /*
+ * The run's Version — &variant=, offered beside the arms (a reprint or court run,
+ * never compose(), whose variant was chosen in the composer) and only when every
+ * certificate on the page is the same multi-plate order (Owl, Battle): render() and
+ * court() apply one variant to the whole URL, and BuildScroll() ignores it for any
+ * order that does not list it, so a mixed page has nothing coherent to offer.
+ */
+$scrollery_variants    = [];
+$scrollery_variant_now = '';
+if ($scrollery_heraldry_choice && !empty($Scrolls)) {
+    $scrollery_orders_on_page = array_values(array_unique(array_map(
+        static fn ($sc): string => (string) ($sc['order'] ?? ''),
+        $Scrolls
+    )));
+    $scrollery_order_def = count($scrollery_orders_on_page) === 1
+        ? (Scroll::Orders()[$scrollery_orders_on_page[0]] ?? null)
+        : null;
+    if (is_array($scrollery_order_def) && count((array) ($scrollery_order_def['variants'] ?? [])) > 1) {
+        $scrollery_variants    = array_values(array_map('strval', $scrollery_order_def['variants']));
+        $scrollery_variant_now = (string) (reset($Scrolls)['variant'] ?? $scrollery_variants[0]);
+    }
+}
+
+/*
+ * The uploaded signature's run key (scrollery-sig-upload.js): every tab of one
+ * batched run shares it, so a signature uploaded in batch 1 is restored in the rest.
+ * &sigrun= is minted by the bulk and `mine` pages for each run they open; a court
+ * run is keyed by its court, whose batch links are built server-side.
+ */
+$scrollery_sig_run = '';
+if (isset($_GET['sigrun']) && preg_match('/^[a-z0-9]{6,40}$/i', (string) $_GET['sigrun'])) {
+    $scrollery_sig_run = (string) $_GET['sigrun'];
+} elseif (is_array($PrintLog ?? null) && ($PrintLog['Kind'] ?? '') === 'court' && (int) ($PrintLog['Params']['court'] ?? 0) > 0) {
+    $scrollery_sig_run = 'court' . (int) $PrintLog['Params']['court'];
+}
+
+/*
  * &configure=1 — open on the options sheet. The Court Planner's print tab arrives this
  * way instead of with &print=1, and an arms reload sets it so the sheet comes back.
  * Closing the sheet takes it off the URL again (replaceState), so a copied link or a
@@ -195,6 +231,7 @@ if ($scrollery_ref !== ''
       data-sc-heading="<?= scroll_e($scrollery_heading) ?>"
       data-scroll-sig="<?= scroll_e($scrollery_sig) ?>"
       <?php if ($scrollery_configure): ?>data-sc-configure="1"<?php endif; ?>
+      <?php if ($scrollery_sig_run !== ''): ?>data-sc-sig-run="<?= scroll_e($scrollery_sig_run) ?>"<?php endif; ?>
       <?php if (!$scrollery_lines): ?>data-scroll-lines="0"<?php endif; ?>
       <?php if ($scrollery_trim): ?>data-scroll-trim="1"<?php endif; ?>
       <?php if ($scrollery_up): ?>data-scroll-up="<?= $scrollery_up ?>"<?php endif; ?>>
@@ -329,7 +366,11 @@ foreach ($Scrolls as $scrollery_scan) {
                 <input type="file" id="sc-sigfile" accept="image/png" hidden>
                 <button type="button" class="sc-btn" id="sc-sigfile-pick">Upload Signature</button>
                 <button type="button" class="sc-btn" id="sc-sigfile-remove" hidden>Remove</button>
+                <?php if ($scrollery_sig_run !== ''): ?>
+                <p class="sc-opt-help">Use a PNG with a transparent background. It replaces the name on the signature line of <?= count($Scrolls) === 1 ? 'this scroll' : 'all ' . (int) count($Scrolls) . ' scrolls' ?> and is sized to fit. It is never uploaded: it stays in this browser for up to two hours so every batch of this run picks it up, then it is discarded. Remove clears it for the whole run.</p>
+                <?php else: ?>
                 <p class="sc-opt-help">Use a PNG with a transparent background. It replaces the name on the signature line of <?= count($Scrolls) === 1 ? 'this scroll' : 'all ' . (int) count($Scrolls) . ' scrolls' ?> and is sized to fit. It is not uploaded or permanently stored: it stays in this browser tab, is kept if you change the heraldry, and is discarded when you leave or reload the page.</p>
+                <?php endif; ?>
                 <p class="sc-opt-help" id="sc-sigfile-status" role="status" hidden></p>
             </div>
             <?php /*
@@ -399,6 +440,20 @@ foreach ($Scrolls as $scrollery_scan) {
                 <?php endif; ?>
             </div>
             <?php endif; ?>
+            <?php if ($scrollery_variants !== []): ?>
+            <?php /* The run's Version — &variant=. A different plate is different artwork,
+                     drawn server-side, so like the arms a change reloads the page (buttons,
+                     not a select, for the same reason). See $scrollery_variants above. */ ?>
+            <div class="sc-opt" role="group" aria-labelledby="sc-variant-label" aria-describedby="sc-variant-help">
+                <span class="sc-opt-label" id="sc-variant-label">Version</span>
+                <div class="sc-seg" id="sc-variant">
+                    <?php foreach ($scrollery_variants as $scrollery_vkey): ?>
+                    <button type="button" class="sc-seg-btn" data-variant="<?= scroll_e($scrollery_vkey) ?>" aria-pressed="<?= $scrollery_vkey === $scrollery_variant_now ? 'true' : 'false' ?>"><?= scroll_e(ucfirst($scrollery_vkey)) ?></button>
+                    <?php endforeach; ?>
+                </div>
+                <p class="sc-opt-help" id="sc-variant-help">Which plate of this order <?= count($Scrolls) === 1 ? 'this scroll prints on' : 'these scrolls print on' ?>. Changing this reloads the page.</p>
+            </div>
+            <?php endif; ?>
         </div>
         <div class="sc-sheet-foot">
             <button type="button" class="sc-btn" data-sc-sheet-close>Done</button>
@@ -441,7 +496,7 @@ foreach ($Scrolls as $scrollery_scan) {
 </script>
 <?php if (!empty($Dropped)): ?>
 <p class="sc-overflow-notice" role="status">
-    Only the first <?= (int) ($MaxRun ?? 0) ?> certificates of this run are shown.
+    Only the first <?= (int) ($MaxRun ?? 0) ?> scrolls of this run are shown.
     <?= (int) $Dropped ?> more were left out — print them in a second run.
 </p>
 <?php endif; ?>
@@ -514,6 +569,9 @@ foreach ($Scrolls as $scrollery_scan) {
     dialog, not on the paper.
 */ ?>
 <p class="sc-clip-notice" id="sc-clip-notice" role="status" hidden></p>
+<?php /* Filled by scrollery-sig-upload.js when a batched run's signature could not be
+         carried into this tab. Screen-only chrome, like the notices above. */ ?>
+<p class="sc-overflow-notice" id="sc-sig-run-note" role="status" hidden></p>
 <?php if ($scrollery_trim): ?>
 <?php /*
     Crop marks. Four corners, each drawing two hairlines with its own
@@ -1061,34 +1119,42 @@ foreach ($Scrolls as $scrollery_scan) {
         }
     } catch (e) { /* private mode: Back falls back to the server's choice */ }
 
-    var arms = document.getElementById('sc-arms');
-    if (arms) {
-        arms.addEventListener('click', function (e) {
-            var btn = e.target.closest ? e.target.closest('[data-heraldry]') : null;
-            if (!btn || btn.getAttribute('aria-pressed') === 'true' || arms.getAttribute('aria-busy') === 'true') { return; }
-            var key = btn.getAttribute('data-heraldry');
+    /* The two server-drawn choices — the arms (&heraldry=) and the Version
+       (&variant=) — share one reload path. `fallback` is the value an absent
+       parameter already means, so choosing it clears the parameter. */
+    function bindReloadGroup(group, attr, param, fallback, noun) {
+        if (!group) { return; }
+        group.addEventListener('click', function (e) {
+            var btn = e.target.closest ? e.target.closest('[' + attr + ']') : null;
+            if (!btn || btn.getAttribute('aria-pressed') === 'true' || group.getAttribute('aria-busy') === 'true') { return; }
+            var key = btn.getAttribute(attr);
+            var go = function () { reloadWith(group, attr, btn, param, key === fallback ? null : key); };
 
             /* An uploaded signature lives only in this page. It is carried across the
                reload in sessionStorage (scrollery-sig-upload.js); when that cannot be
                stored — quota, private mode — ask before throwing it away. */
             var Up = window.ScrolleryUploadedSig;
             if (Up && Up.has() && !Up.keepForReload()) {
-                var msg = 'Changing the heraldry reloads the page, and your uploaded signature could not be kept. You will need to upload it again.';
+                var msg = 'Changing the ' + noun + ' reloads the page, and your uploaded signature could not be kept. You will need to upload it again.';
                 if (typeof window.orkConfirm === 'function') {
-                    window.orkConfirm(msg, function () { reloadWith(btn, key); }, { title: 'Discard the signature?', okLabel: 'Change heraldry' });
+                    window.orkConfirm(msg, go, { title: 'Discard the signature?', okLabel: 'Change ' + noun });
                 } else {
-                    askInline(msg, function () { reloadWith(btn, key); });
+                    askInline(group, attr, noun, msg, go);
                 }
                 return;
             }
-            reloadWith(btn, key);
+            go();
         });
     }
 
+    bindReloadGroup(document.getElementById('sc-arms'), 'data-heraldry', 'heraldry', 'auto', 'heraldry');
+    /* No fallback for the Version: every plate is named on the URL, because an absent
+       &variant= is the order's FIRST plate only by BuildScroll()'s fallback. */
+    bindReloadGroup(document.getElementById('sc-variant'), 'data-variant', 'variant', null, 'version');
+
     /* This page loads no revised.js, so window.orkConfirm is normally absent; the
-       fallback is a note in the Heraldry group with the two choices, never a native
-       dialog. */
-    function askInline(message, onYes) {
+       fallback is a note in the group with the two choices, never a native dialog. */
+    function askInline(arms, attr, noun, message, onYes) {
         var group = arms.parentNode;
         var old = group.querySelector('.sc-arms-ask');
         if (old) { old.remove(); }
@@ -1101,7 +1167,7 @@ foreach ($Scrolls as $scrollery_scan) {
         var yes = document.createElement('button');
         yes.type = 'button';
         yes.className = 'sc-btn sc-btn-primary';
-        yes.textContent = 'Change heraldry';
+        yes.textContent = 'Change ' + noun;
         var no = document.createElement('button');
         no.type = 'button';
         no.className = 'sc-btn';
@@ -1120,8 +1186,8 @@ foreach ($Scrolls as $scrollery_scan) {
         no.focus();
     }
 
-    function reloadWith(btn, key) {
-        var pressed = arms.querySelectorAll('[data-heraldry]');
+    function reloadWith(arms, attr, btn, param, value) {
+        var pressed = arms.querySelectorAll('[' + attr + ']');
         for (var i = 0; i < pressed.length; i++) {
             pressed[i].setAttribute('aria-pressed', pressed[i] === btn ? 'true' : 'false');
         }
@@ -1130,7 +1196,7 @@ foreach ($Scrolls as $scrollery_scan) {
         try { if (back) { window.sessionStorage.setItem(BACK_KEY, back.href); } } catch (err) { /* see above */ }
 
         var next = withParam(window.location.search, 'print', null);
-        next = withParam(next, 'heraldry', key === 'auto' ? null : key);
+        next = withParam(next, param, value);
         next = withParam(next, 'configure', '1');
         window.location.replace(window.location.pathname + next + window.location.hash);
     }

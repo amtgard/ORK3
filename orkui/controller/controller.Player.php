@@ -465,12 +465,16 @@ class Controller_Player extends Controller
             || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
         $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
         // CanPrintScroll arrives from Model_Player knowing only the row (art, not
-        // revoked). The View/Print buttons it drives are shown under canManageAwards
-        // — park CREATE at the recipient's HOME park — but the render route gates on
-        // where each award was GIVEN, so narrow it to what this viewer can print.
-        if ($this->data['canManageAwards'] && is_array($this->data['Details']['Awards'] ?? null)) {
+        // revoked). The profile's View/Print buttons show on that flag alone, for any
+        // viewer, so narrow it to the render route's own gate (Scroll::PrintPermission:
+        // where each award was GIVEN, or the recipient themselves). Runs for every
+        // viewer: an anonymous one is cleared to false without a query.
+        if (is_array($this->data['Details']['Awards'] ?? null)) {
             $this->load_model('Scrollery');
             $this->data['Details']['Awards'] = $this->Scrollery->flag_viewer_printable_awards($this->data['Details']['Awards'], $uid);
+            // The Customize link (Scrollery's composer, prefilled from the award) needs
+            // issuing rights as well, so it is stamped separately and only where both hold.
+            $this->data['Details']['Awards'] = $this->Scrollery->flag_viewer_customizable_awards($this->data['Details']['Awards'], $uid);
         }
         $this->data['CanMonarchyOnlyRec'] = $uid > 0 && $this->Player->monarchy_only_level($uid, $playerKingdomId, $playerParkId) > 0;
         $this->data['ShowRecsTab']          = $this->Player->profile_recs_visible($uid, $playerKingdomId, $playerParkId);

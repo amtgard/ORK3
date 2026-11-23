@@ -648,7 +648,7 @@
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
-				<?php if (!empty($CanManagePark) || !empty($CanManageCourt)): ?>
+				<?php if (!empty($CanManagePark) || !empty($CanManageCourt) || !empty($CanIssueScrolls)): ?>
 				<li data-pktab="admin">
 					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin Tasks</span>
 				</li>
@@ -1315,10 +1315,11 @@
 			</div>
 
 			<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
-			<?php if (!empty($CanAdminPark) || !empty($CanManageCourt)): ?>
+			<?php if (!empty($CanAdminPark) || !empty($CanManageCourt) || !empty($CanIssueScrolls)): ?>
 			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
-				<?php if (!empty($CanAdminPark)): ?>
+				<?php if (!empty($CanAdminPark) || !empty($CanIssueScrolls)): ?>
 				<div class="kn-report-cols">
+					<?php if (!empty($CanAdminPark)): ?>
 					<div class="kn-report-group">
 						<h5><i class="fas fa-users-cog"></i> Players</h5>
 						<ul>
@@ -1334,21 +1335,27 @@
 							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
 						</ul>
 					</div>
-					<?php /* Scrollery. Inside the same admin-gated block as the groups above, so
-					         it inherits that gate; both routes re-check authority server-side. */ ?>
+					<?php endif; ?>
+					<?php /* Scrollery. Gated on CanIssueScrolls — Scrollery's own AUTH_EDIT
+					         issuing check, the one create/bulk enforce — not CanAdminPark's
+					         AUTH_CREATE, so an officer who may issue always sees the links. */ ?>
+					<?php if (!empty($CanIssueScrolls)): ?>
 					<div class="kn-report-group">
-						<h5><i class="fas fa-scroll"></i> Certificates</h5>
+						<h5><i class="fas fa-scroll"></i> Scrolls</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Scrollery/create/park/<?= $park_id ?>">Print a Scroll</a></li>
-							<li><a href="<?= UIR ?>Scrollery/bulk/park/<?= $park_id ?>">Print Bulk Scrolls</a></li>
+							<li><a href="<?= UIR ?>Scrollery/bulk/park/<?= $park_id ?>">Print Scrolls in Bulk</a></li>
 						</ul>
 					</div>
+					<?php endif; ?>
+					<?php if (!empty($CanAdminPark)): ?>
 					<div class="kn-report-group">
 						<h5><i class="fas fa-poll"></i> Surveys</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Survey/index/Park/<?= $park_id ?>">Manage Surveys</a></li>
 						</ul>
 					</div>
+					<?php endif; ?>
 				</div>
 				<?php endif; ?>
 
@@ -1776,6 +1783,10 @@
 					<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
 					<?php endif; ?>
 					<button class="kn-rec-filter-btn" data-filter="snoozed">Snoozed</button>
+					<?php if (!empty($CanAdminPark)) { /* officers only; the partial also hides itself when no ladder recs */
+						$rkfRecs = $AwardRecommendations; $rkfTable = 'pk-rec-table'; $rkfCol = 2; $rkfManage = '.pk-manage-recs';
+						include __DIR__ . '/_recs_rank_filter.tpl';
+					} ?>
 					<span class="kn-rec-filter-info">
 						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 						<div class="kn-rec-filter-popover">
@@ -1826,7 +1837,7 @@
 							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?><?= ork_monarchy_only_badge((int)($rec['MonarchyOnlyLevel'] ?? 0)) ?></td>
-							<td style="white-space:nowrap" data-order="<?= max(0, (int)$rec['Rank']) ?>">
+							<td style="white-space:nowrap" data-order="<?= max(0, (int)$rec['Rank']) ?>" data-ladder="<?= (array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? '1' : '0' ?>" data-master="<?= !empty($rec['IsMaster']) ? '1' : '0' ?>">
 								<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 								<?php if (!empty($rec['AlreadyHas'])): ?>
 								<span class="pk-rec-has-tip"
@@ -2033,6 +2044,10 @@ var PkBannerConfig = {
 			<div class="pk-award-success" id="pk-award-success" style="display:none">
 				<i class="fas fa-check-circle"></i> Award saved!
 			</div>
+			<?php /* Not on the success banner's timer: the court note and the print run stay
+			         put while the modal is open (revised.js pkDoSave / pkNotePrintable). */ ?>
+			<div class="ork-award-court-note" id="pk-award-court-note" role="status" style="display:none"></div>
+			<div class="ork-award-print-run" id="pk-award-print-run" style="display:none"></div>
 			<div class="pk-form-error" id="pk-award-error"></div>
 
 			<!-- Award Type Toggle -->
@@ -2161,7 +2176,16 @@ var PkBannerConfig = {
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn-ghost" id="pk-award-cancel">Close</button>
-			<div style="display:flex;gap:8px">
+			<div style="display:flex;gap:8px;align-items:center">
+				<?php /* Scrollery: the last printable award granted in this sitting, as on the
+				         profile's Add Award modal. Shown only when the server said THIS officer
+				         may print it (X-Ork-Printable), so it is never a dead link. */ ?>
+				<a href="#" id="pk-award-print-link" class="pn-award-print-icon" style="display:none"
+				   target="_blank" rel="noopener"
+				   data-tip="Print the scroll for the award you just granted"
+				   aria-label="Print the scroll for the award you just granted">
+					<i class="fas fa-print"></i>
+				</a>
 				<button class="pk-btn pk-btn-secondary" id="pk-award-save-same" disabled>
 					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
 				</button>
@@ -3906,3 +3930,5 @@ window.OrkBcCfg = {
 </script>
 <?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>
+<?php /* Award Info modal for the closed-recs panel's granted rows ((i) button). */ ?>
+<?php include __DIR__ . '/_award_info_modal.tpl'; ?>

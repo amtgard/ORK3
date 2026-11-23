@@ -40,6 +40,29 @@ class Controller_CourtAjax extends Controller
         return [$uid, $court];
     }
 
+    // Refusal copy for a viewer who manages the court but cannot issue from it.
+    private function notIssuerMessage(array $court, $action)
+    {
+        return !empty($court['IsKingdomCourt'])
+            ? 'This is a Kingdom Court: only kingdom officers can ' . $action . '.'
+            : 'Not authorized.';
+    }
+
+    // Scrollery's issuing rule over the court's issuing scope (print preflight and
+    // print completion). Managing the court is not enough for a Kingdom Court.
+    private function requireScrolleryIssuer($uid, array $court)
+    {
+        $this->load_model('Scrollery');
+        if (!$this->Scrollery->may_issue_for_court($uid, $court)) {
+            $this->jsonOut([
+                'status' => 3,
+                'error'  => !empty($court['IsKingdomCourt'])
+                    ? 'Kingdom Court scrolls are printed by kingdom officers.'
+                    : 'Not authorized.',
+            ]);
+        }
+    }
+
     /**
      * A court date is either empty ("undated") or a real calendar date.
      *
@@ -232,11 +255,15 @@ class Controller_CourtAjax extends Controller
         // they have no access to open. A zero clears the recorder, which the
         // publish-time default re-fills, so only a non-zero id is checked.
         $recorder = (int)($fields['RecorderMundaneId'] ?? 0);
-        if ($recorder > 0 && !$this->Court->can_manage($recorder, $court['KingdomId'], $court['ParkId'])) {
+        // Over the issuing scope: recording is granting, which a Kingdom Court's
+        // host-park officers cannot do (grant_award / finalize_court).
+        if ($recorder > 0 && !$this->Court->can_issue_for_court($recorder, $court)) {
             $this->jsonOut([
                 'status' => 1,
                 'error'  => 'That player cannot be the recorder for this court. The recorder has to be an officer '
-                    . 'who can manage courts here — usually the Prime Minister, or a Monarch or Regent. '
+                    . (!empty($court['IsKingdomCourt'])
+                        ? 'of the kingdom, since this is a Kingdom Court — usually the kingdom Prime Minister, or the Monarch or Regent. '
+                        : 'who can manage courts here — usually the Prime Minister, or a Monarch or Regent. ')
                     . 'Pick one of those officers, or ask your Prime Minister to record this court.',
             ]);
         }
@@ -766,8 +793,10 @@ class Controller_CourtAjax extends Controller
         }
 
         $uid = $this->requireLogin();
-        if (!$this->Court->can_manage($uid, $ca['KingdomId'], $ca['ParkId'])) {
-            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        // Over the ISSUING scope: a Kingdom Court held at a park grants in the
+        // kingdom's name, so its host-park officers may not grant there.
+        if (!$this->Court->can_issue_for_court($uid, $ca)) {
+            $this->jsonOut(['status' => 3, 'error' => $this->notIssuerMessage($ca, 'grant its awards')]);
         }
 
         if ($ca['CourtStatus'] !== 'published') {
@@ -863,6 +892,10 @@ class Controller_CourtAjax extends Controller
     {
         $court_id = (int)($_POST['CourtId'] ?? 0);
         [$uid, $court] = $this->requireCourtAuth($court_id);
+        // Finalize writes the permanent record in the issuing body's name.
+        if (!$this->Court->can_issue_for_court($uid, $court)) {
+            $this->jsonOut(['status' => 3, 'error' => $this->notIssuerMessage($court, 'finalize it')]);
+        }
 
         if ($court['Status'] !== 'published') {
             $this->jsonOut(['status' => 1, 'error' => 'Court must be published to finalize.']);
@@ -1011,6 +1044,10 @@ class Controller_CourtAjax extends Controller
     {
         $court_id = (int)($_POST['CourtId'] ?? 0);
         [$uid, $court] = $this->requireCourtAuth($court_id);
+        // Batch staging is granting, so it takes grant_award's issuing rule.
+        if (!$this->Court->can_issue_for_court($uid, $court)) {
+            $this->jsonOut(['status' => 3, 'error' => $this->notIssuerMessage($court, 'record its grants')]);
+        }
 
         if ($court['Status'] !== 'published') {
             $this->jsonOut(['status' => 1, 'error' => 'Court must be published to record grants.']);
@@ -1258,7 +1295,8 @@ class Controller_CourtAjax extends Controller
 
     // -----------------------------------------------------------------------
     // complete_printed_scrolls
-    // POST: CourtId, Lines (JSON: [{CourtAwardId, RowVersion}, ...])
+    // POST: CourtId, Lines (JSON: [{CourtAwardId, RowVersion}, ...]),
+    //       RunStart (scrollery_print_plan's stamp), DryRun (optional: count only)
     // -----------------------------------------------------------------------
     public function complete_printed_scrolls($p = null)
     {
@@ -1267,14 +1305,46 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid court.']);
         }
 
-        $this->requireCourtAuth($court_id);
+        [$uid, $court] = $this->requireCourtAuth($court_id);
+        $this->requireScrolleryIssuer($uid, $court);
 
         $lines = json_decode((string)($_POST['Lines'] ?? ''), true);
         if (!is_array($lines)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid lines.']);
         }
 
-        $this->jsonOut($this->Court->complete_printed_scrolls($court_id, $lines));
+        // Only lines the print log shows printed since the run's preflight complete:
+        // the bar opens before anything has printed, and an unprinted line must not
+        // be marked done.
+        $this->load_model('Scrollery');
+        $runStart = $this->Scrollery->valid_print_run_stamp((string)($_POST['RunStart'] ?? ''));
+        if ($runStart === '') {
+            $this->jsonOut(['status' => 1, 'error' => 'This print run has no start time. Print the scrolls again.']);
+        }
+        $ids = [];
+        foreach ($lines as $line) {
+            if (is_array($line) && (int)($line['CourtAwardId'] ?? 0) > 0) {
+                $ids[] = (int)$line['CourtAwardId'];
+            }
+        }
+        $printed    = $this->Scrollery->court_lines_printed_since($ids, $runStart, $court_id);
+        $notPrinted = array_values(array_diff(array_unique($ids), $printed));
+
+        // DryRun: the bar's "K of N printed" poll — the same gate and the same
+        // filter Yes will apply, with nothing written.
+        if (!empty($_POST['DryRun'])) {
+            $this->jsonOut(['status' => 0, 'Printed' => $printed, 'NotPrinted' => $notPrinted]);
+        }
+
+        $printedSet = array_flip($printed);
+        $lines = array_values(array_filter($lines, static function ($line) use ($printedSet) {
+            return is_array($line) && isset($printedSet[(int)($line['CourtAwardId'] ?? 0)]);
+        }));
+        $result = $lines === []
+            ? ['status' => 0, 'Completed' => [], 'Stale' => []]
+            : $this->Court->complete_printed_scrolls($court_id, $lines);
+        $result['NotPrinted'] = $notPrinted;
+        $this->jsonOut($result);
     }
 
     // -----------------------------------------------------------------------
@@ -1298,9 +1368,10 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid court.']);
         }
 
-        [$uid] = $this->requireCourtAuth($court_id);
+        [$uid, $court] = $this->requireCourtAuth($court_id);
+        // The same gate as the Scrollery/court print route this preflight feeds.
+        $this->requireScrolleryIssuer($uid, $court);
 
-        $this->load_model('Scrollery');
         $run = $this->Scrollery->scrolls_for_court_awards($court_id, [], $uid);
 
         $printable = [];
@@ -1326,6 +1397,9 @@ class Controller_CourtAjax extends Controller
             'Printable' => $printable,
             'Skipped'   => $skipped,
             'Dropped'   => (int)$run['Dropped'],
+            // Captured here, before the print tab exists, and handed back to
+            // complete_printed_scrolls: only lines printed since then complete.
+            'RunStart'  => $this->Scrollery->print_run_stamp(),
         ]);
     }
 

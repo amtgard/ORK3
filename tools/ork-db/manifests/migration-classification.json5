@@ -125,6 +125,8 @@
     "2026-11-16-event-schedule-batch-tokens.sql": { "class": "S", "render": "full", "notes": "Request tokens for schedule batches and copies, so a retried request applies once; CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-11-22-recommendation-resolution.sql": { "class": "S", "render": "full", "notes": "ork_recommendations.resolution ENUM granted|dismissed, NULL = live; how a closed rec was closed; ADD COLUMN IF NOT EXISTS, DDL only, idempotent" },
     "2026-11-22-recommendation-resolution-backfill.sql": { "class": "PB", "render": "skip", "notes": "Classifies historic closed recs as granted (court-linked or a matching held award) or dismissed; only touches resolution IS NULL, re-runnable" },
+    "2026-11-23-recommendation-granted-award.sql": { "class": "S", "render": "full", "notes": "ork_recommendations.granted_awards_id INT NOT NULL DEFAULT 0 + index: the award a granted rec was granted as; ADD COLUMN/INDEX IF NOT EXISTS, DDL only, idempotent" },
+    "2026-11-23-recommendation-granted-award-backfill.sql": { "class": "PB", "render": "skip", "notes": "Ties historic granted recs to their backing award (court line, else the backing_award_id rule); only touches granted rows still at 0, re-runnable" },
     "2026-11-15-online-attendance.sql": { "class": "S+RC", "render": "full", "notes": "Online flag on ork_attendance/ork_attendance_link plus per-kingdom CountOnlineAttendance config seed; idempotent" }
   }
 }

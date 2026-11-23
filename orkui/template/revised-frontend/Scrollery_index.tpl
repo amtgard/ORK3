@@ -79,7 +79,7 @@ html[data-theme="dark"] .sc-door h2 { color: var(--ork-text); background: none;
              The exclusions are named because the alternative is a knight looking for
              a Print button that policy removed and concluding the tool is broken. */ ?>
     <div class="rp-context sc-lede">
-        Print award certificates straight from the record — the recipient, rank, date,
+        Print award scrolls straight from the record — the recipient, rank, date,
         giver and issuing park all come from the award itself, so nothing is typed twice.
         Scrollery prints the <strong>ladder orders</strong> — Battle, Crown, Dragon, Flame,
         Garber, Griffin, Hydra, Jovius, Lion, Mask, Owl, Rose, Smith, Warrior, Zodiac and
@@ -87,7 +87,7 @@ html[data-theme="dark"] .sc-door h2 { color: var(--ork-text); background: none;
         <strong>Custom Title</strong>, which take a composed scroll you design here.
         Nothing else prints. Knighthoods, masterhoods, paragons, associate titles and every
         noble title are deliberately left out: those are documents for a scribe, not a
-        generated certificate. Officer positions are jobs somebody held rather than honours
+        generated scroll. Officer positions are jobs somebody held rather than honours
         they were given, so they are out too. An award with no Print button is one of those,
         not a fault.
     </div>
@@ -95,18 +95,18 @@ html[data-theme="dark"] .sc-door h2 { color: var(--ork-text); background: none;
     <div class="sc-doors">
         <a class="rp-filter-card sc-door" href="<?= UIR ?>Scrollery/mine">
             <div class="sc-door-icon"><i class="fa-solid fa-scroll"></i></div>
-            <h2>Reprint my scroll</h2>
-            <p>Print a certificate for any award on your own record.</p>
-            <span class="adm-btn adm-btn-primary">My scrolls</span>
+            <h2>Print My Scrolls</h2>
+            <p>Print a scroll for any award on your own record.</p>
+            <span class="adm-btn adm-btn-primary">My Scrolls</span>
         </a>
 
         <?php if ($isOfficer): ?>
             <?php
             $officerDoors = [
-                ['create', 'fa-feather-pointed', 'Print a new scroll',
-                    'Print one certificate while granting an award.', 'New scroll'],
-                ['bulk', 'fa-layer-group', 'Print bulk scrolls',
-                    'Print every certificate for an event or a date range in one pass.', 'Bulk print'],
+                ['create', 'fa-feather-pointed', 'Print a Scroll',
+                    'Compose and print one scroll while granting an award.', 'New Scroll'],
+                ['bulk', 'fa-layer-group', 'Print Scrolls in Bulk',
+                    'Print every scroll for an event or a date range in one pass.', 'Bulk Print'],
             ];
             foreach ($officerDoors as [$route, $icon, $heading, $blurb, $cta]):
                 ?>

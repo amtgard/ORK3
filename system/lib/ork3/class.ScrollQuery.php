@@ -569,6 +569,61 @@ class ScrollQuery extends Ork3
     }
 
     /**
+     * Active principalities beneath the given kingdoms, at any depth, as kingdom
+     * scope candidates: Authorization::HasAuthority() lets kingdom authority flow
+     * DOWN the parent_kingdom_id chain, so a parent-kingdom officer can issue for a
+     * principality whose authorization rows never name them.
+     *
+     * CANDIDATES ONLY, like IssuableScopes(): the caller still confirms each through
+     * Model_Scrollery::may_issue_for(). Retired principalities are left out — a door
+     * to a body that no longer holds court is noise. Visited ids stop a corrupt
+     * parent_kingdom_id cycle from looping.
+     *
+     * @param list<int> $kingdomIds
+     * @return list<array{Type: string, Id: int, Name: string}>
+     */
+    public function ChildKingdomScopes(array $kingdomIds): array
+    {
+        $frontier = array_values(array_unique(array_filter(array_map('intval', $kingdomIds), 'valid_id')));
+        $visited  = array_fill_keys($frontier, true);
+        $children = [];
+
+        while ($frontier !== []) {
+            $this->db->Clear();
+            $rs = $this->db->DataSet(
+                'SELECT kingdom_id, name, active
+                   FROM ' . DB_PREFIX . 'kingdom
+                  WHERE parent_kingdom_id IN (' . implode(',', $frontier) . ')'
+            );
+            $frontier = [];
+            if (!is_object($rs)) {
+                break;
+            }
+            while ($rs->Next()) {
+                $id = (int) $rs->kingdom_id;
+                if ($id <= 0 || isset($visited[$id])) {
+                    continue;
+                }
+                $visited[$id] = true;
+                // A retired principality's own children may still be active, so the
+                // walk continues through it even though it is not offered.
+                $frontier[] = $id;
+                if ((string) $rs->active === 'Active') {
+                    $children[$id] = (string) ($rs->name ?? '');
+                }
+            }
+        }
+
+        ksort($children);
+        $scopes = [];
+        foreach ($children as $id => $name) {
+            $scopes[] = ['Type' => 'kingdom', 'Id' => $id, 'Name' => $name];
+        }
+
+        return $scopes;
+    }
+
+    /**
      * Player::GetScrollRecipient() for a whole print run, in ONE statement.
      *
      * Lives here, not on Player, for the same reason IssuableScopes() does: Player

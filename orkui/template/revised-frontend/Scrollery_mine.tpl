@@ -1,6 +1,6 @@
 <?php
 /**
- * "Reprint my scroll" — the player's own award history, filtered to the awards
+ * "Print My Scrolls" — the player's own award history, filtered to the awards
  * Scrollery is allowed to print.
  *
  * The list is bounded by one person's award record, but that bound is not small:
@@ -108,11 +108,11 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
         <div class="rp-header-left">
             <div class="rp-header-icon-title">
                 <i class="fa-solid fa-scroll rp-header-icon"></i>
-                <h1 class="rp-header-title">My Scrolls</h1>
+                <h1 class="rp-header-title">Print My Scrolls</h1>
             </div>
             <div class="rp-header-scope">
                 <span class="rp-scope-chip">
-                    <i class="fa-solid fa-certificate"></i>
+                    <i class="fa-solid fa-scroll"></i>
                     <?= count($awards) ?> printable award<?= count($awards) === 1 ? '' : 's' ?>
                 </span>
             </div>
@@ -270,7 +270,7 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
                                         Version of <?= htmlspecialchars((string) $a['Title'], ENT_QUOTES, 'UTF-8') ?>
                                     </label>
                                     <select class="adm-select sc-variant" id="sc-variant-<?= $awardsId ?>"
-                                            data-sc-variant>
+                                            data-sc-variant data-sc-order="<?= htmlspecialchars((string) $a['Title'], ENT_QUOTES, 'UTF-8') ?>">
                                         <?php foreach ($variants as $v): ?>
                                             <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>">
                                                 <?= htmlspecialchars(ucfirst($v), ENT_QUOTES, 'UTF-8') ?>
@@ -331,8 +331,10 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
                 Tick a row, then shift-click another to select everything between them.
                 Printing opens a preview first &mdash; nothing reaches the printer until you
                 choose Print there. Runs of more than <?= $chunk ?> open in batches of
-                <?= $chunk ?>, one tab each: a full page of certificates is a large image and
+                <?= $chunk ?>, one tab each: a full page of scrolls is a large image and
                 browsers stop rendering them past about that many.
+                <?php if ($hasVariants): ?>Rows set to different versions open in separate
+                batches, one version per batch.<?php endif; ?>
             </p>
         <?php endif; ?>
     </div>
@@ -392,7 +394,7 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
     // on the current page, and every row still needs its links kept in step.
     var rows    = Array.prototype.slice.call(tbody.querySelectorAll('[data-sc-row]'));
 
-    function plural(n) { return n === 1 ? 'certificate' : 'certificates'; }
+    function plural(n) { return n === 1 ? 'scroll' : 'scrolls'; }
 
     /* ---- the row's own variant, and the two links that carry it --------- */
 
@@ -577,35 +579,63 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
 
     /*
      * render() takes ONE &variant= for the whole URL, because a variant names a plate
-     * within an order rather than a property of an award row. A selection whose rows
-     * disagree therefore cannot carry all of them.
+     * within an order rather than a property of an award row. So the run is split by
+     * the version each row asks for — every batch carries one — instead of dropping
+     * the choices that disagree.
      *
-     * `lossy` is narrower than "they disagree", deliberately. Scroll::BuildScroll()
-     * accepts a variant only if it is in the chosen order's OWN list and otherwise
-     * falls back to that order's first plate — so a value one order does not recognise
-     * costs the others nothing, and a row still sitting on its own first option has
-     * nothing to lose either way. Warning on a plain "select all", where nobody chose
-     * anything, would be crying wolf about a run that prints exactly what the page
-     * shows. The warning fires only when a DELIBERATE choice is about to be dropped.
+     * BuildScroll() ignores a variant its order does not list and draws the order's
+     * FIRST plate, so a row still on its first plate fits any group whose version its
+     * order does not offer (an Owl on parchment rides with a Battle on martial), and a
+     * row with no version to choose fits any group. Deliberate choices make the groups
+     * first, so the defaults cost no extra batch — a plain "select all" is one run.
+     *
+     * &sigrun= is the run's key, shared by every batch, so a signature image uploaded
+     * in batch 1 is restored in the others (scrollery-sig-upload.js).
      */
-    function variantState(chosen) {
-        var seen = [], dirty = false;
+    function planBatches(chosen) {
+        var groups = [], defaults = [], plain = [];
+        var fits = function (variant, row) {
+            return variant === row.v || (row.v === row.plates[0] && row.plates.indexOf(variant) === -1);
+        };
+        var place = function (row) {
+            var g = groups.filter(function (x) { return fits(x.variant, row); })[0];
+            if (!g) { g = { variant: row.v, ids: [], orders: [] }; groups.push(g); }
+            g.ids.push(row.id);
+            // Orders this version actually applies to, for the batch label.
+            if (row.plates.indexOf(g.variant) !== -1 && g.orders.indexOf(row.order) === -1) { g.orders.push(row.order); }
+        };
         chosen.forEach(function (box) {
             var sel = box.closest('tr').querySelector('[data-sc-variant]');
-            if (!sel) { return; }
-            if (seen.indexOf(sel.value) === -1) { seen.push(sel.value); }
-            if (sel.options.length && sel.value !== sel.options[0].value) { dirty = true; }
+            if (!sel) { plain.push(box.value); return; }
+            var row = { id: box.value, v: sel.value, order: sel.getAttribute('data-sc-order') || '', plates: Array.prototype.map.call(sel.options, function (o) { return o.value; }) };
+            if (row.v === row.plates[0]) { defaults.push(row); } else { place(row); }
         });
-
-        return { variant: seen.length === 1 ? seen[0] : '', lossy: seen.length > 1 && dirty };
+        defaults.forEach(place);
+        if (plain.length) {
+            if (groups.length) { groups[0].ids = groups[0].ids.concat(plain); } else { groups.push({ variant: '', ids: plain, orders: [] }); }
+        }
+        var batches = [];
+        groups.forEach(function (g) {
+            for (var i = 0; i < g.ids.length; i += CHUNK) {
+                batches.push({ variant: g.variant, orders: g.orders, ids: g.ids.slice(i, i + CHUNK) });
+            }
+        });
+        return batches;
     }
 
-    function batchUrl(ids, variant) {
-        return withHand(UIR_SC + 'Scrollery/render&awards=' + ids.join(',')
-             + (variant ? '&variant=' + encodeURIComponent(variant) : ''));
+    /* A short random key for this run; letters and digits only, as the render page
+       accepts. */
+    function newRunKey() {
+        return (Math.random().toString(36).slice(2, 10) + Date.now().toString(36)).replace(/[^a-z0-9]/g, '');
     }
 
-    function renderBatches(batches, variant) {
+    function batchUrl(b, run) {
+        return withHand(UIR_SC + 'Scrollery/render&awards=' + b.ids.join(',')
+             + (b.variant ? '&variant=' + encodeURIComponent(b.variant) : '')
+             + (run ? '&sigrun=' + run : ''));
+    }
+
+    function renderBatches(batches, run) {
         if (!batchBar) { return; }
         batchBar.innerHTML = '';
         if (!batches.length) { return; }
@@ -621,29 +651,33 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
             : 'Batch 1 of ' + batches.length + ' opened in a new tab (if your browser blocked it, use its link). Open the rest one at a time:';
         batchBar.appendChild(intro);
 
+        var versions = batches.some(function (b) { return b.variant !== batches[0].variant; });
         batches.forEach(function (b, i) {
-            var a = document.createElement('a');
+            var a = document.createElement('a'),
+                n = b.ids.length;
             a.className = 'adm-btn adm-btn-ghost';
             a.target = '_blank';
             a.rel = 'noopener';
-            a.href = batchUrl(b, variant);
-            a.textContent = batches.length === 1
-                ? 'Open the preview — ' + b.length + ' ' + plural(b.length)
-                : 'Batch ' + (i + 1) + ' — ' + b.length + ' ' + plural(b.length);
+            a.href = batchUrl(b, run);
+            // Name the version only when the run holds more than one.
+            a.textContent = (batches.length === 1
+                ? 'Open the preview — ' + n + ' ' + plural(n)
+                : 'Batch ' + (i + 1) + ' — ' + n + ' ' + plural(n))
+                + (versions && b.variant ? ' (' + (b.orders && b.orders.length ? b.orders.join(', ') + ': ' : '')
+                    + b.variant.charAt(0).toUpperCase() + b.variant.slice(1) + ')' : '');
             batchBar.appendChild(a);
         });
     }
 
-    function openRun(ids, variant) {
-        var batches = [];
-        for (var i = 0; i < ids.length; i += CHUNK) { batches.push(ids.slice(i, i + CHUNK)); }
+    function openRun(batches) {
+        var run = newRunKey();
 
         // The first batch opens on the click that asked for it. The rest do NOT open in
         // the same loop: every browser blocks all but the first popup from one gesture,
         // so a long run would silently produce one tab and swallow the others. They are
         // offered as links instead — one gesture each, nothing blocked.
-        window.open(batchUrl(batches[0], variant), '_blank', 'noopener');
-        renderBatches(batches, variant);
+        window.open(batchUrl(batches[0], run), '_blank', 'noopener');
+        renderBatches(batches, run);
     }
 
     btn.addEventListener('click', function () {
@@ -658,29 +692,23 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
         }
         if (refusal) { refusal.textContent = ''; }
 
-        var state   = variantState(chosen),
-            variant = state.variant,
-            n       = Math.ceil(ids.length / CHUNK),
-            note    = state.lossy
-                ? ' You have picked different versions in this selection, and one run can only'
-                + ' carry one — so each prints its own default instead. Print them separately'
-                + ' to keep the versions you chose.'
-                : '';
+        var batches = planBatches(chosen),
+            n       = batches.length;
 
-        if ((ids.length > CONFIRM_OVER || state.lossy) && typeof window.orkConfirm === 'function') {
+        if (ids.length > CONFIRM_OVER && typeof window.orkConfirm === 'function') {
             window.orkConfirm(
                 'This opens a preview of ' + ids.length + ' ' + plural(ids.length) +
                 ' — one page each' +
                 (n > 1 ? ', in ' + n + ' batches of up to ' + CHUNK + '. The first opens now and '
                        + 'the rest appear as links to open one at a time.'
-                       : '. Nothing prints until you choose Print on that page.') + note,
-                function () { openRun(ids, variant); },
+                       : '. Nothing prints until you choose Print on that page.'),
+                function () { openRun(batches); },
                 { title: 'Print ' + ids.length + ' ' + plural(ids.length) + '?',
                   okLabel: 'Open preview', danger: false }
             );
             return;
         }
-        openRun(ids, variant);
+        openRun(batches);
     });
 
     rows.forEach(syncRowLinks);

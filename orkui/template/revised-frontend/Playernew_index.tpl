@@ -2228,7 +2228,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php /* An officer on their own profile takes this branch, not the one below,
 				          so the self-service link has to be offered here as well. */ ?>
 				<a href="<?= UIR ?>Scrollery/mine" class="pn-btn pn-btn-sm" style="margin-left:8px">
-					<i class="fas fa-scroll"></i> Print My Certificates
+					<i class="fas fa-scroll"></i> Print My Scrolls
 				</a>
 				<?php endif; ?>
 				</div>
@@ -2241,7 +2241,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					</a>
 					<?php endif; ?>
 					<a href="<?= UIR ?>Scrollery/mine" class="pn-btn pn-btn-sm">
-						<i class="fas fa-scroll"></i> Print My Certificates
+						<i class="fas fa-scroll"></i> Print My Scrolls
 					</a>
 				</div>
 				<?php endif; ?>
@@ -2363,13 +2363,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
 									        data-award="<?= htmlspecialchars($awardData, ENT_QUOTES) ?>"
 									        data-tip="Revoke award"><i class="fas fa-ban"></i></button>
-									<?php /* Scrollery: only where certificate artwork exists — no dead buttons.
-									          Sits under $canManageAwards with the buttons above, but CanPrintScroll is
-									          viewer-aware: for an officer, controller.Player.php runs the rows through
+									<?php endif; ?>
+									<?php /* Scrollery: only where scroll artwork exists — no dead buttons.
+									          Deliberately OUTSIDE $canManageAwards: CanPrintScroll is viewer-aware —
+									          controller.Player.php runs every row through
 									          Model_Scrollery::flag_viewer_printable_awards(), the render route's own
-									          gate (where GIVEN, not the recipient's home park), so an award given
-									          elsewhere or unattributed shows no button the render tab would refuse.
-									          A player prints their own from Scrollery/mine.
+									          gate (where GIVEN, not the recipient's home park; the recipient always;
+									          anonymous never) — so whoever sees a button can open the scroll.
 
 									          Revoked rows are covered by this same flag — Model_Player folds
 									          ork_awards.revoked into CanPrintScroll — so there is deliberately no
@@ -2377,17 +2377,27 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									          Revoked Awards table below keys on stripped_from, and the 59 revocations
 									          that left mundane_id intact appear HERE, among the live grants. */ ?>
 									<?php if (!empty($detail['CanPrintScroll'])): ?>
-									<?php /* View first, Print second: "View" opens the same certificate WITHOUT
-									          print=1, so the officer can look at it before the OS print dialog opens.
+									<?php /* View first, Print second: "View" opens the same scroll WITHOUT
+									          print=1, so it can be checked before the OS print dialog opens.
 									          Print stays one click — a single sheet does not justify an extra one. */ ?>
 									<a class="pn-award-action-btn pn-award-view-btn"
 									   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>"
 									   target="_blank" rel="noopener"
-									   data-tip="View certificate"><i class="fas fa-eye"></i></a>
+									   data-tip="View scroll"><i class="fas fa-eye"></i></a>
 									<a class="pn-award-action-btn pn-award-print-btn"
 									   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>&print=1"
 									   target="_blank" rel="noopener"
-									   data-tip="Print certificate"><i class="fas fa-print"></i></a>
+									   data-tip="Print scroll"><i class="fas fa-print"></i></a>
+									<?php /* Customize: the composer, prefilled from this award, for the custom
+									          border, ribbon and arms only it offers. Stamped by
+									          Model_Scrollery::flag_viewer_customizable_awards() only where the
+									          viewer may also issue for the giving body. */ ?>
+									<?php if (!empty($detail['ScrollCustomizeUrl'])): ?>
+									<a class="pn-award-action-btn pn-award-customize-btn"
+									   href="<?= UIR . htmlspecialchars((string)$detail['ScrollCustomizeUrl'], ENT_QUOTES) ?>"
+									   target="_blank" rel="noopener"
+									   aria-label="Customize this scroll"
+									   data-tip="Customize this scroll"><i class="fas fa-wand-magic-sparkles"></i></a>
 									<?php endif; ?>
 									<?php endif; ?>
 									<button type="button" class="pn-award-action-btn pn-award-info-btn"
@@ -2543,8 +2553,11 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
 										        data-award="<?= htmlspecialchars($titleData, ENT_QUOTES) ?>"
 										        data-tip="Revoke title"><i class="fas fa-ban"></i></button>
+										<?php endif; ?>
 										<?php /* Model_Player stamps CanPrintScroll on EVERY award row, titles included,
 										          and this cell was the only one of the two that never rendered the offer.
+										          Outside $canManageAwards for the same reason as the Awards cell (the
+										          flag is already narrowed to this viewer's print permission).
 										          Gated on the same flag as the Awards cell so the pending Scrollery scope
 										          exclusion (knighthoods, masterhoods, paragons, associate titles, noble
 										          titles above Lord) turns these off automatically, with no second
@@ -2557,11 +2570,17 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 										<a class="pn-award-action-btn pn-award-view-btn"
 										   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>"
 										   target="_blank" rel="noopener"
-										   data-tip="View certificate"><i class="fas fa-eye"></i></a>
+										   data-tip="View scroll"><i class="fas fa-eye"></i></a>
 										<a class="pn-award-action-btn pn-award-print-btn"
 										   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>&print=1"
 										   target="_blank" rel="noopener"
-										   data-tip="Print certificate"><i class="fas fa-print"></i></a>
+										   data-tip="Print scroll"><i class="fas fa-print"></i></a>
+										<?php if (!empty($detail['ScrollCustomizeUrl'])): ?>
+										<a class="pn-award-action-btn pn-award-customize-btn"
+										   href="<?= UIR . htmlspecialchars((string)$detail['ScrollCustomizeUrl'], ENT_QUOTES) ?>"
+										   target="_blank" rel="noopener"
+										   aria-label="Customize this scroll"
+										   data-tip="Customize this scroll"><i class="fas fa-wand-magic-sparkles"></i></a>
 										<?php endif; ?>
 										<?php endif; ?>
 										<button type="button" class="pn-award-action-btn pn-award-info-btn"
@@ -2630,6 +2649,47 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				</div>
 				<?php endif; ?>
 				<div id="pn-recs-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
+				<?php /* Closed-recs history: officers who may dismiss AND restore this
+				         player's recs (canManageAwards = park CREATE over the recipient's
+				         park, the PlayerAjax endpoint's rule). Never the recipient. */ ?>
+				<?php if (!empty($can_delete_recommendation) && !empty($canManageAwards) && !$isOwnProfile): ?>
+				<div class="pk-deleted-recs" id="pn-deleted-recs" data-loaded="0" data-csv-name="<?= htmlspecialchars(($Player['Persona'] ?? 'Player') . ' Granted and Dismissed Recommendations') ?>">
+					<button type="button" class="pk-deleted-recs-toggle" id="pn-deleted-recs-toggle" aria-expanded="false">
+						<span class="pk-deleted-recs-caret">&#9654;</span>
+						<span class="pk-deleted-recs-toggle-label">Show Granted &amp; Dismissed Recommendations</span>
+						<span class="pk-deleted-recs-count" id="pn-deleted-recs-count" style="display:none">0</span>
+					</button>
+					<div class="pk-deleted-recs-body" id="pn-deleted-recs-body" style="display:none">
+						<div class="pk-deleted-recs-loading" id="pn-deleted-recs-loading">Loading&hellip;</div>
+						<div class="pk-deleted-recs-empty" id="pn-deleted-recs-empty" style="display:none">No granted or dismissed recommendations yet.</div>
+						<div class="pk-deleted-recs-msg" role="alert" style="display:none"></div>
+						<div class="pk-closed-filter" role="group" aria-label="Show" style="display:none">
+							<button type="button" class="pk-closed-filter-btn pk-closed-filter-on" data-filter="all" aria-pressed="true">All <span class="pk-closed-filter-n" data-n="all"></span></button>
+							<button type="button" class="pk-closed-filter-btn" data-filter="granted" aria-pressed="false">Granted <span class="pk-closed-filter-n" data-n="granted"></span></button>
+							<button type="button" class="pk-closed-filter-btn" data-filter="dismissed" aria-pressed="false">Dismissed <span class="pk-closed-filter-n" data-n="dismissed"></span></button>
+						</div>
+						<div class="pk-deleted-recs-table-wrap" id="pn-deleted-recs-table-wrap" style="display:none">
+							<table class="pk-deleted-recs-table">
+								<thead>
+									<tr>
+										<th>Player</th>
+										<th>Award</th>
+										<th>Rank</th>
+										<th>Notes</th>
+										<th>Date Rec.</th>
+										<th>Recommended By</th>
+										<th>Status</th>
+										<th>Closed</th>
+										<th>Closed By</th>
+										<th class="no-export"></th>
+									</tr>
+								</thead>
+								<tbody id="pn-deleted-recs-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+				<?php endif; ?>
 			</div><?php endif; ?>
 
 			<!-- Notes Tab -->
@@ -3156,22 +3216,9 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 </div>
 <?php endif; ?>
 
-<!-- =============================================
-     Award Info Modal — the (i) button at the end of every Awards/Titles row.
-     Every viewer; filled lazily from PlayerAjax/award_info (revised.js).
-     ============================================= -->
-<div class="pn-overlay" id="pn-award-info-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-award-info-title" aria-hidden="true">
-	<div class="pn-modal-box pn-ai-box">
-		<div class="pn-modal-header">
-			<h3 class="pn-modal-title" id="pn-award-info-title"><i class="fas fa-info-circle pn-modal-title-icon"></i><span id="pn-award-info-name">Award Details</span></h3>
-			<button type="button" class="pn-modal-close-btn" id="pn-award-info-close-btn" aria-label="Close">&times;</button>
-		</div>
-		<div class="pn-modal-body pn-ai-body" id="pn-award-info-body"></div>
-		<div class="pn-modal-footer">
-			<button type="button" class="pn-btn pn-btn-secondary" id="pn-award-info-done">Close</button>
-		</div>
-	</div>
-</div>
+<!-- Award Info Modal — the (i) button at the end of every Awards/Titles row (and the
+     granted rows of the closed-recs panel). Shared markup + script: _award_info_modal.tpl. -->
+<?php include __DIR__ . '/_award_info_modal.tpl'; ?>
 
 <!-- =============================================
      Add Award / Add Title Modal
@@ -3319,8 +3366,8 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 				         route's own permission gate), so it is never a dead link. */ ?>
 				<a href="#" id="pn-award-print-link" class="pn-award-print-icon" style="display:none"
 				   target="_blank" rel="noopener"
-				   data-tip="Print the certificate for the award you just granted"
-				   aria-label="Print the certificate for the award you just granted">
+				   data-tip="Print the scroll for the award you just granted"
+				   aria-label="Print the scroll for the award you just granted">
 					<i class="fas fa-print"></i>
 				</a>
 				<button class="pn-btn pn-btn-primary" id="pn-award-save-same" disabled>
@@ -8265,6 +8312,10 @@ $(function() {
 
 	// Allow OrkRsCfg.reload (set above) to force a recs reload after seconds actions.
 	window.pnReloadRecs = function() { pnRecsLoaded = false; pnLoadRecs(); };
+	// A rec restored from the closed-recs panel is live again: show it in the list.
+	document.addEventListener('pk:rec-restored', function(e) {
+		if (e.target && e.target.id === 'pn-deleted-recs') window.pnReloadRecs();
+	});
 	window.pnReloadNotes = function() { pnNotesLoaded = false; pnLoadNotes(); };
 
 	// Hook tab clicks to trigger lazy loading

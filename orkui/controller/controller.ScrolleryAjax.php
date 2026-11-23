@@ -89,7 +89,7 @@ class Controller_ScrolleryAjax extends Controller
      *
      * THE GATE IS RE-RUN HERE, the same one the page ran: what the beacon names is a
      * claim, never a grant. awards re-decides every id through
-     * scrolls_for_awards_ids(); court re-checks Model_Court::can_manage(); compose
+     * scrolls_for_awards_ids(); court re-checks may_issue_for_court(); compose
      * re-checks may_issue_for() and re-runs the composition. Only what passes is
      * written, deduped by ScrollPrintLog::RecordPrints().
      *
@@ -160,14 +160,16 @@ class Controller_ScrolleryAjax extends Controller
             $courtId = (int) $str('court');
             $this->load_model('Court');
             $court = $courtId > 0 ? $this->Court->get_court_detail($courtId) : null;
-            if (!is_array($court) || !$this->Court->can_manage($viewerId, $court['KingdomId'], $court['ParkId'])) {
+            // The same gate as the Scrollery/court route that printed the run.
+            if (!is_array($court) || !$this->Scrollery->may_issue_for_court($viewerId, $court)) {
                 $fail(403, 5, 'Not authorised for that court');
             }
             $logged = $this->Scrollery->log_court_prints(
                 $courtId,
                 Scroll::CourtLineIds(['courtLines' => $str('courtLines')]),
                 $viewerId,
-                $heraldry
+                $heraldry,
+                preg_replace('/[^a-z]/', '', strtolower($str('variant')))
             );
         } elseif ($kind === 'compose') {
             $scopeType = $str('scopeType') === 'kingdom' ? 'kingdom' : 'park';

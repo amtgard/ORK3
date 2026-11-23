@@ -23,7 +23,8 @@
  * Court details mirror the login-free court report (Court::getCourtReportDetail):
  * only a FINALIZED court ('complete'), only the line marked 'given', never a
  * revoked award. A certificate printed through Scrollery has no scroll maker, so
- * that half is withheld and a note shown instead.
+ * that half is withheld. Print state (PrintedWithScrollery / LastPrintedAt) is
+ * top-level, for every award, court or not.
  */
 class AwardProvenance extends Ork3
 {
@@ -49,6 +50,14 @@ class AwardProvenance extends Ork3
             return null;
         }
         $recsShown = $this->recsVisibleTo($viewer, $award);
+        $court     = $this->courtLine($award);
+        // Print state belongs to every award, not just finalized-court ones: most
+        // scrolls are printed straight off the profile or the bulk tools. The court
+        // line already read it (against its own line id); otherwise fall back to the
+        // line the award row names, if any.
+        $lastPrinted = $court !== null
+            ? $court['LastPrintedAt']
+            : $this->lastPrintedAt($awardsId, $award['CourtAwardId']);
 
         return [
             'AwardsId'        => $awardsId,
@@ -59,7 +68,9 @@ class AwardProvenance extends Ork3
             // Why recs are withheld, for the empty state: 'login' (anonymous) or 'private'.
             'RecsWithheld'    => $recsShown ? '' : ($viewer > 0 ? 'private' : 'login'),
             'Recommendations' => $recsShown ? $this->grantedRecs($award, $viewer) : [],
-            'Court'           => $this->courtLine($award),
+            'Court'           => $court,
+            'PrintedWithScrollery' => $lastPrinted !== '',
+            'LastPrintedAt'   => $lastPrinted,
         ];
     }
 
@@ -328,7 +339,8 @@ class AwardProvenance extends Ork3
         }
         $lineId       = (int) $rs->court_award_id;
         $scrollStatus = (int) $rs->scroll_status;
-        $printed      = $this->printedWithScrollery($awardsId, $lineId);
+        $lastPrinted  = $this->lastPrintedAt($awardsId, $lineId);
+        $printed      = $lastPrinted !== '';
         $scrollery    = $printed || $scrollStatus === Court::SCROLL_SCROLLERY;
         $line = [
             'CourtAwardId'      => $lineId,
@@ -349,6 +361,7 @@ class AwardProvenance extends Ork3
                 (int) $rs->rec_monarchy_only !== 0
             ),
             'PrintedWithScrollery' => $printed,
+            'LastPrintedAt'     => $lastPrinted,
             // Who made what. A finalized line is taken as the record; tracking states
             // are planning detail and are not published. No maker → no entry.
             'Scroll'            => ($scrollery || (int) ($rs->scroll_maker_id ?? 0) <= 0) ? null : [
@@ -383,15 +396,9 @@ class AwardProvenance extends Ork3
         return $line;
     }
 
-    private function printedWithScrollery(int $awardsId, int $lineId): bool
+    /** When this award's scroll was last printed through Scrollery ('' = never). */
+    private function lastPrintedAt(int $awardsId, int $lineId): string
     {
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT 1 AS hit FROM ' . DB_PREFIX . 'scroll_print
-              WHERE awards_id = ' . $awardsId . ($lineId > 0 ? ' OR court_award_id = ' . $lineId : '') . '
-              LIMIT 1'
-        );
-
-        return (bool) ($rs && $rs->Next());
+        return Ork3::$Lib->scrollprintlog->LastPrintedAt($awardsId, $lineId);
     }
 }

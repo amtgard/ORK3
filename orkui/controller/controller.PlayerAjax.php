@@ -334,6 +334,21 @@ class Controller_PlayerAjax extends Controller
             // courtLines lets the client repaint the row's court badges from what the
             // server actually did, instead of issuing its own follow-up court calls.
             $out = ['status' => 0, 'awardId' => $new_award_id, 'courtLines' => $court_lines, 'courtAction' => $court_action];
+            // Print-after-grant, the same contract as the profile's addaward: awardsId +
+            // printable for THIS officer (the render route's own gate), so the Manager's
+            // toast never offers a dead link. Best-effort like the reconcile above — the
+            // award row is already committed, and a throw would invite a double grant.
+            $printable = false;
+            if ($new_award_id > 0) {
+                try {
+                    $this->load_model('Scrollery');
+                    $printable = $this->Scrollery->award_is_printable($new_award_id, (int)$this->session->user_id);
+                } catch (\Throwable $e) {
+                    error_log('PlayerAjax::grantaward printable check failed (award ' . $new_award_id . '): ' . $e->getMessage());
+                }
+            }
+            $out['awardsId']  = $new_award_id;
+            $out['printable'] = $printable;
             if ($noteWithheld) {
                 $out['noteWithheld'] = true;
                 $out['noteWithheldMessage'] = "The note matched a Monarchy Only recommendation's reason and was not saved.";
@@ -561,6 +576,53 @@ class Controller_PlayerAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Player not found']);
             }
             exit;
+
+        } elseif ($action === 'deletedrecommendations' || $action === 'restorerecommendation') {
+            // Profile twin of the Kingdom/Park closed-recs panel endpoints. Authority
+            // is the one Player::RestoreAwardRecommendation enforces: park CREATE over
+            // the recipient's home park. The recipient never sees their own closed
+            // recs here, even as an officer of their own park.
+            $uid = (int)$this->session->user_id;
+            $recipient = $this->Player->player_info($player_id);
+            $recip_park_id = is_array($recipient) ? (int)$recipient['ParkId'] : 0;
+            if ($uid === $player_id || !valid_id($recip_park_id)
+                || !$this->Authorization->has_authority($uid, AUTH_PARK, $recip_park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            if ($action === 'deletedrecommendations') {
+                $this->load_model('Reports');
+                // Paged like the Kingdom/Park panels (dismissals are never purged).
+                $limit  = (int)($_POST['Limit'] ?? $_GET['Limit'] ?? 200);
+                $limit  = ($limit > 0 && $limit <= 500) ? $limit : 200;
+                $offset = max(0, (int)($_POST['Offset'] ?? $_GET['Offset'] ?? 0));
+                $recs = $this->Reports->deleted_recommended_awards(['PlayerId' => $player_id, 'KingdomId' => 0, 'ParkId' => 0, 'Limit' => $limit, 'Offset' => $offset, 'Token' => $this->session->token]);
+                $recs = is_array($recs) ? array_values($recs) : [];
+                // Granted rows offer View/Print scroll only where this viewer may print it.
+                $this->load_model('Scrollery');
+                $recs = $this->Scrollery->flag_printable_granted_recs($recs, $uid);
+                echo json_encode([
+                    'status'          => 0,
+                    'recommendations' => $recs,
+                    'offset'          => $offset + count($recs),
+                    'hasMore'         => count($recs) >= $limit,
+                ]);
+                exit;
+            }
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            // Scoped to this player: the self check above only holds if the rec is
+            // really about $player_id.
+            if (!valid_id($rec_id) || $this->Player->recommendation_recipient_id($rec_id) !== $player_id) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->restore_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'updateprofile') {
             // Own-profile customization: about, colors, name prefix/suffix, photo focus.
@@ -828,6 +890,13 @@ class Controller_PlayerAjax extends Controller
         if ($info === null) {
             echo json_encode(['status' => 1, 'error' => 'Award not found']);
             exit;
+        }
+        // The render route's own gate (where the award was GIVEN, or the recipient),
+        // so the modal's View/Print links never open a refusal. Anonymous: false.
+        $info['CanPrint'] = false;
+        if ($viewer > 0) {
+            $this->load_model('Scrollery');
+            $info['CanPrint'] = $this->Scrollery->award_is_printable($awards_id, $viewer);
         }
         echo json_encode(['status' => 0, 'info' => $info]);
         exit;

@@ -294,6 +294,14 @@ class Model_Player extends Model
         return (int) Ork3::$Lib->recommendationvisibility->creatorLevel((int)$uid, (int)$recipient_id);
     }
 
+    // Recipient (mundane_id) of a rec, live or closed; 0 when it does not exist.
+    // Lets a per-player endpoint refuse a rec id that is not about that player.
+    public function recommendation_recipient_id($rec_id)
+    {
+        $rec = Ork3::$Lib->recommendationvisibility->loadRec((int)$rec_id);
+        return $rec === null ? 0 : (int)$rec['MundaneId'];
+    }
+
     // Award note from a "Give from rec" form: '' when it is the reason of a rec that
     // is Monarchy Only now (a tab opened while it was public pre-filled it). A rec id
     // not about $recipient_id is ignored. The one publishing gate.
