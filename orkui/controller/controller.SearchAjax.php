@@ -38,21 +38,6 @@ class Controller_SearchAjax extends Controller
             exit;
         }
 
-        // CSV → int[] for the list-valued surface-context params.
-        $csvIds = function ($key) {
-            $raw = trim($_GET[$key] ?? '');
-            if ($raw === '') {
-                return [];
-            }
-            $out = [];
-            foreach (explode(',', $raw) as $v) {
-                if ((int)$v > 0) {
-                    $out[] = (int)$v;
-                }
-            }
-            return $out;
-        };
-
         $limit  = min(max((int)($_GET['limit'] ?? 15), 1), 100);
         $offset = min(max((int)($_GET['offset'] ?? 0), 0), 2000);
 
@@ -63,10 +48,10 @@ class Controller_SearchAjax extends Controller
             'parkId'             => (int)($_GET['parkId']    ?? 0) ?: null,
             'kingdomId'          => (int)($_GET['kingdomId'] ?? 0) ?: null,
             'restrictTo'         => $_GET['restrictTo'] ?? '',
-            'restrictKingdomIds' => $csvIds('restrictKingdomIds'),
+            'restrictKingdomIds' => $this->csvIds('restrictKingdomIds'),
             'excludeKingdomId'   => (int)($_GET['excludeKingdomId'] ?? 0) ?: null,
             'excludeParkId'      => (int)($_GET['excludeParkId']    ?? 0) ?: null,
-            'excludeIds'         => $csvIds('excludeIds'),
+            'excludeIds'         => $this->csvIds('excludeIds'),
             // Filter pill: narrows within the hard scope above, never widens it.
             'filterKingdomId'    => (int)($_GET['filterKingdomId'] ?? 0),
             'filterParkId'       => (int)($_GET['filterParkId']    ?? 0),
@@ -111,5 +96,60 @@ class Controller_SearchAjax extends Controller
             'token'              => $this->session->token ?? null,
         ]));
         exit;
+    }
+
+    // Filter-pill dropdown data for a search field: {kingdoms:[...]} or, with forKingdom, {parks:[...]}.
+    // Public (names/abbreviations only), so no login is required.
+    public function filteroptions($p = null)
+    {
+        header('Content-Type: application/json');
+        $this->load_model('Search');
+        $scope = $this->filterScopeParams();
+        $forKingdom = (int)($_GET['forKingdom'] ?? 0);
+        if ($forKingdom > 0) {
+            echo json_encode(['parks' => $this->Search->filter_scope_parks($forKingdom, $scope)]);
+        } else {
+            echo json_encode(['kingdoms' => $this->Search->filter_scope_kingdoms($scope)]);
+        }
+        exit;
+    }
+
+    // Typed "KD:PK" prefix → {match:{kingdomId,...}} when it names an in-scope kingdom/park, else {match:null}.
+    public function filterresolve($p = null)
+    {
+        header('Content-Type: application/json');
+        $this->load_model('Search');
+        $prefix = substr(trim((string)($_GET['prefix'] ?? '')), 0, 16);
+        echo json_encode(['match' => $this->Search->resolve_filter_prefix($prefix, $this->filterScopeParams())]);
+        exit;
+    }
+
+    // The search field's hard-scope params, as sent by the player-search component.
+    private function filterScopeParams(): array
+    {
+        return [
+            'parkId'             => max((int)($_GET['parkId'] ?? 0), 0),
+            'kingdomId'          => max((int)($_GET['kingdomId'] ?? 0), 0),
+            'restrictTo'         => in_array($_GET['restrictTo'] ?? '', ['park', 'kingdom'], true) ? $_GET['restrictTo'] : '',
+            'restrictKingdomIds' => $this->csvIds('restrictKingdomIds'),
+            'excludeKingdomId'   => max((int)($_GET['excludeKingdomId'] ?? 0), 0),
+            'excludeParkId'      => max((int)($_GET['excludeParkId'] ?? 0), 0),
+        ];
+    }
+
+    // CSV → int[] (positive ids only) for the list-valued surface-context params.
+    private function csvIds(string $key): array
+    {
+        $raw = trim((string)($_GET[$key] ?? ''));
+        if ($raw === '') {
+            return [];
+        }
+        $out = [];
+        foreach (explode(',', $raw) as $v) {
+            if ((int)$v > 0) {
+                $out[] = (int)$v;
+            }
+        }
+        return $out;
     }
 }

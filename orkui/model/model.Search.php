@@ -28,6 +28,22 @@ class Model_Search extends Model
         return $this->_search_service()->GetUnitActivityCounts($unitIds);
     }
 
+    // Player-search filter pill: scope-aware kingdom/park options and typed-prefix resolution.
+    public function filter_scope_kingdoms(array $scope): array
+    {
+        return $this->_search_service()->FilterScopeKingdoms($scope);
+    }
+
+    public function filter_scope_parks(int $kingdomId, array $scope): array
+    {
+        return $this->_search_service()->FilterScopeParks($kingdomId, $scope);
+    }
+
+    public function resolve_filter_prefix(string $prefix, array $scope): ?array
+    {
+        return $this->_search_service()->ResolveFilterPrefix($prefix, $scope);
+    }
+
     private function _search_service(): SearchService
     {
         return new SearchService();

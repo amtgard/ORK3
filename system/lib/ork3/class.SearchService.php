@@ -776,6 +776,161 @@ class SearchService extends Ork3
         return 0;
     }
 
+    /**
+     * Kingdom ids a search field's filter pill may target, mirroring RankedPlayers' hard scope:
+     * [] for a park-locked field; restrictKingdomIds when given; the kingdom's family for
+     * restrictTo 'kingdom' (centred on parkId's kingdom when a park is supplied); null = any.
+     */
+    private function filterScopeKingdomIds(array $scope): ?array
+    {
+        $restrictTo = (string)($scope['restrictTo'] ?? '');
+        if ($restrictTo === 'park') {
+            return [];
+        }
+        $restrict = array_values(array_unique(array_filter(array_map('intval', (array)($scope['restrictKingdomIds'] ?? [])), fn ($v) => $v > 0)));
+        if (!empty($restrict)) {
+            return $restrict;
+        }
+        if ($restrictTo === 'kingdom') {
+            $kid = (int)($scope['kingdomId'] ?? 0);
+            $pid = (int)($scope['parkId'] ?? 0);
+            if ($pid > 0) {
+                $kid = $this->parkKingdomId($pid);
+            }
+            if ($kid > 0) {
+                return array_values(array_filter(array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid)), fn ($v) => $v > 0));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Active kingdoms a search field's filter may narrow to (public names only), sorted by name.
+     *
+     * @param array $scope parkId, kingdomId, restrictTo, restrictKingdomIds, excludeKingdomId, excludeParkId
+     * @return array<int, array{id: int, name: string, abbr: string}>
+     */
+    public function FilterScopeKingdoms(array $scope): array
+    {
+        $allowed = $this->filterScopeKingdomIds($scope);
+        if ($allowed === []) {
+            return [];
+        }
+        $where = ["active = 'Active'", "kingdom_id != 15"];
+        if ($allowed !== null) {
+            $where[] = "kingdom_id IN (" . implode(',', $allowed) . ")";
+        }
+        $exclude = (int)($scope['excludeKingdomId'] ?? 0);
+        if ($exclude > 0) {
+            $where[] = "kingdom_id != {$exclude}";
+        }
+        $this->db->clear();
+        $rs = $this->db->query("SELECT kingdom_id, name, abbreviation FROM " . DB_PREFIX . "kingdom WHERE " . implode(' AND ', $where));
+        $out = [];
+        if ($rs !== false && $rs->size() > 0) {
+            while ($rs->Next()) {
+                $out[] = ['id' => (int)$rs->kingdom_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation];
+            }
+        }
+        usort($out, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+        return $out;
+    }
+
+    // True when $kingdomId is an active kingdom inside the field's filter scope.
+    private function kingdomInFilterScope(int $kingdomId, array $scope): bool
+    {
+        if ($kingdomId <= 0 || $kingdomId === 15 || $kingdomId === (int)($scope['excludeKingdomId'] ?? 0)) {
+            return false;
+        }
+        $allowed = $this->filterScopeKingdomIds($scope);
+        if ($allowed !== null && !in_array($kingdomId, $allowed, true)) {
+            return false;
+        }
+        $this->db->clear();
+        $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = {$kingdomId} AND active = 'Active' LIMIT 1");
+        return $rs !== false && $rs->size() > 0;
+    }
+
+    /**
+     * Active parks of $kingdomId for the filter's park dropdown; [] when the kingdom is outside the scope.
+     *
+     * @return array<int, array{id: int, name: string, abbr: string}>
+     */
+    public function FilterScopeParks(int $kingdomId, array $scope): array
+    {
+        $kingdomId = (int)$kingdomId;
+        if (!$this->kingdomInFilterScope($kingdomId, $scope)) {
+            return [];
+        }
+        $where = ["kingdom_id = {$kingdomId}", "active = 'Active'"];
+        $exclude = (int)($scope['excludeParkId'] ?? 0);
+        if ($exclude > 0) {
+            $where[] = "park_id != {$exclude}";
+        }
+        $this->db->clear();
+        $rs = $this->db->query("SELECT park_id, name, abbreviation FROM " . DB_PREFIX . "park WHERE " . implode(' AND ', $where));
+        $out = [];
+        if ($rs !== false && $rs->size() > 0) {
+            while ($rs->Next()) {
+                $out[] = ['id' => (int)$rs->park_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation];
+            }
+        }
+        usort($out, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+        return $out;
+    }
+
+    /**
+     * Resolve a typed filter prefix ("KCG:AR", "KCG:", "KCG:*", "KCG") to an active kingdom/park
+     * inside the field's scope. null when malformed, unknown, inactive or out of scope.
+     *
+     * @return array{kingdomId: int, kingdomName: string, kingdomAbbr: string, parkId: int, parkName: string, parkAbbr: string}|null
+     */
+    public function ResolveFilterPrefix(string $prefix, array $scope): ?array
+    {
+        if (!preg_match('/^([a-z0-9]{2,3})(?::([a-z0-9]{2,3}|\*)?)?$/i', trim($prefix), $m)) {
+            return null;
+        }
+        // Both parts are regex-validated alphanumerics, so they are safe to inline.
+        $kAbbr = $m[1];
+        $pAbbr = (isset($m[2]) && $m[2] !== '*') ? $m[2] : '';
+
+        $this->db->clear();
+        $rs = $this->db->query("SELECT kingdom_id, name, abbreviation FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' AND active = 'Active' AND kingdom_id != 15 ORDER BY kingdom_id LIMIT 1");
+        if ($rs === false || $rs->size() === 0) {
+            return null;
+        }
+        $rs->Next();
+        $match = [
+            'kingdomId'   => (int)$rs->kingdom_id,
+            'kingdomName' => (string)$rs->name,
+            'kingdomAbbr' => (string)$rs->abbreviation,
+            'parkId'      => 0,
+            'parkName'    => '',
+            'parkAbbr'    => '',
+        ];
+        if (!$this->kingdomInFilterScope($match['kingdomId'], $scope)) {
+            return null;
+        }
+        if ($pAbbr === '') {
+            return $match;
+        }
+
+        $this->db->clear();
+        $rs = $this->db->query("SELECT park_id, name, abbreviation FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$match['kingdomId']} AND active = 'Active' ORDER BY park_id LIMIT 1");
+        if ($rs === false || $rs->size() === 0) {
+            return null;
+        }
+        $rs->Next();
+        $parkId = (int)$rs->park_id;
+        if ($parkId === (int)($scope['excludeParkId'] ?? 0)) {
+            return null;
+        }
+        $match['parkId']   = $parkId;
+        $match['parkName'] = (string)$rs->name;
+        $match['parkAbbr'] = (string)$rs->abbreviation;
+        return $match;
+    }
+
     /** @var array<string, array> per-request memo of viewerCaps(), keyed by token */
     private static $viewerCapsMemo = [];
 
