@@ -616,6 +616,30 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
 }
 @container pn-tab (min-width:561px){.pn-tl-date-mobile{display:none}}
+/* Browsers without container queries (Safari/iOS before 16, 2022) ignore every
+   @container block above and would keep the desktop layout on a phone. They do
+   understand @supports, so repeat the four rules on the old viewport
+   breakpoint (700px, what this page used before the container switch). */
+@supports not (container-type:inline-size){
+@media(max-width:700px){
+.pna-layout{flex-direction:column;align-items:stretch}
+.pna-sidebar{flex:none;width:100%}
+.pna-ev-cols{flex-direction:column}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-divider)}
+.pna-card{padding:12px 13px}
+.pna-tenure-years{font-size:36px}
+.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}
+.pn-timeline::before{left:18px}
+.pn-tl-item{flex-wrap:nowrap}
+.pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
+.pn-tl-left{display:none}
+.pn-tl-right{order:2!important;width:auto;flex:1;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-item:nth-child(even) .pn-tl-left{display:none}
+.pn-tl-item:nth-child(even) .pn-tl-right{order:2!important;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
+}
+@media(min-width:701px){.pn-tl-date-mobile{display:none}}
+}
 /* ===== Milestones Config (Design Modal) ===== */
 .pn-ms-toggle-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .pn-ms-toggle{display:flex;align-items:center;gap:10px;font-size:13px;color:#4a5568}
