@@ -355,6 +355,9 @@ window.OrkPlayerSearch = (function () {
       if (destroyed) return;
       if (!enabled()) { root.style.display = 'none'; restorePadding(); return; }
       if (!shown()) { root.style.display = 'none'; return; }
+      // A visibility:hidden input (e.g. the collapsed header search) gets no overlay and no extra
+      // padding, which would otherwise hold a collapsed max-width:0 field open.
+      if (getComputedStyle(input).visibility === 'hidden') { root.style.display = 'none'; restorePadding(); return; }
       root.style.display = '';
       btn.classList.toggle('ops-filter-on', !!current);
       applyPadding();

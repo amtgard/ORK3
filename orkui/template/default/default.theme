@@ -591,6 +591,7 @@ document.addEventListener('keydown', function (e) {
 		} else {
 			var el = document.getElementById('UniversalSearch');
 			if (el) el.value = '';
+			if (nsFilter) nsFilter.set(null);
 			var dd = document.getElementById('nav-search-dropdown');
 			if (dd) { dd.className = ''; dd.innerHTML = ''; }
 		}
@@ -600,6 +601,7 @@ document.addEventListener('keydown', function (e) {
 	var nsKid = <?= (isset($__home) && $__home) ? ((int)$__home['parent_kingdom_id'] > 0 ? (int)$__home['parent_kingdom_id'] : (int)$__home['kingdom_id']) : 0 ?>;
 	var nsPid = <?= (isset($__home) && $__home) ? (int)$__home['park_id'] : 0 ?>;
 	var nsUir = '<?= UIR ?>';
+	var nsFilter = null;   // header kingdom/park filter pill (OrkPlayerSearch.filterField handle)
 
 	$(document).ready(function() {
 		// ---- Dropdowns: close on outside click ----
@@ -619,6 +621,26 @@ document.addEventListener('keydown', function (e) {
 		var nsTimer = null;
 		var nsXhr   = null;
 
+		// Kingdom/park filter pill (players only). All UI comes from the shared component; the
+		// header just re-runs its search when the pill changes (a typed "KCG:AR " prefix becomes
+		// a pill without firing an input event).
+		var nsInput  = document.getElementById('UniversalSearch');
+		nsFilter = (nsInput && window.OrkPlayerSearch) ? OrkPlayerSearch.filterField(nsInput, {
+			uir: nsUir,
+			scope: {},
+			onChange: function() {
+				var term = $.trim(nsInput.value);
+				clearTimeout(nsTimer);
+				if (term.length >= 2) nsSearch(term);
+				else $('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+			}
+		}) : null;
+
+		function nsOpen() {
+			document.getElementById('nav-search-wrap').classList.add('nav-search-open');
+			document.getElementById('nav-search-toggle').classList.add('active');
+		}
+
 		function nsEsc(str) {
 			return $('<span>').text(str || '').html();
 		}
@@ -627,7 +649,9 @@ document.addEventListener('keydown', function (e) {
 			var $dd = $('#nav-search-dropdown');
 			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
 			if (nsXhr) nsXhr.abort();
-			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid,
+			var f = nsFilter ? nsFilter.get() : null;
+			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid
+				+ (f ? '&fk=' + f.kingdomId + '&fp=' + f.parkId : ''),
 				function(res) { nsRender(res || {}); }
 			).fail(function(xhr) {
 				if (xhr.statusText !== 'abort')
@@ -738,6 +762,7 @@ document.addEventListener('keydown', function (e) {
 			nsTimer = setTimeout(function() { nsSearch(term); }, 350);
 		}).on('keydown', function(e) {
 			if (e.key === 'Escape') {
+				if ($('.ops-filter-modal:not([hidden])').length) return;   // Esc belongs to the filter modal
 				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
 				document.getElementById('nav-search-wrap').classList.remove('nav-search-open');
 				document.getElementById('nav-search-toggle').classList.remove('active');
@@ -765,19 +790,20 @@ document.addEventListener('keydown', function (e) {
 		// Once the user clicks/focuses into the search, lock it open so that mousing
 		// off does NOT collapse it or blur the input. It stays open until an
 		// explicit outside click (below) or Escape.
-		$('#UniversalSearch').on('focus', function() {
-			document.getElementById('nav-search-wrap').classList.add('nav-search-open');
-			document.getElementById('nav-search-toggle').classList.add('active');
-		});
+		$('#UniversalSearch').on('focus', nsOpen);
+		// Using the filter icon/pill (e.g. on a hover-expanded field) locks the search open too, so
+		// it is still expanded when the modal hands focus back to the input.
+		$('#nav-search-wrap').on('click focusin', '.ops-filter', nsOpen);
 
 		// Close the search (collapse + clear) only on an actual click OUTSIDE it.
 		$(document).on('click.searchDropdown', function(e) {
-			if (!$(e.target).closest('#nav-search-wrap').length) {
+			if (!$(e.target).closest('#nav-search-wrap, .ops-filter-modal').length) {
 				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
 				document.getElementById('nav-search-wrap').classList.remove('nav-search-open');
 				document.getElementById('nav-search-toggle').classList.remove('active');
 				var _inp = document.getElementById('UniversalSearch');
 				if (_inp) { _inp.value = ''; _inp.blur(); }
+				if (nsFilter) nsFilter.set(null);
 			}
 		});
 	});
