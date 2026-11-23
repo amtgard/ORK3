@@ -67,7 +67,7 @@ details > summary::-webkit-details-marker { display: none; }
 	<!-- Context strip -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Track new player acquisition and retention for parks within this kingdom.</span>
+		<span>Track new player acquisition and retention for parks within this kingdom.<?php $_type_note = ork_attendance_type_note($form['AttendanceType'] ?? 'all'); if ($_type_note !== '') : ?> <strong><?=htmlspecialchars($_type_note)?></strong><?php endif; ?></span>
 	</div>
 
 	<!-- Stats row (only when results exist) -->
@@ -141,6 +141,11 @@ details > summary::-webkit-details-marker { display: none; }
 								Show Player Details
 							</label>
 						</div>
+						<div class="rp-form-group">
+							<label>Attendance Type</label>
+							<?=ork_attendance_type_control((string)($form['AttendanceType'] ?? 'all'))?>
+							<input type="hidden" name="AttendanceType" value="<?=htmlspecialchars((string)($form['AttendanceType'] ?? 'all'))?>">
+						</div>
 						<button type="submit" name="RunReport" value="1" class="rp-btn-run">Run Report</button>
 					</form>
 <?php endif; ?>
@@ -172,6 +177,9 @@ details > summary::-webkit-details-marker { display: none; }
 
 							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Avg Visits / New Player</dt>
 							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">New Player Visits ÷ New Players. Indicates how engaged new players were on average during the period.</dd>
+
+							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Attendance Type</dt>
+							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Who is a new player, and their first park, always come from all sign-ins: an online sign-in counts as playing. In-Person or Online limits the visits, returning players and last sign-in to that kind of sign-in, and New Players to those with at least one sign-in of that kind in the range at the park (or kingdom) being reported: a sign-in somewhere else does not count.</dd>
 
 							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Last Sign-in Date (Player Details)</dt>
 							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">The most recent sign-in date for each player across all time, not limited to the report period. This lets you see whether a new player from a past muster is still active today.</dd>
@@ -374,4 +382,8 @@ details > summary::-webkit-details-marker { display: none; }
 	});
 <?php endif; ?>
 }());
+</script>
+<script>
+/* In-Person / Online / All: keep the hidden field in step; re-run the report when it has already run. */
+if (window.ornBindAttendanceTypeForm) window.ornBindAttendanceTypeForm(document.querySelector('form[action$="Reports/new_player_attendance"]'), <?=isset($form) ? 'true' : 'false'?>);
 </script>

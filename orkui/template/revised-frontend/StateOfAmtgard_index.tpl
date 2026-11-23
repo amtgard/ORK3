@@ -51,6 +51,11 @@ $rangeLimitMonths = (int)($RangeLimitMonths ?? 0);  // 12 in production, 0 = unl
               title="Set dates to the full attendance history (<?= htmlspecialchars($minDate) ?> &ndash; <?= htmlspecialchars($maxDate) ?>)">All Time</button>
     </div>
     <?php endif; ?>
+    <div class="sor-filter-group sor-filter-type" id="sor-type-group">
+      <label id="sor-type-label">Attendance</label>
+      <?= ork_attendance_type_control('all') ?>
+      <p class="sor-type-note" id="sor-type-note" aria-live="polite"></p>
+    </div>
     <div class="sor-filter-group sor-filter-kingdoms">
       <label for="sor-kingdoms">Kingdoms <small style="font-weight:400;color:#888">(Ctrl+click to multi-select)</small></label>
       <select id="sor-kingdoms" multiple size="6">
@@ -179,6 +184,7 @@ window.SOR_RANGE_LIMIT_MONTHS = <?= (int)$rangeLimitMonths ?>;
       A normal player is defined as someone with <strong>4 or more sign-ins</strong> and <strong>at least 12 credits</strong> during the report period.
       Players with only 1&ndash;3 sign-ins are visitors or trial attendees and are excluded from normal-player averages
       to give a more representative picture of engaged community members.
+      With In-Person or Online selected, the figures count only sign-ins of that type, while normal-player status still uses sign-ins of every type.
     </div>
 
     <!-- 3. Two-column prose stats -->
@@ -202,7 +208,7 @@ window.SOR_RANGE_LIMIT_MONTHS = <?= (int)$rangeLimitMonths ?>;
       </div>
       <p class="sor-note" style="margin-top:6px">
         Longevity is measured from a player&#8217;s first-ever attendance record to the end of the report period.
-        Only players active during the selected date range are included.
+        Only players active during the selected date range are included. With In-Person or Online selected, only players with a sign-in of that type in the range are counted; their longevity still runs from their first sign-in of any type.
       </p>
     </div>
 
@@ -212,6 +218,7 @@ window.SOR_RANGE_LIMIT_MONTHS = <?= (int)$rangeLimitMonths ?>;
       <div id="sor-retention-body" style="margin-top:8px"></div>
       <p class="sor-note" style="margin-top:6px">
         Fixed-cohort analysis: only players whose first-ever sign-in was at least 2 years before the latest data, so retention isn&#8217;t censored by recent joiners. This panel ignores the date range above (it always studies mature cohorts) but respects the kingdom filter. A &ldquo;real joiner&rdquo; is anyone with 4+ sign-in days &mdash; matching this report&#8217;s definition of 1&ndash;3 sign-ins as visitors/trial attendees. &ldquo;Still active at N&rdquo; means they actually attended within 3 months of that anniversary, not merely that their first&ndash;last span reached it.
+        With In-Person or Online selected, the cohort is the players with at least one sign-in of that type; median sign-ins, &ldquo;still active&rdquo; and active months count only that type, while one-and-done, real-joiner status and tenure use sign-ins of every type.
       </p>
     </div>
 
@@ -726,6 +733,18 @@ html {
   border-color: #c0392b;
   background: var(--ork-card-bg);
 }
+
+/* In-Person / Online / All. The control itself is styled by orkui.css. */
+.sor-filter-type { max-width: 100%; min-width: 0; }
+.sor-type-note {
+  margin: 0;
+  max-width: 340px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--ork-text-secondary);
+}
+.sor-type-note:empty { display: none; }
 
 /* Setting custom backgrounds on <option> disables the browser's native
    selection highlight, so we paint it ourselves. The linear-gradient hack
@@ -4475,10 +4494,19 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
   /* ----------------------------------------------------------------
      Build the query string from current filter values
   ---------------------------------------------------------------- */
+  // In-Person / Online / All: one page-level value, sent on every section request.
+  var _sorAttendanceType = 'all';
+  var SOR_TYPE_NOTES = {
+    in_person: 'Showing in-person sign-ins only. Player status (new, returning, normal player, real joiner), longevity and park founding / retirement still use every sign-in. Award grants are not affected.',
+    online: 'Showing online sign-ins only. Player status (new, returning, normal player, real joiner), longevity and park founding / retirement still use every sign-in. Award grants are not affected.'
+  };
+  var SOR_TYPE_LABELS = { all: 'All', in_person: 'In-Person', online: 'Online' };
+
   function sorBuildQs() {
     var start = document.getElementById('sor-start').value || '';
     var end   = document.getElementById('sor-end').value   || '';
-    var qs = 'start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end);
+    var qs = 'start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end)
+           + '&AttendanceType=' + encodeURIComponent(_sorAttendanceType);
 
     var sel = document.getElementById('sor-kingdoms');
     if (sel) {
@@ -4491,12 +4519,31 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     return qs;
   }
 
+  // Mount the shared control. A change re-runs every section when the report has
+  // already been generated; otherwise it applies to the next Generate.
+  (function () {
+    var el = document.querySelector('#sor-type-group .orn-type-control');
+    if (!el || typeof window.ornAttendanceTypeControl !== 'function') return;
+    el.setAttribute('aria-labelledby', 'sor-type-label');
+    window.ornAttendanceTypeControl(el, {
+      value: 'all',
+      onChange: function (v) {
+        _sorAttendanceType = v;
+        var note = document.getElementById('sor-type-note');
+        if (note) note.textContent = SOR_TYPE_NOTES[_sorAttendanceType] || '';
+        var report = document.getElementById('sor-report');
+        if (report && report.style.display !== 'none') window.sorGenerate();
+      }
+    });
+  }());
+
   /* ----------------------------------------------------------------
      Status helpers
   ---------------------------------------------------------------- */
   var _sorDone     = 0;
   var _sorTotal    = 0; // FIX F: self-incremented in sorFetch, reset to 0 in sorGenerate
   var _sorTimeoutHandle = null; // FIX G: cancelable timeout for hung fetches
+  var _sorRunSeq = 0; // bumped per sorGenerate; responses from an older run are dropped
   window._sorPayloads = {}; var _sorPayloads = window._sorPayloads;
 
   function sorSetStatus(msg, cls) {
@@ -4524,7 +4571,7 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
   /* ----------------------------------------------------------------
      Fetch one section
   ---------------------------------------------------------------- */
-  function sorFetch(section, qs, renderFn) {
+  function sorFetch(section, qs, renderFn, seq) {
     // _sorTotal is set up-front from the job list in sorGenerate (the pool calls
     // sorFetch gradually, so self-incrementing here made the "x/N" denominator grow).
     // UIR resolves to `.../index.php?Route=` (query-param routing), so the
@@ -4538,11 +4585,13 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
         return r.json();
       })
       .then(function (data) {
+        if (seq !== _sorRunSeq) return; // stale: a newer run (e.g. a type change) has started
         _sorPayloads[section] = data;
         renderFn(data);
         sorSectionDone(section);
       })
       .catch(function (err) {
+        if (seq !== _sorRunSeq) return;
         sorSetStatus('Error loading ' + section + ': ' + err.message, 'sor-status-error');
         // Hide skeleton for sections that have one, so they don't hang
         var skMap = { parks: 'sor-parks-skeleton', players: 'sor-players-skeleton',
@@ -4596,6 +4645,7 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     }
 
     // Reset counters and show report container
+    var runSeq = ++_sorRunSeq;
     _sorDone = 0;
     _sorTotal = 0; // reset; set to the job count once the pool is built (below)
     if (_sorTimeoutHandle) { clearTimeout(_sorTimeoutHandle); _sorTimeoutHandle = null; } // FIX G
@@ -4643,7 +4693,8 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
       var kdLabel = (sel && selKd.length === sel.options.length)
         ? 'All Kingdoms'
         : selKd.slice(0, 5).join(', ') + (selKd.length > 5 ? ' (+' + (selKd.length - 5) + ' more)' : '');
-      printMeta.textContent = 'Period: ' + start + '—' + end + '  •  Kingdoms: ' + kdLabel;
+      printMeta.textContent = 'Period: ' + start + '—' + end + '  •  Kingdoms: ' + kdLabel
+        + '  •  Attendance: ' + SOR_TYPE_LABELS[_sorAttendanceType];
     }
 
     // Fire 6 parallel requests
@@ -4666,10 +4717,11 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     _sorTotal = _sorJobs.length; // fixed denominator so the "x/N" counter doesn't grow as the pool fires
     var _sorJobIdx = 0;
     function _sorRunNext() {
+      if (runSeq !== _sorRunSeq) return; // superseded run: stop feeding the pool
       if (_sorJobIdx >= _sorJobs.length) return;
       var job = _sorJobs[_sorJobIdx++];
       // sorFetch's .catch resolves, so the promise always settles → queue advances.
-      sorFetch(job[0], qs, job[1]).then(_sorRunNext, _sorRunNext);
+      sorFetch(job[0], qs, job[1], runSeq).then(_sorRunNext, _sorRunNext);
     }
     for (var _sc = 0; _sc < SOR_MAX_CONCURRENCY && _sc < _sorJobs.length; _sc++) _sorRunNext();
 

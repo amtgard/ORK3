@@ -2465,3 +2465,73 @@ html[data-theme="dark"] .rp-stats-filter-notice {
     vertical-align: middle;
     margin-left: 4px;
 }
+
+/* Online attendance badge (wifi icon only) — ork_online_badge() (PHP) / ornOnlineBadge()
+   (revised.js). Lives here (not revised.css) because default-theme attendance pages
+   render it too. */
+.orn-online-badge {
+    display: inline-block;
+    position: relative;
+    color: var(--ork-text-muted);
+    font-size: 0.85em;
+    line-height: 1;
+    vertical-align: baseline;
+    cursor: default;
+}
+/* Tooltip. Hover-only ::after so nothing is laid out at rest inside scrolling
+   containers. Shown to the RIGHT, vertically centred, so it stays inside a table
+   row: DataTables scrollX bodies clip the usual above-the-element tip on the first
+   row. !important on placement: revised.css's generic [data-tip] rule has higher
+   specificity and anchors tips above. */
+.orn-online-badge[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: 50% !important;
+    bottom: auto !important;
+    left: calc(100% + 6px) !important;
+    right: auto !important;
+    transform: translateY(-50%) !important;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: #1a202c;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: nowrap;
+    text-align: left;
+    pointer-events: none;
+    z-index: var(--z-tooltip);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+html[data-theme="dark"] .orn-online-badge[data-tip]:hover::after {
+    background: #f7fafc;
+    color: #1a202c;
+}
+/* Online? labeled checkbox (inline edits, Behold). Here for the same reason as the
+   badge: default-theme attendance pages use it too. */
+.orn-online-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    font-size: 13px;
+    color: var(--ork-text);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.orn-online-check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
+.form-container label.orn-online-check { display: inline-flex; width: auto; margin-left: 0; }
+html[data-theme="dark"] .form-container label.orn-online-check { color: var(--ork-text); }
+
+/* ---- Attendance type control (In-Person | Online | All) — see ornAttendanceTypeControl() in orkui.js ---- */
+.orn-type-control { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--ork-border-dark); border-radius: 8px; overflow: hidden; background: var(--ork-card-bg); }
+.orn-type-control .orn-type-opt { min-height: 44px; min-width: 44px; padding: 0 16px; margin: 0; border: 0; border-radius: 0; background: transparent; color: var(--ork-text-secondary); font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2; cursor: pointer; flex: 1 1 auto; }
+.orn-type-control .orn-type-opt + .orn-type-opt { border-left: 1px solid var(--ork-border-dark); }
+.orn-type-control .orn-type-opt:hover { background: var(--ork-bg-inset); color: var(--ork-text); }
+.orn-type-control .orn-type-opt.orn-type-active,
+.orn-type-control .orn-type-opt[aria-pressed="true"] { background: var(--ork-link); color: #fff; }
+.orn-type-control .orn-type-opt:focus-visible { outline: 2px solid var(--ork-link-bright); outline-offset: -2px; }
+html[data-theme="dark"] .orn-type-control .orn-type-opt.orn-type-active,
+html[data-theme="dark"] .orn-type-control .orn-type-opt[aria-pressed="true"] { background: var(--ork-link-bright); color: #1a202c; }
+@media (max-width: 600px) { .orn-type-control .orn-type-opt { padding: 0 10px; } }

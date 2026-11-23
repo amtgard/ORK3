@@ -513,6 +513,32 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     border-top : 1px solid var(--ork-divider);
 }
 
+/* ── Sign-ins counted (In-Person / Online / All) ─────────────
+   Page-level, above Filters; the switch itself is the shared .orn-type-control (orkui.css). */
+.pe-type-bar {
+    display      : flex;
+    flex-wrap    : wrap;
+    align-items  : center;
+    gap          : 8px 12px;
+    min-width    : 0;
+    padding      : 10px 14px;
+    background   : var(--rp-card-bg, var(--ork-card-bg));
+    border       : 1px solid var(--rp-border);
+    border-radius: 8px;
+    box-shadow   : var(--ork-shadow-card);
+}
+.pe-type-label {
+    display    : inline-flex;
+    align-items: center;
+    gap        : 6px;
+    font-size  : 13px;
+    font-weight: 600;
+    color      : var(--rp-text-body);
+}
+.pe-type-label i { color: var(--rp-text-muted); }
+.pe-type-note { font-size: 12px; font-weight: 600; color: var(--pe-accent-text); text-align: left; }
+.pe-type-note:empty { display: none; }
+
 /* ── Action bar: Run, dirty hint, Copy link, Export ────────
    Outside the folding cards (spec §5), so it is always visible. */
 .pe-action-bar {
@@ -717,6 +743,8 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     .pe-group-actions .pe-btn-add { flex: 1 1 0; justify-content: center; }
     .pe-connector { padding-left: 4px; }
     .pe-action-bar { flex-direction: column; align-items: stretch; padding: 10px 12px; }
+    .pe-type-bar { flex-direction: column; align-items: stretch; padding: 10px 12px; }
+    .pe-type-bar .orn-type-control { width: 100%; }
     .pe-btn-run { min-height: 44px; }
     .pe-root .dt-buttons .dt-button.pe-dt-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; }
     .pe-btn-link { min-height: 44px; }

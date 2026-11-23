@@ -953,12 +953,16 @@ class Controller_Reports extends Controller
         $end_date        = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
                             ? $this->request->EndDate : date('Y-m-d');
 
+        // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
+
         $form = array(
             'KingdomId'         => $kingdom_id,
             'ParkId'            => $park_id,
             'StartDate'         => $start_date,
             'EndDate'           => $end_date,
-            'ShowPlayerDetails' => $show_details ? 1 : 0
+            'ShowPlayerDetails' => $show_details ? 1 : 0,
+            'AttendanceType'    => $attendance_type
         );
         $this->data['form'] = $form;
 
@@ -967,7 +971,8 @@ class Controller_Reports extends Controller
             'ParkId'               => $park_id,
             'StartDate'            => $start_date,
             'EndDate'              => $end_date,
-            'IncludePlayerDetails' => $show_details
+            'IncludePlayerDetails' => $show_details,
+            'AttendanceType'       => $attendance_type
         ));
 
         if (is_array($result)) {
@@ -1027,7 +1032,9 @@ class Controller_Reports extends Controller
             'ParkId' => $park_id,
             'AvgByUniques' => isset($this->request->AvgByUniques) ? 1 : 0,
             'LocalPlayersOnly' => isset($this->request->LocalPlayersOnly) ? 1 : 0,
-            'GridView' => isset($this->request->GridView) ? 1 : 0
+            'GridView' => isset($this->request->GridView) ? 1 : 0,
+            // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+            'AttendanceType' => is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all'
         );
         $this->data['form'] = $form;
 
@@ -1040,7 +1047,8 @@ class Controller_Reports extends Controller
                 'EndDate' => $rounded_end,
                 'Period' => $period,
                 'MinimumSignIns' => $form['MinimumSignIns'],
-                'LocalPlayersOnly' => $form['LocalPlayersOnly']
+                'LocalPlayersOnly' => $form['LocalPlayersOnly'],
+                'AttendanceType' => $form['AttendanceType']
             ));
             $this->data['mode'] = 'single_park';
 
@@ -1080,7 +1088,8 @@ class Controller_Reports extends Controller
                 'StartDate' => $rounded_start,
                 'EndDate' => $rounded_end,
                 'Period' => $period,
-                'LocalPlayersOnly' => $form['LocalPlayersOnly']
+                'LocalPlayersOnly' => $form['LocalPlayersOnly'],
+                'AttendanceType' => $form['AttendanceType']
             ));
             $this->data['mode'] = 'all_parks';
             // Full ordered period list so the grid shows empty periods (as 0) in order.
@@ -1483,6 +1492,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         if ((int)($r['Status']['Status'] ?? 1) !== 0) {
             echo json_encode($this->_pe_json_error($r));
@@ -1529,6 +1540,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         $path = is_string($r['Path'] ?? null) ? $r['Path'] : '';
         if ($path !== '') {

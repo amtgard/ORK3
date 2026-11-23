@@ -33,6 +33,9 @@ final class ReportsFixture
     /** @var list<int> */
     private array $kingdomAwardIds = [];
 
+    /** @var array<string, array{0: int, 1: string, 2: string|null}> kingdom|key => [kingdomId, key, original value or null when absent] */
+    private array $configRestores = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -152,7 +155,7 @@ final class ReportsFixture
         return $id;
     }
 
-    public function insertAttendance(int $mundaneId, int $parkId, int $kingdomId, string $date, int $eventId = 0): int
+    public function insertAttendance(int $mundaneId, int $parkId, int $kingdomId, string $date, int $eventId = 0, int $online = 0): int
     {
         $classId = (int) $this->pdo->query(
             'SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id ASC LIMIT 1'
@@ -165,8 +168,8 @@ final class ReportsFixture
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'attendance
              (park_id, kingdom_id, mundane_id, persona, class_id, date, credits, note, flavor, by_whom_id,
-              entered_at, entry_method, event_id, event_calendardetail_id, date_year, date_month, date_week3, date_week6)
-             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', ?, 0, ?, ?, ?, 0)'
+              entered_at, entry_method, event_id, event_calendardetail_id, date_year, date_month, date_week3, date_week6, online)
+             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', ?, 0, ?, ?, ?, 0, ?)'
         );
         $stmt->execute([
             $parkId,
@@ -180,6 +183,7 @@ final class ReportsFixture
             (int) date('Y', $timestamp),
             (int) date('n', $timestamp),
             (int) date('W', $timestamp),
+            $online ? 1 : 0,
         ]);
         $id = (int) $this->pdo->lastInsertId();
         $this->attendanceIds[] = $id;
@@ -405,8 +409,71 @@ final class ReportsFixture
         return (string) $stmt->fetchColumn();
     }
 
+    /**
+     * Set (or create) a kingdom ork_configuration row; the original is restored in cleanup().
+     * $jsonValue is stored verbatim, e.g. '"0"'.
+     */
+    public function setKingdomConfig(int $kingdomId, string $key, string $jsonValue): void
+    {
+        $slot = $kingdomId . '|' . $key;
+        $current = $this->kingdomConfigValue($kingdomId, $key);
+        if (!array_key_exists($slot, $this->configRestores)) {
+            $this->configRestores[$slot] = [$kingdomId, $key, $current];
+        }
+        if ($current === null) {
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO ' . DB_PREFIX . "configuration (type, id, `key`, value, user_setting, allowed_values, var_type)
+                 VALUES ('Kingdom', ?, ?, ?, 1, 'null', 'fixed')"
+            );
+            $stmt->execute([$kingdomId, $key, $jsonValue]);
+        } else {
+            $stmt = $this->pdo->prepare(
+                'UPDATE ' . DB_PREFIX . "configuration SET value = ? WHERE type = 'Kingdom' AND id = ? AND `key` = ?"
+            );
+            $stmt->execute([$jsonValue, $kingdomId, $key]);
+        }
+    }
+
+    /**
+     * Remove a kingdom ork_configuration row; the original is restored in cleanup().
+     */
+    public function deleteKingdomConfig(int $kingdomId, string $key): void
+    {
+        $slot = $kingdomId . '|' . $key;
+        if (!array_key_exists($slot, $this->configRestores)) {
+            $this->configRestores[$slot] = [$kingdomId, $key, $this->kingdomConfigValue($kingdomId, $key)];
+        }
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM ' . DB_PREFIX . "configuration WHERE type = 'Kingdom' AND id = ? AND `key` = ?"
+        );
+        $stmt->execute([$kingdomId, $key]);
+    }
+
+    private function kingdomConfigValue(int $kingdomId, string $key): ?string
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT value FROM ' . DB_PREFIX . "configuration WHERE type = 'Kingdom' AND id = ? AND `key` = ? LIMIT 1"
+        );
+        $stmt->execute([$kingdomId, $key]);
+        $value = $stmt->fetchColumn();
+
+        return $value === false ? null : (string) $value;
+    }
+
     public function cleanup(): void
     {
+        foreach ($this->configRestores as [$kingdomId, $key, $original]) {
+            if ($original === null) {
+                $stmt = $this->pdo->prepare(
+                    'DELETE FROM ' . DB_PREFIX . "configuration WHERE type = 'Kingdom' AND id = ? AND `key` = ?"
+                );
+                $stmt->execute([$kingdomId, $key]);
+            } else {
+                $this->setKingdomConfig($kingdomId, $key, $original);
+            }
+        }
+        $this->configRestores = [];
+
         if ($this->authIds !== []) {
             $in = implode(',', array_map('intval', $this->authIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "authorization WHERE authorization_id IN ({$in})");

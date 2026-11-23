@@ -1134,7 +1134,8 @@ class Player extends Ork3
                         'ClassName' => $r->class_name,
                         'ParkName' => $r->park_name,
                         'KingdomName' => $r->kingdom_name,
-                        'EventName' => $r->event_name
+                        'EventName' => $r->event_name,
+                        'Online' => (int) $r->online,
                     );
                 if (is_numeric($limit)) {
                     $limit--;

@@ -23,6 +23,7 @@ if ($_has_data) {
 $_active_filters = [];
 if (!empty($NativePopulace)) $_active_filters[] = 'Local Players Only';
 if (!empty($Waivered))       $_active_filters[] = 'Waivered Players Only';
+$_type_note = ork_attendance_type_note($AttendanceType ?? 'all');
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
@@ -72,7 +73,7 @@ details > summary::-webkit-details-marker { display: none; }
 	<!-- Context strip -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Ranked by average weekly attendance from <strong><?=htmlspecialchars($StartDate)?></strong> to <strong><?=htmlspecialchars($EndDate)?></strong> (<?=$_week_count?> weeks).</span>
+		<span>Ranked by average weekly attendance from <strong><?=htmlspecialchars($StartDate)?></strong> to <strong><?=htmlspecialchars($EndDate)?></strong> (<?=$_week_count?> weeks).<?php if ($_type_note !== '') : ?> <strong><?=htmlspecialchars($_type_note)?></strong><?php endif; ?></span>
 	</div>
 
 <?php if ($_has_data): ?>
@@ -136,6 +137,11 @@ details > summary::-webkit-details-marker { display: none; }
 								Waivered Players Only
 							</label>
 						</div>
+						<div class="rp-form-group">
+							<label>Attendance Type</label>
+							<?=ork_attendance_type_control((string)($AttendanceType ?? 'all'))?>
+							<input type="hidden" name="AttendanceType" value="<?=htmlspecialchars((string)($AttendanceType ?? 'all'))?>">
+						</div>
 						<button type="submit" class="rp-btn-run">Update</button>
 					</form>
 				</div>
@@ -156,6 +162,9 @@ details > summary::-webkit-details-marker { display: none; }
 
 							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Waivered Players Only</dt>
 							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Counts only attendance by players with a signed waiver on file.</dd>
+
+							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Attendance Type</dt>
+							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Counts only In-Person or only Online sign-ins. All counts both.</dd>
 						</dl>
 					</div>
 				</details>
@@ -243,4 +252,8 @@ $(function () {
 	}).observe(document.documentElement, { attributeFilter: ['data-theme'] });
 <?php endif; ?>
 });
+</script>
+<script>
+/* In-Person / Online / All: keep the hidden field in step; re-run the report when it has already run. */
+if (window.ornBindAttendanceTypeForm) window.ornBindAttendanceTypeForm(document.querySelector('form[action$="Admin/topparks"]'), true);
 </script>
