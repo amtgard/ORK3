@@ -83,6 +83,13 @@
     var EDIT_SUBMIT = 'Update my answers';
     var EDIT_DONE = 'Your answers have been updated.';
     var EDIT_LINK_LEAD = 'You can change your answers until this survey closes:';
+    // While a survey allows changes, every response keeps a private link (an
+    // HMAC key plus a copy of the answers) until the survey closes, so the
+    // anonymous promise has to say so instead of "nothing".
+    var ANON_DESC = 'Record nothing about me.';
+    var ANON_DESC_EDIT = 'Record nothing about me, apart from a private link kept only so I can change my answers; it is wiped when the survey closes.';
+    var ANON_INTRO = 'Your answers are recorded anonymously. Nothing about you is stored with them.';
+    var ANON_INTRO_EDIT = 'Your answers are recorded anonymously. Until this survey closes, the only thing kept with them is a private link so you can change them; it is wiped at close.';
 
     /** The scope reason names who the survey is for; the generic line is the fallback. */
     function reasonText(reason, s) {
@@ -141,7 +148,7 @@
                 title: 'My Kingdom and How Long I\'ve Been Playing',
                 desc: 'Record only my kingdom and a years-played range, such as 3–5 years. No name, no profile link.'
             },
-            { value: 'anonymous', title: 'Anonymous Only', desc: 'Record nothing about me.' }
+            { value: 'anonymous', title: 'Anonymous Only', desc: (s && s.allow_edit) ? ANON_DESC_EDIT : ANON_DESC }
         ];
     }
 
@@ -950,7 +957,7 @@
             html += '<p class="sv-intro">Your updated answers replace the ones you sent before.</p>';
         } else {
             html += '<h2 class="sv-card-title">Ready to send</h2>';
-            html += '<p class="sv-intro">Your answers are recorded anonymously. Nothing about you is stored with them.</p>';
+            html += '<p class="sv-intro">' + esc((s && s.allow_edit) ? ANON_INTRO_EDIT : ANON_INTRO) + '</p>';
         }
 
         if (IS_PREVIEW) {

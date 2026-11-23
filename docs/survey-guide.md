@@ -319,6 +319,10 @@ On the last screen they choose:
 >   range, such as 3–5 years. No name, no profile link.
 > - **Anonymous Only** — Record nothing about me.
 
+When the survey allows **Update my answers**, the last option instead reads *"Record nothing about
+me, apart from a private link kept only so I can change my answers; it is wiped when the survey
+closes."* — the link (a key and a copy of the answers) exists on every response until close.
+
 On a park survey that reads, for example, *"The Rivermoor officers, the Kingdom of the Wetlands
 officers, and ORK administrators…"*: kingdom officers can manage every park survey in their kingdom,
 and a parent kingdom's officers can manage its principality's surveys, so the copy names them too.
