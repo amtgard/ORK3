@@ -19,12 +19,18 @@
        onSelect: function(player){...},   // player = normalized row from SearchAjax/players
        onClear:  function(){...},         // fired on any edit — clear any stored selection (hidden MundaneId)
        uir: window.UIR,                   // optional; defaults to global UIR
-       preload: [{MundaneId,Persona,...}] // shown on focus when input is empty
+       preload: [{MundaneId,Persona,...}], // shown on focus when input is empty
+       filter: false,         // opt out of the kingdom/park filter icon + pill (default on; never
+                              // shown for restrictTo:'park' or when the scope has no kingdoms)
        // includeInactive / includeSuspended are accepted but IGNORED — inactive is now always a
        // last-resort tier and banned visibility is decided server-side by the viewer's authority.
      });
    Returns: { close, destroy, setOpts }
-   OrkPlayerSearch.reattach(inputEl, newOpts) — setOpts on existing or attach fresh.
+   OrkPlayerSearch.reattach(inputEl, newOpts) — setOpts on existing or attach fresh (a new scope
+     re-validates the filter pill and clears it when it no longer resolves).
+   OrkPlayerSearch.filterField(inputEl, {uir, scope, onChange(filter|null, info)})
+     → {get, set, setScope, destroy} — the filter UI alone, for searches that render their own
+     results (header Universal Search). scope uses the attach() scope keys.
 */
 window.OrkPlayerSearch = (function () {
   var DEBOUNCE = 220, MINLEN = 2, uidSeq = 0;
@@ -56,6 +62,442 @@ window.OrkPlayerSearch = (function () {
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', repositionOpen);
     window.visualViewport.addEventListener('scroll', repositionOpen);
+  }
+
+  /* ================= Scope filter: icon + pill + kingdom/park modal =================
+     One implementation for every player search. attach() wires it in unless opts.filter===false;
+     the header Universal Search uses OrkPlayerSearch.filterField() directly.
+     filter = {kingdomId, kingdomName, kingdomAbbr, parkId, parkName, parkAbbr} (parkId 0 = whole kingdom).
+     The server ANDs it with the field's hard scope, so it can only ever narrow. */
+  // "KCG:AR ", "KCG: ", "KCG:* " at the very start, closed by whitespace. A bare "KCG " is NOT
+  // converted, so ordinary short names ("Al ") are never eaten.
+  var FILTER_PREFIX_RE = /^([A-Za-z0-9]{2,3}):([A-Za-z0-9]{2,3}|\*)?\s/;
+  var filterFields = [];      // registry → one set of layout listeners for all fields
+  var kingdomCache = {};      // scope key → Promise<[{id,name,abbr}]>, page lifetime
+  var parkCache = {};         // scope key + kingdom → Promise<[{id,name,abbr,kingdomId?,kingdomAbbr?}]>
+
+  function scopeFrom(o){
+    o = o || {};
+    return { kingdomId: o.kingdomId || 0, parkId: o.parkId || 0, restrictTo: o.restrictTo || '',
+      restrictKingdomIds: list(o.restrictKingdomIds), excludeKingdomId: o.excludeKingdomId || 0,
+      excludeParkId: o.excludeParkId || 0 };
+  }
+  function scopeQS(s){
+    var rk = csv(s.restrictKingdomIds);
+    return '&kingdomId=' + (parseInt(s.kingdomId, 10) || 0) + '&parkId=' + (parseInt(s.parkId, 10) || 0)
+      + (s.restrictTo       ? '&restrictTo='         + encodeURIComponent(s.restrictTo) : '')
+      + (rk                 ? '&restrictKingdomIds=' + encodeURIComponent(rk)           : '')
+      + (s.excludeKingdomId ? '&excludeKingdomId='   + (parseInt(s.excludeKingdomId, 10) || 0) : '')
+      + (s.excludeParkId    ? '&excludeParkId='      + (parseInt(s.excludeParkId, 10) || 0)    : '');
+  }
+  function getJSON(url, signal){
+    return fetch(url, signal ? { signal: signal, credentials: 'same-origin' } : { credentials: 'same-origin' })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function cached(store, key, url, pick){
+    if (!store[key]) {
+      store[key] = getJSON(url).then(function(d){ return (d && d[pick]) || []; });
+      store[key].catch(function(){ delete store[key]; });   // a failed load may be retried
+    }
+    return store[key];
+  }
+  function loadKingdoms(uir, scope){
+    var k = scopeQS(scope);
+    return cached(kingdomCache, k, uir + 'SearchAjax/filteroptions' + k, 'kingdoms');
+  }
+  function loadParks(uir, scope, kid){
+    var k = scopeQS(scope) + '&forKingdom=' + (parseInt(kid, 10) || 0);
+    return cached(parkCache, k, uir + 'SearchAjax/filteroptions' + k, 'parks');
+  }
+  function filterLabel(f){
+    var k = f.kingdomAbbr || f.kingdomName || '';
+    return f.parkId ? k + ':' + (f.parkAbbr || f.parkName || '') : k;
+  }
+  function filterTip(f){
+    return 'Filtering to ' + (f.kingdomName || f.kingdomAbbr || '')
+      + (f.parkId ? ' - ' + (f.parkName || f.parkAbbr || '') : '');
+  }
+  function normFilter(m){
+    if (!m || !(parseInt(m.kingdomId, 10) > 0)) return null;
+    return { kingdomId: parseInt(m.kingdomId, 10), kingdomName: m.kingdomName || '', kingdomAbbr: m.kingdomAbbr || '',
+      parkId: parseInt(m.parkId, 10) || 0, parkName: m.parkId ? (m.parkName || '') : '',
+      parkAbbr: m.parkId ? (m.parkAbbr || '') : '' };
+  }
+
+  // Layout sync: overlays are absolutely positioned siblings, so every layout change that can move
+  // or resize the input re-measures (rAF-batched). Scroll only matters for fields whose overlay
+  // sits outside a scroll container that the input is inside (flag computed per sync).
+  var syncQueued = false, syncScrollOnly = true;
+  function queueSync(scrollOnly){
+    if (!scrollOnly) syncScrollOnly = false;
+    if (syncQueued) return;
+    syncQueued = true;
+    (window.requestAnimationFrame || setTimeout)(function(){
+      var only = syncScrollOnly; syncQueued = false; syncScrollOnly = true;
+      filterFields.forEach(function(f){ if (!only || f.scrollSensitive) f.sync(); });
+    });
+  }
+  var ro = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(function(){ queueSync(false); }) : null;
+  window.addEventListener('resize', function(){ queueSync(false); });
+  window.addEventListener('scroll', function(){ if (filterFields.length) queueSync(true); }, true);
+  ['transitionend', 'animationend'].forEach(function(ev){
+    document.addEventListener(ev, function(){ if (filterFields.length) queueSync(false); }, true);
+  });
+
+  // ---- The one shared modal (built lazily, appended to body) ----
+  var modal = null, modalField = null, modalSeq = 0;
+  function buildModal(){
+    var root = document.createElement('div');
+    root.className = 'ops-filter-modal';
+    root.hidden = true;
+    root.innerHTML =
+        '<div class="ops-filter-backdrop"></div>'
+      + '<div class="ops-filter-dialog" role="dialog" aria-modal="true" aria-labelledby="ops-filter-title">'
+      +   '<div class="ops-filter-title" id="ops-filter-title"><i class="fas fa-filter" aria-hidden="true"></i> Filter by kingdom or park</div>'
+      +   '<label class="ops-filter-lbl" for="ops-filter-k">Kingdom</label>'
+      +   '<select class="ops-filter-sel" id="ops-filter-k"><option value="">All kingdoms</option></select>'
+      +   '<label class="ops-filter-lbl" for="ops-filter-p">Park</label>'
+      +   '<select class="ops-filter-sel" id="ops-filter-p" disabled><option value="">All parks</option></select>'
+      +   '<div class="ops-filter-msg" aria-live="polite"></div>'
+      +   '<div class="ops-filter-foot">'
+      +     '<button type="button" class="ops-filter-b ops-filter-b-clear">Clear</button>'
+      +     '<span class="ops-filter-spacer"></span>'
+      +     '<button type="button" class="ops-filter-b ops-filter-b-cancel">Cancel</button>'
+      +     '<button type="button" class="ops-filter-b ops-filter-b-apply">Apply</button>'
+      +   '</div>'
+      + '</div>';
+    document.body.appendChild(root);
+    var m = { root: root, dialog: root.querySelector('.ops-filter-dialog'),
+      kSel: root.querySelector('#ops-filter-k'), pSel: root.querySelector('#ops-filter-p'),
+      msg: root.querySelector('.ops-filter-msg'), kingdoms: [], parks: [] };
+    // Keep the modal's events from reaching host-page "outside click"/Escape handlers
+    // (host modals, the header search collapse, the dropdown close listener).
+    ['click', 'mousedown', 'pointerdown', 'touchstart', 'keydown', 'focusin'].forEach(function(ev){
+      root.addEventListener(ev, function(e){ e.stopPropagation(); });
+    });
+    root.querySelector('.ops-filter-backdrop').addEventListener('click', function(){ closeModal(); });
+    root.querySelector('.ops-filter-b-cancel').addEventListener('click', function(){ closeModal(); });
+    root.querySelector('.ops-filter-b-clear').addEventListener('click', function(){
+      var f = modalField; closeModal(); if (f) f.apply(null);
+    });
+    root.querySelector('.ops-filter-b-apply').addEventListener('click', function(){
+      var f = modalField, kid = parseInt(m.kSel.value, 10) || 0, pid = parseInt(m.pSel.value, 10) || 0;
+      var k = null, p = null, i;
+      for (i = 0; i < m.kingdoms.length; i++) if (parseInt(m.kingdoms[i].id, 10) === kid) k = m.kingdoms[i];
+      for (i = 0; i < m.parks.length; i++) if (parseInt(m.parks[i].id, 10) === pid) p = m.parks[i];
+      closeModal();
+      if (!f) return;
+      f.apply(k ? { kingdomId: kid, kingdomName: k.name, kingdomAbbr: k.abbr,
+        parkId: p ? pid : 0, parkName: p ? p.name : '', parkAbbr: p ? p.abbr : '' } : null);
+    });
+    m.kSel.addEventListener('change', function(){ fillParks(parseInt(m.kSel.value, 10) || 0, 0); });
+    root.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+      if (e.key !== 'Tab') return;
+      // Focus trap: cycle through the dialog's enabled controls.
+      var els = Array.prototype.filter.call(m.dialog.querySelectorAll('select, button'),
+        function(el){ return !el.disabled; });
+      if (!els.length) return;
+      var first = els[0], last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+      else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+      else if (els.indexOf(document.activeElement) < 0) { first.focus(); e.preventDefault(); }
+    });
+    return m;
+  }
+  function setOptions(sel, placeholder, rows, labelFn){
+    sel.innerHTML = '';
+    var o = document.createElement('option'); o.value = ''; o.textContent = placeholder; sel.appendChild(o);
+    rows.forEach(function(r){
+      var op = document.createElement('option');
+      op.value = String(r.id); op.textContent = labelFn(r);   // textContent: names arrive unescaped
+      sel.appendChild(op);
+    });
+  }
+  function fillParks(kid, presetPid){
+    var m = modal, f = modalField, seq = ++modalSeq;
+    m.parks = [];
+    setOptions(m.pSel, 'All parks', [], null);
+    m.pSel.disabled = true;
+    if (!kid || !f) return;
+    loadParks(f.uir(), f.scope(), kid).then(function(parks){
+      if (seq !== modalSeq || modalField !== f) return;
+      m.parks = parks;
+      // Principality parks follow the kingdom's own; tag them with their principality.
+      setOptions(m.pSel, 'All parks', parks, function(p){
+        var pk = parseInt(p.kingdomId, 10) || 0;
+        return p.name + (pk && pk !== kid && p.kingdomAbbr ? ' (' + p.kingdomAbbr + ')' : '');
+      });
+      m.pSel.disabled = false;
+      if (presetPid) m.pSel.value = String(presetPid);
+      if (m.pSel.value !== String(presetPid || '')) m.pSel.value = '';
+    }).catch(function(){
+      if (seq === modalSeq) m.msg.textContent = 'Could not load parks — try again';
+    });
+  }
+  function openModal(field){
+    if (!modal) modal = buildModal();
+    var m = modal, seq = ++modalSeq, cur = field.get();
+    modalField = field;
+    m.msg.textContent = 'Loading kingdoms…';
+    m.kingdoms = []; m.parks = [];
+    setOptions(m.kSel, 'All kingdoms', [], null); m.kSel.disabled = true;
+    setOptions(m.pSel, 'All parks', [], null);    m.pSel.disabled = true;
+    m.root.hidden = false;
+    m.root.querySelector('.ops-filter-b-cancel').focus();
+    loadKingdoms(field.uir(), field.scope()).then(function(ks){
+      if (seq !== modalSeq || modalField !== field) return;
+      if (!ks.length) { closeModal(); field.markEmpty(); return; }
+      m.kingdoms = ks;
+      m.msg.textContent = '';
+      setOptions(m.kSel, 'All kingdoms', ks, function(k){ return k.name; });
+      m.kSel.disabled = false;
+      if (cur) m.kSel.value = String(cur.kingdomId);
+      if (cur && m.kSel.value === String(cur.kingdomId)) fillParks(cur.kingdomId, cur.parkId);
+      else m.kSel.value = '';
+      m.kSel.focus();
+    }).catch(function(){
+      if (seq === modalSeq) m.msg.textContent = 'Could not load kingdoms — try again';
+    });
+  }
+  function closeModal(){
+    if (!modal || modal.root.hidden) return;
+    var f = modalField;
+    modal.root.hidden = true;
+    modalField = null; modalSeq++;
+    if (f) f.focusInput();
+  }
+
+  /* filterField(input, {uir, scope, onChange(filter|null, info)}) → {get, set, setScope, destroy}
+     info.textChanged is true when the visible text changed (pill broken back into text / prefix
+     absorbed), so a host can drop a stale selection. */
+  function filterField(input, cfg){
+    if (!input || !input.parentNode) return null;
+    if (input._opsFilter) { input._opsFilter.configure(cfg || {}); return input._opsFilter; }
+    cfg = cfg || {};
+    var scope = scopeFrom(cfg.scope), current = null, emptyScope = false, checkedKey = null;
+    var rTimer = null, rCtrl = null, destroyed = false;
+
+    var root = document.createElement('span');
+    root.className = 'ops-filter';
+    var pill = document.createElement('span');
+    pill.className = 'ops-filter-pill';
+    pill.hidden = true;
+    var pillTxt = document.createElement('span');
+    pillTxt.className = 'ops-filter-pill-label';
+    var pillX = document.createElement('button');
+    pillX.type = 'button'; pillX.className = 'ops-filter-pill-x';
+    pillX.setAttribute('aria-label', 'Remove filter');
+    pillX.textContent = '×';
+    pill.appendChild(pillTxt); pill.appendChild(pillX);
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'ops-filter-btn';
+    btn.setAttribute('aria-label', 'Filter by kingdom or park');
+    btn.setAttribute('data-tip', 'Filter by kingdom or park');
+    btn.setAttribute('aria-haspopup', 'dialog');
+    btn.innerHTML = '<i class="fas fa-filter" aria-hidden="true"></i>';
+    root.appendChild(pill); root.appendChild(btn);
+    // After the input: out of flow (absolute), so flex/grid/table layouts are untouched, and the
+    // tab order runs input → pill × → filter button.
+    input.parentNode.insertBefore(root, input.nextSibling);
+
+    // Padding: keep the host's own padding and add room for the overlays; content-box inputs get a
+    // compensating width so the field's outer size never changes. All restored on destroy.
+    var orig = { pl: input.style.paddingLeft, pr: input.style.paddingRight, w: input.style.width };
+    var cs0 = getComputedStyle(input);
+    var baseL = parseFloat(cs0.paddingLeft) || 0, baseR = parseFloat(cs0.paddingRight) || 0;
+    var contentBox = cs0.boxSizing === 'content-box';
+    var specW = null, autoW = null, applied = 0;
+    if (contentBox) {
+      // A display:none element reports its specified width ("100%", "auto", "12em") — read it once.
+      var prevDisp = input.style.display;
+      input.style.display = 'none';
+      specW = getComputedStyle(input).width;
+      input.style.display = prevDisp;
+    }
+
+    function enabled(){ return scope.restrictTo !== 'park' && !emptyScope; }
+    function shown(){ return input.isConnected && input.getClientRects().length > 0; }
+    function restorePadding(){
+      input.style.paddingLeft = orig.pl; input.style.paddingRight = orig.pr; input.style.width = orig.w;
+      applied = 0;
+    }
+    function applyPadding(){   // only called while the overlay is rendered (offsetWidths are real)
+      var addL = current ? pill.offsetWidth + 6 : 0;
+      var addR = btn.offsetWidth + 2;
+      input.style.paddingLeft  = addL ? (baseL + addL) + 'px' : orig.pl;
+      input.style.paddingRight = (baseR + addR) + 'px';
+      if (!contentBox) return;
+      var delta = addL + addR;
+      if (delta === applied) return;
+      if (specW && specW !== 'auto') {
+        input.style.width = 'calc(' + specW + ' - ' + delta + 'px)';
+      } else {
+        // width:auto is intrinsic (size attr), so freeze that content width minus the added padding.
+        if (autoW === null) autoW = parseFloat(getComputedStyle(input).width) || 0;
+        input.style.width = Math.max(autoW - delta, 20) + 'px';
+      }
+      applied = delta;
+    }
+    function scrollerBetween(){
+      // A clipping/scrolling ancestor between the input and the overlay's containing block means
+      // the overlay won't scroll/clip with the input on its own.
+      var cb = root.offsetParent, el = input.parentElement;
+      while (el && el !== cb && el !== document.body) {
+        var cs = getComputedStyle(el);
+        if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') return el;
+        el = el.parentElement;
+      }
+      return null;
+    }
+    var field;
+    function sync(){
+      if (destroyed) return;
+      if (!enabled()) { root.style.display = 'none'; restorePadding(); return; }
+      if (!shown()) { root.style.display = 'none'; return; }
+      root.style.display = '';
+      btn.classList.toggle('ops-filter-on', !!current);
+      applyPadding();
+      root.style.left = '0px'; root.style.top = '0px';
+      var r0 = root.getBoundingClientRect(), ri = input.getBoundingClientRect();
+      root.style.left = (ri.left - r0.left) + 'px';
+      root.style.top  = (ri.top - r0.top) + 'px';
+      root.style.width  = input.offsetWidth + 'px';
+      root.style.height = input.offsetHeight + 'px';
+      var sc = scrollerBetween();
+      field.scrollSensitive = !!sc;
+      var hide = false;
+      if (sc) { var rs = sc.getBoundingClientRect(); hide = ri.bottom <= rs.top || ri.top >= rs.bottom || ri.right <= rs.left || ri.left >= rs.right; }
+      root.style.visibility = hide ? 'hidden' : '';
+    }
+    function render(){
+      pill.hidden = !current;
+      if (current) {
+        pillTxt.textContent = filterLabel(current);
+        pill.setAttribute('data-tip', filterTip(current));
+      } else {
+        pill.removeAttribute('data-tip');
+      }
+      sync();
+    }
+    function set(f, info){
+      var next = enabled() ? normFilter(f) : null;
+      var same = (!next && !current) || (next && current && next.kingdomId === current.kingdomId && next.parkId === current.parkId);
+      current = next;
+      render();
+      if (!same && cfg.onChange) cfg.onChange(current ? Object.assign({}, current) : null, info || {});
+    }
+    // Lazy: the first focus / icon click asks whether this scope has any kingdoms to offer.
+    function checkScope(){
+      if (scope.restrictTo === 'park') return;
+      var key = scopeQS(scope);
+      if (checkedKey === key) return;
+      checkedKey = key;
+      loadKingdoms(field.uir(), scope).then(function(ks){
+        if (!destroyed && checkedKey === key && !ks.length) field.markEmpty();
+      }).catch(function(){ checkedKey = null; });
+    }
+    function abortResolve(){ clearTimeout(rTimer); if (rCtrl) { rCtrl.abort(); rCtrl = null; } }
+    function resolve(prefix, sc){
+      if (rCtrl) rCtrl.abort();
+      rCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var mine = rCtrl;
+      return getJSON(field.uir() + 'SearchAjax/filterresolve&prefix=' + encodeURIComponent(prefix) + scopeQS(sc),
+        mine ? mine.signal : undefined).then(function(d){
+          if (rCtrl === mine) rCtrl = null;
+          return normFilter(d && d.match);
+        });
+    }
+    function onInput(){
+      abortResolve();
+      var m = FILTER_PREFIX_RE.exec(input.value);
+      if (!m || !enabled()) return;
+      var token = m[0];
+      rTimer = setTimeout(function(){
+        resolve(m[1] + ':' + (m[2] || ''), scope).then(function(f){
+          if (!f || destroyed || input.value.indexOf(token) !== 0) return;   // unknown/out of scope: leave text
+          var caret = input.selectionStart == null ? input.value.length : input.selectionStart;
+          var rest = input.value.slice(token.length).replace(/^\s+/, '');
+          var removed = input.value.length - rest.length;
+          input.value = rest;
+          var pos = Math.max(0, caret - removed);
+          try { input.setSelectionRange(pos, pos); } catch (e) {}
+          set(f, { textChanged: true });
+        }).catch(function(){});
+      }, 120);
+    }
+    function onKeydown(e){
+      if (e.key !== 'Backspace' || !current || input.selectionStart !== 0 || input.selectionEnd !== 0) return;
+      e.preventDefault();
+      // Break the pill back into editable text: "KCG:AR" + (space) + whatever was typed.
+      var label = filterLabel(current), v = input.value;
+      input.value = label + (v && !/^\s/.test(v) ? ' ' : '') + v;
+      try { input.setSelectionRange(label.length, label.length); } catch (err) {}
+      set(null, { textChanged: true });
+    }
+    function onFocus(){ checkScope(); sync(); }
+    function onBtn(e){ e.preventDefault(); checkScope(); openModal(field); }
+    function onX(e){ e.preventDefault(); e.stopPropagation(); set(null); input.focus(); }
+
+    input.addEventListener('input', onInput);
+    input.addEventListener('keydown', onKeydown);
+    input.addEventListener('focus', onFocus);
+    input.addEventListener('mouseenter', sync);
+    btn.addEventListener('click', onBtn);
+    pillX.addEventListener('click', onX);
+    if (ro) { ro.observe(input); if (input.parentElement) ro.observe(input.parentElement); }
+
+    field = {
+      input: input,
+      scrollSensitive: false,
+      sync: sync,
+      uir: function(){ return cfg.uir || window.UIR || ''; },
+      scope: function(){ return scope; },
+      focusInput: function(){ try { input.focus(); } catch (e) {} },
+      get: function(){ return current; },
+      apply: function(f){ set(f); },     // from the modal (Apply / Clear)
+      markEmpty: function(){ emptyScope = true; if (current) set(null); else sync(); },
+      configure: function(c){ if (c.uir) cfg.uir = c.uir; if (c.onChange) cfg.onChange = c.onChange; if (c.scope) handle.setScope(c.scope); }
+    };
+    var handle = {
+      get: function(){ return current ? Object.assign({}, current) : null; },
+      set: function(f){ set(f); },
+      // New hard scope: re-validate the pill against it (clears it when it no longer resolves).
+      setScope: function(s){
+        var next = scopeFrom(s);
+        if (scopeQS(next) === scopeQS(scope)) return;
+        scope = next; emptyScope = false; checkedKey = null;
+        if (modalField === field) closeModal();
+        if (!current) { sync(); return; }
+        if (!enabled()) { set(null); return; }
+        var was = current;
+        resolve(filterLabel(was), scope).then(function(f){
+          if (destroyed || current !== was) return;
+          if (f) { current = f; render(); } else set(null);
+        }).catch(function(){});
+      },
+      destroy: function(){
+        if (destroyed) return;
+        destroyed = true;
+        abortResolve();
+        if (modalField === field) closeModal();
+        input.removeEventListener('input', onInput);
+        input.removeEventListener('keydown', onKeydown);
+        input.removeEventListener('focus', onFocus);
+        input.removeEventListener('mouseenter', sync);
+        if (ro) { ro.unobserve(input); if (input.parentElement) ro.unobserve(input.parentElement); }
+        restorePadding();
+        root.remove();
+        var i = filterFields.indexOf(field); if (i >= 0) filterFields.splice(i, 1);
+        delete input._opsFilter;
+      }
+    };
+    field.handle = handle;
+    handle.configure = field.configure;
+    filterFields.push(field);
+    input._opsFilter = handle;
+    sync();
+    return handle;
   }
 
   function attach(input, opts) {
@@ -161,10 +603,12 @@ window.OrkPlayerSearch = (function () {
     function advUrl(){
       // Carry the current term + surface scope into the Advanced Search page (opens in a new tab).
       // UIR ends in "?Route=" so params join with & (per the &q= rule). Build from live opts.
-      var uir = opts.uir || window.UIR || '';
+      // An active filter pill wins over the ring centre: it is what the user narrowed to.
+      var uir = opts.uir || window.UIR || '', f = currentFilter();
+      var pid = f ? f.parkId : opts.parkId, kid = f ? f.kingdomId : opts.kingdomId;
       return uir + 'Search/advanced&q=' + encodeURIComponent(lastTerm || input.value.trim())
-        + (opts.parkId    ? '&parkId='    + encodeURIComponent(opts.parkId)    : '')
-        + (opts.kingdomId ? '&kingdomId=' + encodeURIComponent(opts.kingdomId) : '');
+        + (pid ? '&parkId='    + encodeURIComponent(pid) : '')
+        + (kid ? '&kingdomId=' + encodeURIComponent(kid) : '');
     }
     function render(){
       // An empty page can still have more results behind it (rows filtered client-side
@@ -221,7 +665,7 @@ window.OrkPlayerSearch = (function () {
     }
     function buildUrl(term, offset, ex){
       var uir = opts.uir || window.UIR || '';
-      var rk = csv(opts.restrictKingdomIds);
+      var rk = csv(opts.restrictKingdomIds), f = currentFilter();
       return uir + 'SearchAjax/players'
         + '&parkId='    + (opts.parkId    || 0)
         + '&kingdomId=' + (opts.kingdomId || 0)
@@ -231,6 +675,7 @@ window.OrkPlayerSearch = (function () {
         + (opts.excludeParkId    ? '&excludeParkId='    + encodeURIComponent(opts.excludeParkId)    : '')
         + (ex                    ? '&excludeIds='       + encodeURIComponent(ex)                    : '')
         + (opts.bannedScope      ? '&bannedScope='      + encodeURIComponent(opts.bannedScope)      : '')
+        + (f ? '&filterKingdomId=' + f.kingdomId + '&filterParkId=' + (f.parkId || 0) : '')
         + '&limit='  + (opts.limit || 15)
         + '&offset=' + (offset || 0)
         + '&q=' + encodeURIComponent(term);
@@ -328,7 +773,37 @@ window.OrkPlayerSearch = (function () {
     input.addEventListener('blur', onBlur);
     dd.addEventListener('mousedown', onDdMousedown);
 
-    function setOpts(newOpts) { for (var k in newOpts) { opts[k] = newOpts[k]; } }
+    // ---- Scope filter (pill + icon + modal) ----
+    var filt = null;
+    function currentFilter(){ return filt ? filt.get() : null; }
+    function onFilterChange(f, info){
+      if (info && info.textChanged && opts.onClear) opts.onClear();
+      clearTimeout(timer);
+      abortInflight();
+      // Deferred a tick, like refresh(): the click that changed the pill must settle first.
+      setTimeout(function(){
+        var t = input.value.trim();
+        // Only re-search where the user is: a scope change (reattach) clearing the pill on an
+        // unfocused field must not pop its dropdown open.
+        if (t.length >= MINLEN && document.activeElement === input) { items = []; active = -1; search(t); }
+        else { close(); }
+      }, 0);
+    }
+    function syncFilter(){
+      var want = opts.filter !== false && opts.restrictTo !== 'park';
+      if (want && !filt) {
+        filt = filterField(input, { uir: opts.uir, scope: scopeFrom(opts), onChange: onFilterChange });
+      } else if (!want && filt) {
+        var had = !!filt.get();
+        filt.destroy(); filt = null;
+        if (had) onFilterChange(null, {});
+      } else if (filt) {
+        filt.configure({ uir: opts.uir, scope: scopeFrom(opts) });   // new scope → pill re-validated
+      }
+    }
+    syncFilter();
+
+    function setOpts(newOpts) { for (var k in newOpts) { opts[k] = newOpts[k]; } syncFilter(); }
 
     var handle = {
       close: close,
@@ -350,6 +825,7 @@ window.OrkPlayerSearch = (function () {
         input.removeEventListener('blur', onBlur);
         dd.removeEventListener('mousedown', onDdMousedown);
         ['role','aria-autocomplete','aria-expanded','aria-controls','aria-activedescendant'].forEach(function(a){ input.removeAttribute(a); });
+        if (filt) { filt.destroy(); filt = null; }
         dd.remove(); live.remove();
         var idx = instances.indexOf(inst); if (idx >= 0) instances.splice(idx, 1);
         input._opsAttached = false; delete input._opsHandle;
@@ -368,5 +844,5 @@ window.OrkPlayerSearch = (function () {
     }
   }
 
-  return { attach: attach, reattach: reattach };
+  return { attach: attach, reattach: reattach, filterField: filterField };
 })();

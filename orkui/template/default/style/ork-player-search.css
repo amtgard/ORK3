@@ -56,3 +56,101 @@ html[data-theme="dark"] .ops-ac-more:hover, html[data-theme="dark"] .ops-ac-more
 html[data-theme="dark"] .ops-ac-foot{ border-top-color:#4a5568; }
 html[data-theme="dark"] .ops-ac-adv{ color:#63b3ed; border-left-color:#4a5568; }
 html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
+
+/* ===== Scope filter: icon + pill overlay (absolutely positioned sibling of the input; the
+   component sizes/positions it and pads the input, so host layouts never reflow) ===== */
+.ops-filter{ position:absolute; z-index:3; display:flex; align-items:center; box-sizing:border-box;
+  padding:0 2px 0 4px; pointer-events:none; margin:0; border:0; background:none; }
+.ops-filter-pill, .ops-filter-btn{ pointer-events:auto; }
+.ops-filter-pill{ display:inline-flex; align-items:center; gap:1px; height:20px; max-height:calc(100% - 4px);
+  margin-right:auto; padding:0 1px 0 7px; border:1px solid #bcd3ee; border-radius:999px; background:#ebf2fb;
+  color:#2c5282; font-size:11px; font-weight:700; line-height:1; white-space:nowrap; letter-spacing:.02em;
+  box-sizing:border-box; }
+.ops-filter-pill[hidden]{ display:none; }
+.ops-filter-pill-x{ display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px;
+  margin:0; padding:0; border:0; border-radius:50%; background:transparent; color:inherit; font-size:14px;
+  line-height:1; cursor:pointer; box-shadow:none; min-width:0; }
+.ops-filter-pill-x:hover, .ops-filter-pill-x:focus-visible{ background:rgba(44,82,130,.15); }
+.ops-filter-btn{ display:inline-flex; align-items:center; justify-content:center; width:26px; height:calc(100% - 4px);
+  max-height:30px; min-height:0; min-width:0; margin:0 0 0 auto; padding:0; border:0; border-radius:4px;
+  background:transparent; color:#a0aec0; font-size:12px; line-height:1; cursor:pointer; box-shadow:none; }
+.ops-filter-btn:hover{ color:#3182ce; background:#ebf2fb; }
+.ops-filter-btn.ops-filter-on{ color:#3182ce; }
+.ops-filter-pill-x:focus-visible, .ops-filter-btn:focus-visible{ outline:2px solid #3182ce; outline-offset:1px; }
+/* data-tip tooltips, self-contained: not every page loads revised.css's generic [data-tip] rule.
+   !important on placement so page-level generic [data-tip] rules can't re-centre/clip them. */
+.ops-filter [data-tip]{ position:relative; }
+/* Some pages keep an always-present (opacity:0) centred [data-tip]::after/::before; on the
+   right-edge icon that overflows scroll containers, so ours exist only while shown. */
+.ops-filter [data-tip]::after, .ops-filter [data-tip]::before{ display:none; }
+.ops-filter [data-tip]:hover::after, .ops-filter .ops-filter-btn[data-tip]:focus-visible::after{
+  display:block; opacity:1 !important; transition:none;
+  content:attr(data-tip); position:absolute; bottom:calc(100% + 6px) !important; top:auto !important;
+  width:max-content; max-width:240px; min-width:0; white-space:normal; text-align:left;
+  background:#1a202c; color:#fff; font-size:11px; font-weight:400; line-height:1.35; letter-spacing:0;
+  padding:5px 8px; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,.18); pointer-events:none; z-index:20; }
+.ops-filter .ops-filter-pill[data-tip]:hover::after{ left:-1px !important; right:auto !important; transform:none !important; }
+/* Icon sits at the field's right edge: anchor right so wrapped text grows leftward. */
+.ops-filter .ops-filter-btn[data-tip]:hover::after,
+.ops-filter .ops-filter-btn[data-tip]:focus-visible::after{ left:auto !important; right:0 !important; transform:none !important; }
+
+/* ===== Filter modal (one shared instance on <body>; above the dropdown and host modals) ===== */
+.ops-filter-modal{ position:fixed; inset:0; z-index:2147483100; display:flex; align-items:center;
+  justify-content:center; padding:16px; box-sizing:border-box; font-family:inherit; }
+.ops-filter-modal[hidden]{ display:none; }
+.ops-filter-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
+.ops-filter-dialog{ position:relative; width:360px; max-width:100%; box-sizing:border-box; padding:18px 20px 16px;
+  background:#fff; color:#2d3748; border-radius:10px; box-shadow:0 10px 36px rgba(0,0,0,.28);
+  display:flex; flex-direction:column; text-align:left; }
+.ops-filter-title{ margin:0 0 12px; font-size:16px; font-weight:700; line-height:1.3; color:#2d3748; }
+.ops-filter-title .fas{ color:#3182ce; margin-right:4px; font-size:14px; }
+.ops-filter-lbl{ display:block; margin:8px 0 4px; font-size:12px; font-weight:600; color:#4a5568;
+  float:none; width:auto; text-align:left; padding:0; }
+.ops-filter-sel{ display:block; width:100%; box-sizing:border-box; height:36px; margin:0; padding:0 8px;
+  border:1px solid #cbd5e0; border-radius:6px; background-color:#fff; color:#2d3748; font-size:14px; font-family:inherit; }
+.ops-filter-sel:disabled{ background-color:#f7fafc; color:#a0aec0; cursor:not-allowed; }
+.ops-filter-sel:focus-visible{ outline:2px solid #3182ce; outline-offset:1px; }
+.ops-filter-msg{ min-height:16px; margin-top:8px; font-size:12px; color:#718096; }
+.ops-filter-foot{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+.ops-filter-spacer{ flex:1; }
+.ops-filter-b{ min-height:34px; margin:0; padding:0 14px; border:1px solid #cbd5e0; border-radius:6px;
+  background:#fff; color:#2d3748; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;
+  box-shadow:none; text-shadow:none; line-height:1; }
+.ops-filter-b:hover{ background:#f7fafc; }
+.ops-filter-b:focus-visible{ outline:2px solid #3182ce; outline-offset:1px; }
+.ops-filter-b-apply{ background:#3182ce; border-color:#3182ce; color:#fff; }
+.ops-filter-b-apply:hover{ background:#2b6cb0; border-color:#2b6cb0; }
+.ops-filter-b-clear{ border-color:transparent; background:transparent; color:#c53030; padding:0 8px; }
+.ops-filter-b-clear:hover{ background:rgba(197,48,48,.08); }
+
+html[data-theme="dark"] .ops-filter-pill{ background:#2a4365; border-color:#3c5a87; color:#bee3f8; }
+html[data-theme="dark"] .ops-filter-pill-x:hover, html[data-theme="dark"] .ops-filter-pill-x:focus-visible{ background:rgba(190,227,248,.18); }
+html[data-theme="dark"] .ops-filter-btn{ color:#718096; }
+html[data-theme="dark"] .ops-filter-btn:hover{ color:#63b3ed; background:#3b4960; }
+html[data-theme="dark"] .ops-filter-btn.ops-filter-on{ color:#63b3ed; }
+html[data-theme="dark"] .ops-filter [data-tip]:hover::after,
+html[data-theme="dark"] .ops-filter .ops-filter-btn[data-tip]:focus-visible::after{ background:#f7fafc; color:#1a202c; }
+html[data-theme="dark"] .ops-filter-modal{ color-scheme:dark; }
+html[data-theme="dark"] .ops-filter-backdrop{ background:rgba(0,0,0,.6); }
+html[data-theme="dark"] .ops-filter-dialog{ background:#2d3748; color:#e2e8f0; box-shadow:0 10px 36px rgba(0,0,0,.6); }
+html[data-theme="dark"] .ops-filter-title{ color:#e2e8f0; }
+html[data-theme="dark"] .ops-filter-title .fas{ color:#63b3ed; }
+html[data-theme="dark"] .ops-filter-lbl{ color:#cbd5e0; }
+html[data-theme="dark"] .ops-filter-sel{ background-color:#1a202c; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .ops-filter-sel:disabled{ background-color:#283141; color:#718096; }
+html[data-theme="dark"] .ops-filter-msg{ color:#a0aec0; }
+html[data-theme="dark"] .ops-filter-b{ background:#3b4960; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .ops-filter-b:hover{ background:#4a5568; }
+html[data-theme="dark"] .ops-filter-b-apply{ background:#3182ce; border-color:#3182ce; color:#fff; }
+html[data-theme="dark"] .ops-filter-b-apply:hover{ background:#2b6cb0; border-color:#2b6cb0; }
+html[data-theme="dark"] .ops-filter-b-clear{ background:transparent; border-color:transparent; color:#fc8181; }
+html[data-theme="dark"] .ops-filter-b-clear:hover{ background:rgba(252,129,129,.12); }
+
+@media (max-width:480px){
+  .ops-filter-btn{ width:34px; max-height:none; }
+  .ops-filter-pill{ height:24px; }
+  .ops-filter-pill-x{ width:22px; height:22px; }
+  .ops-filter-modal{ padding:16px; align-items:flex-start; padding-top:15vh; }
+  .ops-filter-dialog{ width:100%; }
+  .ops-filter-sel, .ops-filter-b{ min-height:40px; height:40px; font-size:16px; }
+}
