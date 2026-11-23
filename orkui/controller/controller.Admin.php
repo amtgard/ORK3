@@ -47,6 +47,35 @@ class Controller_Admin extends Controller
         $this->template = '../revised-frontend/Admin_index.tpl';
     }
 
+    /**
+     * Admin/guide — the ORK Administrator Guide (docs/admin-guide.md) as a
+     * full page with linkable sections. Global admins only, like the panel.
+     */
+    public function guide($duh = null)
+    {
+        $uid = (int) ($this->session->user_id ?? 0);
+        if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+        $this->data['page_title'] = 'ORK Administrator Guide';
+
+        $path = DIR_BASENAME . 'docs/admin-guide.md';
+        if (!is_readable($path)) {
+            $this->data['GuideHtml']    = '';
+            $this->data['GuideToc']     = [];
+            $this->data['GuideUpdated'] = null;
+            $this->data['Error']        = 'The guide is missing from this install (docs/admin-guide.md).';
+        } else {
+            require_once DIR_SYSTEM . 'lib/ork3/class.GuideDoc.php';
+            $doc = GuideDoc::render((string) file_get_contents($path));
+            $this->data['GuideHtml']    = $doc['html'];
+            $this->data['GuideToc']     = $doc['toc'];
+            $this->data['GuideUpdated'] = (int) filemtime($path);
+        }
+        $this->template = '../revised-frontend/Admin_guide.tpl';
+    }
+
     public function mergepark($submit = null)
     {
         if ($submit == 'submit' && valid_id($this->request->FromParkId) && valid_id($this->request->ToParkId)) {

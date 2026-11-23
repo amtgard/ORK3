@@ -50,6 +50,9 @@ function cpTrend(int $cur, ?int $prev): string {
 				<a class="cp-hero-badge" href="https://github.com/amtgard/ORK3" target="_blank" style="text-decoration:none">
 					<i class="fab fa-github"></i> Source
 				</a>
+				<a class="cp-hero-badge cp-hero-badge-guide" href="<?= UIR ?>Admin/guide" style="text-decoration:none">
+					<i class="fas fa-book-open"></i> Admin Guide
+				</a>
 			</div>
 		</div>
 
@@ -76,6 +79,18 @@ function cpTrend(int $cur, ?int $prev): string {
 		</div>
 	</div>
 </div>
+
+<!-- =============================================
+     ADMINISTRATOR GUIDE CALLOUT
+     ============================================= -->
+<a class="cp-guide-callout" href="<?= UIR ?>Admin/guide">
+	<span class="cp-guide-callout-icon"><i class="fas fa-book-open"></i></span>
+	<span class="cp-guide-callout-text">
+		<strong>ORK Administrator Guide</strong>
+		<span>What global admin is for, what to check before a merge, transfer or suspension, and where to log what you did. Read it before acting in another Kingdom.</span>
+	</span>
+	<span class="cp-guide-callout-btn"><i class="fas fa-arrow-right"></i> Read the guide</span>
+</a>
 
 <!-- =============================================
      TREND STATS ROW
@@ -321,6 +336,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			<ul class="cp-report-list">
 				<li><a href="https://github.com/amtgard/ORK3" target="_blank"><i class="fab fa-github"></i><span>Source Code<span class="cp-report-list-desc">ORK3 on GitHub</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/permissions"><i class="fas fa-shield-alt"></i><span>Global Permissions<span class="cp-report-list-desc">System admins &amp; kingdom access</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/guide"><i class="fas fa-book-open"></i><span>Administrator Guide<span class="cp-report-list-desc">How to use global admin, and when not to</span></span></a></li>
 			</ul>
 		</div>
 
