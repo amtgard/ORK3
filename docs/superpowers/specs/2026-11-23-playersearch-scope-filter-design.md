@@ -32,6 +32,8 @@ kingdoms/parks — by surfacing the hidden `KD:PK term` prefix as a visible, cli
   `XX:YY name` escapes a hard-scoped field. Fix: prefix/filter conditions AND with the hard scope.
 - The pill is sent as explicit params (`filterKingdomId`, `filterParkId`), not re-embedded in `q`.
   Server validates ints; ANDs with scope; an out-of-scope filter yields no results.
+- A kingdom filter (pill or typed `KD:`) **rolls down to principalities**: it matches the
+  kingdom's family (`GetFamilyKingdomIds`). Principalities remain separately selectable.
   Typed prefixes in `q` keep working (same AND semantics).
 - Small resolver endpoint (SearchAjax) turning `KD:PK` into `{kingdomId, kingdomName, parkId,
   parkName}`, honoring the field's scope params; returns nothing if unknown/out of scope.
