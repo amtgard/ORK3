@@ -740,25 +740,55 @@ class SearchService extends Ork3
         $filterPid = 0;
         $search = $q;
         if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
-            $kAbbr = $this->likeEscape($m[1]);
-            $this->db->clear();
-            $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-            if ($rs !== false && $rs->size() > 0) {
-                $rs->Next();
-                $filterKid = (int)$rs->kingdom_id;
-            }
+            $kingdom = $this->abbrevKingdom($m[1]);
+            $filterKid = $kingdom ? $kingdom['id'] : 0;
             if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-                $pAbbr = $this->likeEscape($m[2]);
-                $this->db->clear();
-                $rs = $this->db->query("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-                if ($rs !== false && $rs->size() > 0) {
-                    $rs->Next();
-                    $filterPid = (int)$rs->park_id;
-                }
+                $park = $this->abbrevPark($filterKid, $m[2]);
+                $filterPid = $park ? $park['id'] : 0;
             }
             $search = trim($m[3]);
         }
         return self::$abbrevMemo[$q] = [$filterKid, $filterPid, $search];
+    }
+
+    /**
+     * The kingdom an abbreviation names, preferring an active record over a retired one that shares
+     * it (then lowest id). Shared by the typed-prefix search filter and the filter-pill resolver so
+     * both always land on the same kingdom. null when unknown or not a 2–3 char alphanumeric.
+     *
+     * @return array{id: int, name: string, abbr: string, active: bool}|null
+     */
+    private function abbrevKingdom(string $abbr): ?array
+    {
+        if (!preg_match('/^[a-z0-9]{2,3}$/i', $abbr)) {
+            return null;
+        }
+        $this->db->clear();
+        $rs = $this->db->query("SELECT kingdom_id, name, abbreviation, active FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}' ORDER BY (active = 'Active') DESC, kingdom_id ASC LIMIT 1");
+        if ($rs === false || $rs->size() === 0) {
+            return null;
+        }
+        $rs->Next();
+        return ['id' => (int)$rs->kingdom_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation, 'active' => $rs->active === 'Active'];
+    }
+
+    /**
+     * The park an abbreviation names within $kingdomId, preferring an active record (then lowest id).
+     *
+     * @return array{id: int, name: string, abbr: string, active: bool}|null
+     */
+    private function abbrevPark(int $kingdomId, string $abbr): ?array
+    {
+        if ($kingdomId <= 0 || !preg_match('/^[a-z0-9]{2,3}$/i', $abbr)) {
+            return null;
+        }
+        $this->db->clear();
+        $rs = $this->db->query("SELECT park_id, name, abbreviation, active FROM " . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = " . (int)$kingdomId . " ORDER BY (active = 'Active') DESC, park_id ASC LIMIT 1");
+        if ($rs === false || $rs->size() === 0) {
+            return null;
+        }
+        $rs->Next();
+        return ['id' => (int)$rs->park_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation, 'active' => $rs->active === 'Active'];
     }
 
     /** Kingdom id of a park, or 0 when the park is unknown. */
@@ -810,7 +840,7 @@ class SearchService extends Ork3
      * @param array $scope parkId, kingdomId, restrictTo, restrictKingdomIds, excludeKingdomId, excludeParkId
      * @return array<int, array{id: int, name: string, abbr: string}>
      */
-    public function FilterScopeKingdoms(array $scope): array
+    public function filter_scope_kingdoms(array $scope): array
     {
         $allowed = $this->filterScopeKingdomIds($scope);
         if ($allowed === []) {
@@ -836,18 +866,20 @@ class SearchService extends Ork3
         return $out;
     }
 
-    // True when $kingdomId is an active kingdom inside the field's filter scope.
+    // True when $kingdomId is inside the field's filter scope (scope only; no active-row check).
     private function kingdomInFilterScope(int $kingdomId, array $scope): bool
     {
         if ($kingdomId <= 0 || $kingdomId === 15 || $kingdomId === (int)($scope['excludeKingdomId'] ?? 0)) {
             return false;
         }
         $allowed = $this->filterScopeKingdomIds($scope);
-        if ($allowed !== null && !in_array($kingdomId, $allowed, true)) {
-            return false;
-        }
+        return $allowed === null || in_array($kingdomId, $allowed, true);
+    }
+
+    private function kingdomIsActive(int $kingdomId): bool
+    {
         $this->db->clear();
-        $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = {$kingdomId} AND active = 'Active' LIMIT 1");
+        $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = " . (int)$kingdomId . " AND active = 'Active' LIMIT 1");
         return $rs !== false && $rs->size() > 0;
     }
 
@@ -856,10 +888,10 @@ class SearchService extends Ork3
      *
      * @return array<int, array{id: int, name: string, abbr: string}>
      */
-    public function FilterScopeParks(int $kingdomId, array $scope): array
+    public function filter_scope_parks(int $kingdomId, array $scope): array
     {
         $kingdomId = (int)$kingdomId;
-        if (!$this->kingdomInFilterScope($kingdomId, $scope)) {
+        if (!$this->kingdomInFilterScope($kingdomId, $scope) || !$this->kingdomIsActive($kingdomId)) {
             return [];
         }
         $where = ["kingdom_id = {$kingdomId}", "active = 'Active'"];
@@ -885,49 +917,37 @@ class SearchService extends Ork3
      *
      * @return array{kingdomId: int, kingdomName: string, kingdomAbbr: string, parkId: int, parkName: string, parkAbbr: string}|null
      */
-    public function ResolveFilterPrefix(string $prefix, array $scope): ?array
+    public function resolve_filter_prefix(string $prefix, array $scope): ?array
     {
         if (!preg_match('/^([a-z0-9]{2,3})(?::([a-z0-9]{2,3}|\*)?)?$/i', trim($prefix), $m)) {
             return null;
         }
-        // Both parts are regex-validated alphanumerics, so they are safe to inline.
-        $kAbbr = $m[1];
         $pAbbr = (isset($m[2]) && $m[2] !== '*') ? $m[2] : '';
 
-        $this->db->clear();
-        $rs = $this->db->query("SELECT kingdom_id, name, abbreviation FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' AND active = 'Active' AND kingdom_id != 15 ORDER BY kingdom_id LIMIT 1");
-        if ($rs === false || $rs->size() === 0) {
+        // Same lookup as the typed-prefix search filter, so the pill and the results always agree;
+        // a prefix that lands on a retired kingdom/park yields no pill.
+        $kingdom = $this->abbrevKingdom($m[1]);
+        if ($kingdom === null || !$kingdom['active'] || !$this->kingdomInFilterScope($kingdom['id'], $scope)) {
             return null;
         }
-        $rs->Next();
         $match = [
-            'kingdomId'   => (int)$rs->kingdom_id,
-            'kingdomName' => (string)$rs->name,
-            'kingdomAbbr' => (string)$rs->abbreviation,
+            'kingdomId'   => $kingdom['id'],
+            'kingdomName' => $kingdom['name'],
+            'kingdomAbbr' => $kingdom['abbr'],
             'parkId'      => 0,
             'parkName'    => '',
             'parkAbbr'    => '',
         ];
-        if (!$this->kingdomInFilterScope($match['kingdomId'], $scope)) {
-            return null;
-        }
         if ($pAbbr === '') {
             return $match;
         }
-
-        $this->db->clear();
-        $rs = $this->db->query("SELECT park_id, name, abbreviation FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$match['kingdomId']} AND active = 'Active' ORDER BY park_id LIMIT 1");
-        if ($rs === false || $rs->size() === 0) {
+        $park = $this->abbrevPark($kingdom['id'], $pAbbr);
+        if ($park === null || !$park['active'] || $park['id'] === (int)($scope['excludeParkId'] ?? 0)) {
             return null;
         }
-        $rs->Next();
-        $parkId = (int)$rs->park_id;
-        if ($parkId === (int)($scope['excludeParkId'] ?? 0)) {
-            return null;
-        }
-        $match['parkId']   = $parkId;
-        $match['parkName'] = (string)$rs->name;
-        $match['parkAbbr'] = (string)$rs->abbreviation;
+        $match['parkId']   = $park['id'];
+        $match['parkName'] = $park['name'];
+        $match['parkAbbr'] = $park['abbr'];
         return $match;
     }
 

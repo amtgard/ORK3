@@ -51,7 +51,7 @@ class Controller_SearchAjax extends Controller
             'restrictKingdomIds' => $this->csvIds('restrictKingdomIds'),
             'excludeKingdomId'   => (int)($_GET['excludeKingdomId'] ?? 0) ?: null,
             'excludeParkId'      => (int)($_GET['excludeParkId']    ?? 0) ?: null,
-            'excludeIds'         => $this->csvIds('excludeIds'),
+            'excludeIds'         => $this->csvIds('excludeIds', 200), // matches the client's EXCLUDE_CAP
             // Filter pill: narrows within the hard scope above, never widens it.
             'filterKingdomId'    => (int)($_GET['filterKingdomId'] ?? 0),
             'filterParkId'       => (int)($_GET['filterParkId']    ?? 0),
@@ -127,18 +127,19 @@ class Controller_SearchAjax extends Controller
     // The search field's hard-scope params, as sent by the player-search component.
     private function filterScopeParams(): array
     {
+        $restrictTo = $_GET['restrictTo'] ?? '';
         return [
             'parkId'             => max((int)($_GET['parkId'] ?? 0), 0),
             'kingdomId'          => max((int)($_GET['kingdomId'] ?? 0), 0),
-            'restrictTo'         => in_array($_GET['restrictTo'] ?? '', ['park', 'kingdom'], true) ? $_GET['restrictTo'] : '',
+            'restrictTo'         => in_array($restrictTo, ['park', 'kingdom'], true) ? $restrictTo : '',
             'restrictKingdomIds' => $this->csvIds('restrictKingdomIds'),
             'excludeKingdomId'   => max((int)($_GET['excludeKingdomId'] ?? 0), 0),
             'excludeParkId'      => max((int)($_GET['excludeParkId'] ?? 0), 0),
         ];
     }
 
-    // CSV → int[] (positive ids only) for the list-valued surface-context params.
-    private function csvIds(string $key): array
+    // CSV → int[] (positive ids only, at most $max) for the list-valued surface-context params.
+    private function csvIds(string $key, int $max = 50): array
     {
         $raw = trim((string)($_GET[$key] ?? ''));
         if ($raw === '') {
@@ -148,6 +149,9 @@ class Controller_SearchAjax extends Controller
         foreach (explode(',', $raw) as $v) {
             if ((int)$v > 0) {
                 $out[] = (int)$v;
+                if (count($out) >= $max) {
+                    break;
+                }
             }
         }
         return $out;

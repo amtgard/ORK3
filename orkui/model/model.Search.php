@@ -31,17 +31,17 @@ class Model_Search extends Model
     // Player-search filter pill: scope-aware kingdom/park options and typed-prefix resolution.
     public function filter_scope_kingdoms(array $scope): array
     {
-        return $this->_search_service()->FilterScopeKingdoms($scope);
+        return $this->_search_service()->filter_scope_kingdoms($scope);
     }
 
     public function filter_scope_parks(int $kingdomId, array $scope): array
     {
-        return $this->_search_service()->FilterScopeParks($kingdomId, $scope);
+        return $this->_search_service()->filter_scope_parks($kingdomId, $scope);
     }
 
     public function resolve_filter_prefix(string $prefix, array $scope): ?array
     {
-        return $this->_search_service()->ResolveFilterPrefix($prefix, $scope);
+        return $this->_search_service()->resolve_filter_prefix($prefix, $scope);
     }
 
     private function _search_service(): SearchService

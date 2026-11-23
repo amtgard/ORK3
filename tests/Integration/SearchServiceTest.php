@@ -384,7 +384,7 @@ final class SearchServiceTest extends TestCase
         $kid = $this->fixture->firstKingdomId();
         $family = array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid));
 
-        $rows = $this->searchService->FilterScopeKingdoms(['kingdomId' => $kid, 'restrictTo' => 'kingdom']);
+        $rows = $this->searchService->filter_scope_kingdoms(['kingdomId' => $kid, 'restrictTo' => 'kingdom']);
         $ids = array_map(fn ($r) => $r['id'], $rows);
         $this->assertContains($kid, $ids);
         $this->assertSame([], array_values(array_diff($ids, $family)));
@@ -395,12 +395,12 @@ final class SearchServiceTest extends TestCase
         // restrictKingdomIds wins and excludeKingdomId removes.
         $otherKid = $this->fixture->kingdomIdNotIn($family);
         if ($otherKid > 0) {
-            $listed = $this->searchService->FilterScopeKingdoms(['restrictKingdomIds' => [$kid, $otherKid], 'excludeKingdomId' => $otherKid]);
+            $listed = $this->searchService->filter_scope_kingdoms(['restrictKingdomIds' => [$kid, $otherKid], 'excludeKingdomId' => $otherKid]);
             $this->assertSame([$kid], array_map(fn ($r) => $r['id'], $listed));
         }
 
         // Unscoped: all active kingdoms, sorted by name, never the retired records kingdom (15).
-        $all = $this->searchService->FilterScopeKingdoms([]);
+        $all = $this->searchService->filter_scope_kingdoms([]);
         $allIds = array_map(fn ($r) => $r['id'], $all);
         $this->assertContains($kid, $allIds);
         $this->assertNotContains(15, $allIds);
@@ -414,10 +414,10 @@ final class SearchServiceTest extends TestCase
     {
         $kid = $this->fixture->firstKingdomId();
         $parkId = $this->fixture->parkIdInKingdom($kid);
-        $this->assertSame([], $this->searchService->FilterScopeKingdoms([
+        $this->assertSame([], $this->searchService->filter_scope_kingdoms([
             'parkId' => $parkId, 'kingdomId' => $kid, 'restrictTo' => 'park',
         ]));
-        $this->assertSame([], $this->searchService->FilterScopeParks($kid, [
+        $this->assertSame([], $this->searchService->filter_scope_parks($kid, [
             'parkId' => $parkId, 'kingdomId' => $kid, 'restrictTo' => 'park',
         ]));
     }
@@ -433,16 +433,16 @@ final class SearchServiceTest extends TestCase
         }
         $scope = ['kingdomId' => $kid, 'restrictTo' => 'kingdom'];
 
-        $this->assertSame([], $this->searchService->FilterScopeParks($otherKid, $scope));
-        $this->assertSame([], $this->searchService->FilterScopeParks($otherKid, ['restrictKingdomIds' => [$kid]]));
+        $this->assertSame([], $this->searchService->filter_scope_parks($otherKid, $scope));
+        $this->assertSame([], $this->searchService->filter_scope_parks($otherKid, ['restrictKingdomIds' => [$kid]]));
 
-        $parks = $this->searchService->FilterScopeParks($kid, $scope);
+        $parks = $this->searchService->filter_scope_parks($kid, $scope);
         $this->assertContains($parkA, array_map(fn ($r) => $r['id'], $parks));
         foreach ($parks as $row) {
             $this->assertSame(['id', 'name', 'abbr'], array_keys($row));
         }
 
-        $withoutA = $this->searchService->FilterScopeParks($kid, $scope + ['excludeParkId' => $parkA]);
+        $withoutA = $this->searchService->filter_scope_parks($kid, $scope + ['excludeParkId' => $parkA]);
         $this->assertNotContains($parkA, array_map(fn ($r) => $r['id'], $withoutA));
     }
 
@@ -456,7 +456,7 @@ final class SearchServiceTest extends TestCase
             $this->markTestSkipped('Fixture abbreviations are not prefix-shaped.');
         }
 
-        $m = $this->searchService->ResolveFilterPrefix(strtolower("{$kAbbr}:{$pAbbr}"), []);
+        $m = $this->searchService->resolve_filter_prefix(strtolower("{$kAbbr}:{$pAbbr}"), []);
         $this->assertNotNull($m);
         $this->assertSame($kid, $m['kingdomId']);
         $this->assertSame($parkId, $m['parkId']);
@@ -464,26 +464,104 @@ final class SearchServiceTest extends TestCase
         $this->assertSame(['kingdomId', 'kingdomName', 'kingdomAbbr', 'parkId', 'parkName', 'parkAbbr'], array_keys($m));
 
         foreach (["{$kAbbr}:*", "{$kAbbr}:", $kAbbr] as $kOnly) {
-            $k = $this->searchService->ResolveFilterPrefix($kOnly, []);
+            $k = $this->searchService->resolve_filter_prefix($kOnly, []);
             $this->assertNotNull($k, $kOnly);
             $this->assertSame($kid, $k['kingdomId']);
             $this->assertSame(0, $k['parkId']);
             $this->assertSame('', $k['parkName']);
         }
 
-        $this->assertNull($this->searchService->ResolveFilterPrefix('ZZZ:QQ', []));
-        $this->assertNull($this->searchService->ResolveFilterPrefix("{$kAbbr}:ZQ9", []));
-        $this->assertNull($this->searchService->ResolveFilterPrefix("{$kAbbr}:{$pAbbr}' OR 1=1", []));
-        $this->assertNull($this->searchService->ResolveFilterPrefix("{$kAbbr}:{$pAbbr}", ['parkId' => $parkId, 'restrictTo' => 'park']));
-        $this->assertNull($this->searchService->ResolveFilterPrefix("{$kAbbr}:{$pAbbr}", ['excludeParkId' => $parkId]));
-        $this->assertNull($this->searchService->ResolveFilterPrefix($kAbbr, ['excludeKingdomId' => $kid]));
+        $this->assertNull($this->searchService->resolve_filter_prefix('ZZZ:QQ', []));
+        $this->assertNull($this->searchService->resolve_filter_prefix("{$kAbbr}:ZQ9", []));
+        $this->assertNull($this->searchService->resolve_filter_prefix("{$kAbbr}:{$pAbbr}' OR 1=1", []));
+        $this->assertNull($this->searchService->resolve_filter_prefix("{$kAbbr}:{$pAbbr}", ['parkId' => $parkId, 'restrictTo' => 'park']));
+        $this->assertNull($this->searchService->resolve_filter_prefix("{$kAbbr}:{$pAbbr}", ['excludeParkId' => $parkId]));
+        $this->assertNull($this->searchService->resolve_filter_prefix($kAbbr, ['excludeKingdomId' => $kid]));
 
         $family = array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid));
         $otherKid = $this->fixture->kingdomIdNotIn($family);
         if ($otherKid > 0) {
-            $this->assertNull($this->searchService->ResolveFilterPrefix("{$kAbbr}:{$pAbbr}", ['restrictKingdomIds' => [$otherKid]]));
-            $this->assertNull($this->searchService->ResolveFilterPrefix($kAbbr, ['kingdomId' => $otherKid, 'restrictTo' => 'kingdom']));
+            $this->assertNull($this->searchService->resolve_filter_prefix("{$kAbbr}:{$pAbbr}", ['restrictKingdomIds' => [$otherKid]]));
+            $this->assertNull($this->searchService->resolve_filter_prefix($kAbbr, ['kingdomId' => $otherKid, 'restrictTo' => 'kingdom']));
         }
+    }
+
+    public function testFilterScopeKingdomCentresOnParkKingdom(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $family = array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid));
+        $otherKid = $this->fixture->kingdomIdNotIn($family);
+        if ($otherKid <= 0) {
+            $this->markTestSkipped('Need a kingdom outside the family.');
+        }
+        $otherPark = $this->fixture->parkIdInKingdom($otherKid);
+        $otherFamily = array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($otherKid));
+        // A park in another kingdom wins over a mismatching kingdomId, as in RankedPlayers.
+        $scope = ['kingdomId' => $kid, 'parkId' => $otherPark, 'restrictTo' => 'kingdom'];
+
+        $ids = array_map(fn ($r) => $r['id'], $this->searchService->filter_scope_kingdoms($scope));
+        $this->assertContains($otherKid, $ids);
+        $this->assertNotContains($kid, $ids);
+        $this->assertSame([], array_values(array_diff($ids, $otherFamily)));
+        $this->assertSame([], $this->searchService->filter_scope_parks($kid, $scope));
+        $this->assertNotSame([], $this->searchService->filter_scope_parks($otherKid, $scope));
+        $kAbbr = $this->fixture->kingdomAbbreviation($kid);
+        $this->assertNull($this->searchService->resolve_filter_prefix($kAbbr, $scope));
+    }
+
+    public function testResolverAndSearchPrefixAgreeOnDuplicateAbbreviations(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $kAbbr = $this->fixture->kingdomAbbreviation($kid);
+        $abbr = $this->fixture->unusedParkAbbreviation($kid);
+        if (!preg_match('/^[a-z0-9]{2,3}$/i', $kAbbr) || $abbr === '') {
+            $this->markTestSkipped('Fixture abbreviations are not prefix-shaped.');
+        }
+        // Retired park inserted first (lower id, earlier name) so an unordered LIMIT 1 would pick it.
+        $retired = $this->fixture->createPark($kid, $abbr, 'A Retired ' . $abbr, false);
+        $active = $this->fixture->createPark($kid, $abbr, 'B Active ' . $abbr, true);
+        $this->assertGreaterThan($retired, $active);
+
+        $match = $this->searchService->resolve_filter_prefix("{$kAbbr}:{$abbr}", []);
+        $this->assertNotNull($match);
+        $this->assertSame($active, $match['parkId']);
+        [$searchKid, $searchPid] = $this->searchPrefix("{$kAbbr}:{$abbr} someone");
+        $this->assertSame($kid, $searchKid);
+        $this->assertSame($active, $searchPid);
+
+        // Behavioural: the typed prefix in RankedPlayers filters to the same (active) park.
+        $stem = 'Dup' . bin2hex(random_bytes(3));
+        $inActive = $this->fixture->createPlayer($active, 'dupa', 'T11SRC ' . $stem . ' Active');
+        $inRetired = $this->fixture->createPlayer($retired, 'dupr', 'T11SRC ' . $stem . ' Retired');
+        $ids = array_column($this->searchService->RankedPlayers(['q' => "{$kAbbr}:{$abbr} {$stem}", 'limit' => 50]), 'MundaneId');
+        $this->assertContains($inActive['mundane_id'], $ids);
+        $this->assertNotContains($inRetired['mundane_id'], $ids);
+
+        // Kingdom collisions (real data, e.g. NL active vs retired) — guarded: only when present.
+        foreach ($this->fixture->duplicateKingdomAbbreviations() as $dupAbbr => $activeKid) {
+            if (!preg_match('/^[a-z0-9]{2,3}$/i', $dupAbbr)) {
+                continue;
+            }
+            $k = $this->searchService->resolve_filter_prefix($dupAbbr, []);
+            $this->assertNotNull($k, $dupAbbr);
+            $this->assertSame($activeKid, $k['kingdomId']);
+            [$searchKid] = $this->searchPrefix("{$dupAbbr}: someone");
+            $this->assertSame($activeKid, $searchKid, $dupAbbr);
+        }
+    }
+
+    /**
+     * [kingdomId, parkId] that RankedPlayers' typed-prefix parser resolves for $q.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function searchPrefix(string $q): array
+    {
+        $m = new ReflectionMethod(SearchService::class, 'resolveAbbrevPrefix');
+        $m->setAccessible(true);
+        [$kid, $pid] = $m->invoke($this->searchService, $q);
+
+        return [(int) $kid, (int) $pid];
     }
 
     public function testUniversalSearchHonorsFilter(): void

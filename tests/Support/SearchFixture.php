@@ -30,6 +30,9 @@ final class SearchFixture
     /** @var list<int> */
     private array $detailIds = [];
 
+    /** @var list<int> */
+    private array $parkIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -237,6 +240,60 @@ final class SearchFixture
         return ['event_id' => $eventId, 'park_id' => $parkId, 'kingdom_id' => $kingdomId];
     }
 
+    /**
+     * Insert a throwaway park (for abbreviation-collision tests); removed by cleanup().
+     */
+    public function createPark(int $kingdomId, string $abbreviation, string $suffix, bool $active = true): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . "park (kingdom_id, name, abbreviation, url, active, address, city, province,
+                postal_code, google_geocode, latitude, longitude, location, map_url, description, directions)
+             VALUES (?, ?, ?, '', ?, '', '', '', '', '', 0, 0, '', '', '', '')"
+        );
+        $stmt->execute([$kingdomId, self::MARKER . ' Park ' . $suffix, $abbreviation, $active ? 'Active' : 'Retired']);
+        $parkId = (int) $this->pdo->lastInsertId();
+        $this->parkIds[] = $parkId;
+
+        return $parkId;
+    }
+
+    /**
+     * An abbreviation no park in $kingdomId uses yet ('' when none found).
+     */
+    public function unusedParkAbbreviation(int $kingdomId): string
+    {
+        $stmt = $this->pdo->prepare('SELECT 1 FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ? AND abbreviation = ?');
+        for ($i = 0; $i < 50; $i++) {
+            $abbr = 'Q' . strtoupper(bin2hex(random_bytes(1)));
+            $stmt->execute([$kingdomId, $abbr]);
+            if ($stmt->fetchColumn() === false) {
+                return $abbr;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Kingdom abbreviations shared by an active and a retired kingdom: [abbr => activeKingdomId].
+     *
+     * @return array<string, int>
+     */
+    public function duplicateKingdomAbbreviations(): array
+    {
+        $rows = $this->pdo->query(
+            'SELECT abbreviation, MIN(CASE WHEN active = \'Active\' THEN kingdom_id END) AS active_id
+             FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id != 15 GROUP BY abbreviation
+             HAVING COUNT(*) > 1 AND SUM(active = \'Active\') = 1'
+        )->fetchAll(PDO::FETCH_ASSOC);
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row['abbreviation']] = (int) $row['active_id'];
+        }
+
+        return $out;
+    }
+
     public function cleanup(): void
     {
         foreach ($this->attendanceIds as $id) {
@@ -259,6 +316,9 @@ final class SearchFixture
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $id);
+        }
+        foreach ($this->parkIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'park WHERE park_id = ' . (int) $id);
         }
     }
 
