@@ -1428,3 +1428,8 @@ html[data-theme="dark"] .apexcharts-tooltip-text-y-value {
     white-space: nowrap;
     border: 0;
 }
+
+/* In-Person / Online / All control (orkui.css .orn-type-control) inside a report sidebar
+   form: one row across the narrow sidebar. Colours and dark mode come from orkui.css. */
+.rp-form-group .orn-type-control { display: flex; flex-wrap: nowrap; width: 100%; }
+.rp-form-group .orn-type-control .orn-type-opt { padding: 0 6px; font-size: 13px; min-width: 0; }

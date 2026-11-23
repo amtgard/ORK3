@@ -3,20 +3,29 @@
 $_att_dates  = isset($attendance_periodical['Dates']) && is_array($attendance_periodical['Dates'])
 	? $attendance_periodical['Dates'] : [];
 
-$chart_dates    = [];
-$chart_counts   = [];
-$chart_is_event = [];
+$chart_dates     = [];
+$chart_counts    = [];
+$chart_in_person = [];
+$chart_online    = [];
+$chart_online_only = [];
+$chart_is_event  = [];
 foreach ($_att_dates as $_d) {
 	$chart_dates[]  = valid_id($_d['EventId'])
 		? (date('Y-m-d', strtotime($_d['EventStart'])) . ' – ' . date('Y-m-d', strtotime($_d['EventEnd'])))
 		: date('Y-m-d', strtotime($_d['Date']));
-	$chart_counts[]   = (int)$_d['DistinctPlayers'];
-	$chart_is_event[] = valid_id($_d['EventId']) ? true : false;
+	$chart_counts[]    = (int)$_d['DistinctPlayers'];
+	$chart_in_person[] = (int)($_d['DistinctPlayersInPerson'] ?? 0);
+	$chart_online[]    = (int)($_d['DistinctPlayersOnline'] ?? 0);
+	$chart_online_only[] = (int)($_d['DistinctPlayersOnlineOnly'] ?? 0);
+	$chart_is_event[]  = valid_id($_d['EventId']) ? true : false;
 }
 
-$chart_dates    = array_reverse($chart_dates);
-$chart_counts   = array_reverse($chart_counts);
-$chart_is_event = array_reverse($chart_is_event);
+$chart_dates     = array_reverse($chart_dates);
+$chart_counts    = array_reverse($chart_counts);
+$chart_in_person = array_reverse($chart_in_person);
+$chart_online    = array_reverse($chart_online);
+$chart_online_only = array_reverse($chart_online_only);
+$chart_is_event  = array_reverse($chart_is_event);
 
 /* Total Credits comes from attendance_summary to match the table/CSV */
 $_summary_dates = isset($attendance_summary['Dates']) && is_array($attendance_summary['Dates'])
@@ -29,6 +38,10 @@ $_att_avg     = $_att_records ? $_att_total / $_att_records : 0;
 /* Distinct player stats from dedicated API call */
 $_distinct_total  = isset($distinct_stats['TotalDistinctPlayers']) ? (int)$distinct_stats['TotalDistinctPlayers'] : 0;
 $_distinct_avg_wk = isset($distinct_stats['AvgDistinctPerWeek']) ? (float)$distinct_stats['AvgDistinctPerWeek'] : 0;
+$_distinct_total_ip  = (int)($distinct_stats['TotalDistinctPlayersInPerson'] ?? 0);
+$_distinct_total_on  = (int)($distinct_stats['TotalDistinctPlayersOnline'] ?? 0);
+$_distinct_avg_wk_ip = (float)($distinct_stats['AvgDistinctPerWeekInPerson'] ?? 0);
+$_distinct_avg_wk_on = (float)($distinct_stats['AvgDistinctPerWeekOnline'] ?? 0);
 
 /* ── Trend %: compare avg of recent 4 weeks vs prior 4 weeks ── */
 $_trend_pct = null;
@@ -64,18 +77,26 @@ if ($_att_records > 0) {
 }
 
 /* ── Monthly chart data ── */
-$_monthly_dates  = [];
-$_monthly_counts = [];
+$_monthly_dates     = [];
+$_monthly_counts    = [];
+$_monthly_in_person = [];
+$_monthly_online    = [];
+$_monthly_online_only = [];
 $_month_names = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 foreach ((array)($monthly_chart_data ?? []) as $_m) {
-	$_monthly_dates[]  = $_month_names[(int)$_m['Month']] . ' ' . $_m['Year'];
-	$_monthly_counts[] = (int)$_m['Count'];
+	$_monthly_dates[]     = $_month_names[(int)$_m['Month']] . ' ' . $_m['Year'];
+	$_monthly_counts[]    = (int)$_m['Count'];
+	$_monthly_in_person[] = (int)($_m['InPerson'] ?? 0);
+	$_monthly_online[]    = (int)($_m['Online'] ?? 0);
+	$_monthly_online_only[] = (int)($_m['OnlineOnly'] ?? 0);
 }
 $_has_monthly = count($_monthly_counts) >= 2;
 $_monthly_avg = $_has_monthly ? array_sum($_monthly_counts) / count($_monthly_counts) : 0;
+$_monthly_avg_ip = $_has_monthly ? array_sum($_monthly_in_person) / count($_monthly_in_person) : 0;
+$_monthly_avg_on = $_has_monthly ? array_sum($_monthly_online) / count($_monthly_online) : 0;
 
 /* ── Tooltip text (pre-computed so no inline PHP inside data-tip attributes) ── */
-$_tip_unique   = 'Count of distinct players who signed in at least once during this period.';
+$_tip_unique   = 'Count of distinct players who signed in at least once during this period. A player who signed in both in person and online counts once in each split.';
 $_tip_avg_wk   = 'Average distinct players per week. Each week is counted once regardless of how many days it spans.';
 $_tip_avg_mo   = 'Average distinct players per calendar month over this period. A player who attends multiple weeks in a month is counted once for that month.';
 $_tip_trend    = ($_att_records >= 4)
@@ -84,6 +105,18 @@ $_tip_trend    = ($_att_records >= 4)
 $_tip_peak     = 'Highest single-week distinct player count during this period.';
 $_tip_parks    = 'Number of distinct parks with at least one attendance record during this period.';
 $_tip_weeks    = 'Number of weeks with at least one attendance record during this period.';
+$_tip_col_ip   = 'Distinct players with at least one in-person sign-in.';
+$_tip_col_on   = 'Distinct players with at least one sign-in marked Online.';
+$_tip_col_tot  = 'All distinct players. A player who signed in both in person and online counts once in In-Person, once in Online and once here, so In-Person + Online can exceed Total.';
+$_tip_col_sign = 'Total attendance sign-in records, in person and online.';
+/* Column header with a tooltip icon (the CSV export strips .rp-col-tip). */
+$_att_th = function ($label, $tip) {
+	return htmlspecialchars($label) . ' <span class="rp-stat-tip-icon rp-col-tip" data-tip="' . htmlspecialchars($tip) . '" aria-label="' . htmlspecialchars($tip) . '">?</span>';
+};
+/* In-person / online sub-line under a stat card number. */
+$_att_split = function ($ip, $on, $decimals = 0) {
+	return '<div class="rp-stat-hint">' . number_format($ip, $decimals) . ' in-person &middot; ' . number_format($on, $decimals) . ' online</div>';
+};
 
 /* ── Unique parks (Kingdom scope only) ── */
 $_unique_parks = 0;
@@ -211,6 +244,11 @@ if ($Type !== 'Event') {
 	cursor: pointer; white-space: nowrap;
 }
 .rp-view-btn-active { background: #4338ca; color: #fff; border-color: #4338ca; }
+.rp-col-tip { margin-left: 3px; vertical-align: 1px; }
+.rp-att-key-ip { color: #4338ca; }
+.rp-att-key-on { color: #0369a1; }
+html[data-theme="dark"] .rp-att-key-ip { color: #a5b4fc; }
+html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 </style>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
@@ -260,7 +298,7 @@ if ($Type !== 'Event') {
 	<!-- Context strip -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Attendance over time<?php if ($scope_label && $scope_noun !== 'scope' && $scope_noun !== 'global'): ?> for this <?=$scope_noun?><?php endif; ?>. <?php if ($_att_records > 0): ?>Bars show distinct players per week<?php $has_events = in_array(true, $chart_is_event); if ($has_events): ?> — <strong style="color:#d97706;">amber bars</strong> indicate weeks with events<?php endif; ?>. The line shows the 4-week rolling average.<?php endif; ?></span>
+		<span>Attendance over time<?php if ($scope_label && $scope_noun !== 'scope' && $scope_noun !== 'global'): ?> for this <?=$scope_noun?><?php endif; ?>. <?php if ($_att_records > 0): ?>Bars show distinct players per week, stacked in-person and online-only<?php $has_events = in_array(true, $chart_is_event); if ($has_events): ?> — <strong style="color:#d97706;">amber bars</strong> indicate weeks with events<?php endif; ?>. The line shows the 4-week rolling average.<?php endif; ?></span>
 	</div>
 
 	<!-- Stats row -->
@@ -270,12 +308,14 @@ if ($Type !== 'Event') {
 			<div class="rp-stat-icon"><i class="fas fa-user-check"></i></div>
 			<div class="rp-stat-number"><?=number_format($_distinct_total)?></div>
 			<div class="rp-stat-label">Unique Players</div>
+			<?=$_att_split($_distinct_total_ip, $_distinct_total_on)?>
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_avg_wk)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-calendar-week"></i></div>
 			<div class="rp-stat-number"><?=number_format($_distinct_avg_wk, 1)?></div>
 			<div class="rp-stat-label">Avg / Week</div>
+			<?=$_att_split($_distinct_avg_wk_ip, $_distinct_avg_wk_on, 1)?>
 		</div>
 <?php if ($_has_monthly): ?>
 		<div class="rp-stat-card">
@@ -283,6 +323,7 @@ if ($Type !== 'Event') {
 			<div class="rp-stat-icon"><i class="fas fa-calendar-alt"></i></div>
 			<div class="rp-stat-number"><?=number_format($_monthly_avg, 1)?></div>
 			<div class="rp-stat-label">Avg / Month</div>
+			<?=$_att_split($_monthly_avg_ip, $_monthly_avg_on, 1)?>
 		</div>
 <?php endif; ?>
 		<div class="rp-stat-card">
@@ -346,7 +387,8 @@ if ($Type !== 'Event') {
 			<div class="rp-filter-card">
 				<div class="rp-filter-card-header"><i class="fas fa-info-circle"></i> Reading the Chart</div>
 				<div class="rp-filter-card-body" style="font-size:12px;line-height:1.55;color:var(--rp-text-body);">
-					<p style="margin:0 0 8px;">Each <strong style="color:#4338ca;">indigo bar</strong> shows distinct players for one week.</p>
+					<p style="margin:0 0 8px;">Each <strong class="rp-att-key-ip">indigo bar</strong> shows distinct players for one week who signed in at least once in person.</p>
+					<p style="margin:0 0 8px;">The <strong class="rp-att-key-on">sky-blue segment</strong> stacked on top adds players who signed in only online that week, so the full bar is every distinct player.</p>
 					<p style="margin:0 0 8px;"><strong style="color:#d97706;">Amber bars</strong> highlight weeks that include an event — useful for seeing how events impact turnout.</p>
 					<p style="margin:0;">The <strong style="color:#059669;">green line</strong> is a 4-week rolling average that smooths out week-to-week noise so you can spot the real trend.</p>
 				</div>
@@ -376,8 +418,16 @@ if ($Type !== 'Event') {
 					</div>
 <?php endif; ?>
 					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Players</span>
-						<span class="rp-col-guide-desc">Distinct players who signed in during this period.</span>
+						<span class="rp-col-guide-name">In-Person</span>
+						<span class="rp-col-guide-desc">Distinct players with at least one in-person sign-in.</span>
+					</div>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Online</span>
+						<span class="rp-col-guide-desc">Distinct players with at least one sign-in marked Online.</span>
+					</div>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Total</span>
+						<span class="rp-col-guide-desc">All distinct players who signed in during this period. A player with both kinds counts once in each split and once here.</span>
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Sign-ins</span>
@@ -389,7 +439,7 @@ if ($Type !== 'Event') {
 		</div><!-- /.rp-sidebar -->
 
 		<!-- Tables column -->
-		<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;">
+		<div style="flex:1;min-width:0;max-width:100%;display:flex;flex-direction:column;gap:16px;">
 
 <?php if (!empty($_event_rows)): ?>
 		<!-- Events in period -->
@@ -403,8 +453,10 @@ if ($Type !== 'Event') {
 				<thead>
 					<tr>
 						<th>Event</th>
-						<th class="dt-right">Players</th>
-						<th class="dt-right">Sign-ins</th>
+						<th class="dt-right"><?=$_att_th('In-Person', $_tip_col_ip)?></th>
+						<th class="dt-right"><?=$_att_th('Online', $_tip_col_on)?></th>
+						<th class="dt-right"><?=$_att_th('Total', $_tip_col_tot)?></th>
+						<th class="dt-right"><?=$_att_th('Sign-ins', $_tip_col_sign)?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -416,6 +468,8 @@ if ($Type !== 'Event') {
 							<a href="<?=UIR?>Event/detail/<?=$ev['EventId']?>/<?=$ev['EventCalendarDetailId']?>#ev-tab-attendance"><?=htmlspecialchars($ev['EventName'])?></a><?php if (!empty($ev['ParkName'])): ?>,
 							<a href="<?=UIR?>Park/profile/<?=$ev['ParkId']?>" style="color:var(--rp-text-muted);"><?=htmlspecialchars($ev['ParkName'])?></a><?php endif; ?>
 						</td>
+						<td class="dt-right"><?=(int)($ev['DistinctPlayersInPerson'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)($ev['DistinctPlayersOnline'] ?? 0)?></td>
 						<td class="dt-right"><?=(int)$ev['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$ev['Attendees']?></td>
 					</tr>
@@ -438,14 +492,18 @@ if ($Type !== 'Event') {
 				<thead>
 					<tr>
 						<th>Date</th>
-						<th class="dt-right">Players</th>
-						<th class="dt-right">Sign-ins</th>
+						<th class="dt-right"><?=$_att_th('In-Person', $_tip_col_ip)?></th>
+						<th class="dt-right"><?=$_att_th('Online', $_tip_col_on)?></th>
+						<th class="dt-right"><?=$_att_th('Total', $_tip_col_tot)?></th>
+						<th class="dt-right"><?=$_att_th('Sign-ins', $_tip_col_sign)?></th>
 					</tr>
 				</thead>
 				<tbody>
 <?php foreach ($_kingdom_rows as $kr): ?>
 					<tr>
 						<td><?=date('Y-m-d', strtotime($kr['Date']))?></td>
+						<td class="dt-right"><?=(int)($kr['DistinctPlayersInPerson'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)($kr['DistinctPlayersOnline'] ?? 0)?></td>
 						<td class="dt-right"><?=(int)$kr['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$kr['Attendees']?></td>
 					</tr>
@@ -465,8 +523,10 @@ if ($Type !== 'Event') {
 						<th>Kingdom</th>
 						<th>Park</th>
 <?php endif; ?>
-						<th class="dt-right">Players</th>
-						<th class="dt-right">Sign-ins</th>
+						<th class="dt-right"><?=$_att_th('In-Person', $_tip_col_ip)?></th>
+						<th class="dt-right"><?=$_att_th('Online', $_tip_col_on)?></th>
+						<th class="dt-right"><?=$_att_th('Total', $_tip_col_tot)?></th>
+						<th class="dt-right"><?=$_att_th('Sign-ins', $_tip_col_sign)?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -474,6 +534,8 @@ if ($Type !== 'Event') {
 <?php foreach ($_parkday_rows as $date): ?>
 					<tr>
 						<td><a href="<?=UIR?>Attendance/park/<?=$date['ParkId']?>&AttendanceDate=<?=$date['Date']?>"><?=date('Y-m-d', strtotime($date['Date']))?></a></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
 						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
@@ -482,6 +544,8 @@ if ($Type !== 'Event') {
 <?php foreach ($_parkday_rows as $date): ?>
 					<tr>
 						<td><a href="<?=UIR?>Event/detail/<?=$date['EventId']?>/<?=$date['EventCalendarDetailId']?>#ev-tab-attendance"><?=date('Y-m-d', strtotime($date['EventStart']))?></a></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
 						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
@@ -490,6 +554,8 @@ if ($Type !== 'Event') {
 <?php foreach ($_parkday_rows as $date): ?>
 					<tr>
 						<td><a href="<?=UIR?>Attendance/kingdom/<?=$date['KingdomId']?>&AttendanceDate=<?=$date['Date']?>"><?=date('Y-m-d', strtotime($date['Date']))?></a></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
 						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
@@ -504,6 +570,8 @@ if ($Type !== 'Event') {
 						</td>
 						<td><a href="<?=UIR?>Kingdom/profile/<?=$date['KingdomId']?>"><?=htmlspecialchars($date['KingdomName'])?></a></td>
 						<td><a href="<?=UIR?>Park/profile/<?=$date['ParkId']?>"><?=htmlspecialchars($date['ParkName'])?></a></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
 						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
@@ -530,10 +598,10 @@ if ($Type !== 'Event') {
 <?php if ($Type === 'All'): ?>
 		{ targets: [0], type: 'html' },
 		{ targets: [1, 2], type: 'string' },
-		{ targets: [3, 4], type: 'num', className: 'dt-right' }
+		{ targets: [3, 4, 5, 6], type: 'num', className: 'dt-right' }
 <?php else: ?>
 		{ targets: [0], type: 'html' },
-		{ targets: [1, 2], type: 'num', className: 'dt-right' }
+		{ targets: [1, 2, 3, 4], type: 'num', className: 'dt-right' }
 <?php endif; ?>
 	];
 
@@ -559,7 +627,7 @@ if ($Type !== 'Event') {
 			scrollX      : true,
 			columnDefs   : [
 				{ targets: [0], type: 'string' },
-				{ targets: [1, 2], type: 'num', className: 'dt-right' }
+				{ targets: [1, 2, 3, 4], type: 'num', className: 'dt-right' }
 			],
 			order        : [[0, 'asc']]
 		});
@@ -575,7 +643,7 @@ if ($Type !== 'Event') {
 			scrollX      : true,
 			columnDefs   : [
 				{ targets: [0], type: 'html' },
-				{ targets: [1, 2], type: 'num', className: 'dt-right' }
+				{ targets: [1, 2, 3, 4], type: 'num', className: 'dt-right' }
 			],
 			order        : [[0, 'desc']]
 		});
@@ -586,7 +654,11 @@ if ($Type !== 'Event') {
 		var dt = $('#attendance-table').DataTable();
 		var csv = [];
 		var headers = [];
-		$('#attendance-table thead th').each(function () { headers.push($(this).text().trim()); });
+		$('#attendance-table thead th').each(function () {
+			var $th = $(this).clone();
+			$th.find('.rp-col-tip').remove();
+			headers.push($th.text().trim());
+		});
 		csv.push(headers.join(','));
 		dt.rows({ search: 'applied' }).every(function () {
 			var row = this.data();
@@ -609,21 +681,47 @@ if ($Type !== 'Event') {
 	var chartCounts  = <?=json_encode($chart_counts)?>;
 	var chartDates   = <?=json_encode($chart_dates)?>;
 	var chartIsEvent = <?=json_encode($chart_is_event)?>;
+	var chartInPerson = <?=json_encode($chart_in_person)?>;
+	var chartOnline   = <?=json_encode($chart_online)?>;
+	var chartOnlineOnly = <?=json_encode($chart_online_only)?>;
 	var monthlyDates  = <?=json_encode($_monthly_dates)?>;
 	var monthlyCounts = <?=json_encode($_monthly_counts)?>;
+	var monthlyInPerson = <?=json_encode($_monthly_in_person)?>;
+	var monthlyOnline   = <?=json_encode($_monthly_online)?>;
+	var monthlyOnlineOnly = <?=json_encode($_monthly_online_only)?>;
 	var attChart = null;
+	var ATT_ONLINE_COLOR = '#0ea5e9';
 
-	/* Split into two column series: regular park days vs event weeks */
+	/* Stacked columns: in-person players (park days vs event weeks) plus the
+	   online-only remainder, so the full bar is every distinct player. A player
+	   with both kinds sits in the in-person part only. */
 	var regularData = [];
 	var eventData   = [];
+	var onlineOnlyData = chartOnlineOnly;
 	for (var i = 0; i < chartCounts.length; i++) {
 		if (chartIsEvent[i]) {
 			regularData.push(null);
-			eventData.push(chartCounts[i]);
+			eventData.push(chartInPerson[i]);
 		} else {
-			regularData.push(chartCounts[i]);
+			regularData.push(chartInPerson[i]);
 			eventData.push(null);
 		}
+	}
+
+	/* Shared tooltip body for one bar, labelled like the legend: the In-Person and
+	   Online only segments, the Total (bar height), and, when it differs from the
+	   segment, how many players had any online sign-in (the tables' Online column). */
+	function attSplitTip(ip, on, onlineOnly, tot) {
+		var s = '<br/><span style="color:#4338ca">\u25A0</span> In-Person: <b>' + Highcharts.numberFormat(ip, 0) + '</b>'
+			+ '<br/><span style="color:' + ATT_ONLINE_COLOR + '">\u25A0</span> Online only: <b>' + Highcharts.numberFormat(onlineOnly, 0) + '</b>'
+			+ '<br/>Total: <b>' + Highcharts.numberFormat(tot, 0) + '</b>';
+		if (on !== onlineOnly) {
+			s += '<br/><span style="font-style:italic;">Any online sign-in: ' + Highcharts.numberFormat(on, 0) + '</span>';
+		}
+		return s;
+	}
+	function attLegendStyle() {
+		return { fontSize: '12px', fontWeight: '600', color: attIsDark() ? '#cbd5e0' : '#4a5568' };
 	}
 
 	/* 4-week rolling average */
@@ -663,15 +761,14 @@ if ($Type !== 'Event') {
 		},
 		tooltip: Object.assign({ shared: true,
 			formatter: function () {
+				var i = this.points[0].point.x;
 				var s = '<b>' + this.x + '</b>';
+				if (chartIsEvent[i]) {
+					s += ' <span style="color:#d97706;font-style:italic;">(event week)</span>';
+				}
+				s += attSplitTip(chartInPerson[i], chartOnline[i], chartOnlineOnly[i], chartCounts[i]);
 				this.points.forEach(function (pt) {
-					/* Combine the two column series into one "Attendance" line */
-					if (pt.series.type === 'column') {
-						s += '<br/><span style="color:' + pt.color + '">\u25A0</span> Players: <b>' + Highcharts.numberFormat(pt.y, 0) + '</b>';
-						if (pt.series.options._isEvent) {
-							s += ' <span style="color:#d97706;font-style:italic;">(event week)</span>';
-						}
-					} else {
+					if (pt.series.type !== 'column') {
 						s += '<br/><span style="color:' + pt.color + '">\u2014</span> '
 							+ pt.series.name + ': <b>' + Highcharts.numberFormat(pt.y, 1) + '</b>';
 					}
@@ -681,6 +778,7 @@ if ($Type !== 'Event') {
 		}, attTooltipTheme()),
 		plotOptions: {
 			column: {
+				stacking    : 'normal',
 				borderRadius: 3,
 				borderWidth : 0,
 				groupPadding: 0,
@@ -689,21 +787,31 @@ if ($Type !== 'Event') {
 		},
 		series : [
 			{
-				name : 'Park Days',
+				name : 'Online only',
 				type : 'column',
+				legendIndex: 2,
+				data : onlineOnlyData,
+				color: ATT_ONLINE_COLOR
+			},
+			{
+				name : 'In-Person: Park Days',
+				type : 'column',
+				legendIndex: 0,
 				data : regularData,
 				color: '#4338ca',
 				_isEvent: false
 			},
 			{
-				name : 'Event Weeks',
+				name : 'In-Person: Event Weeks',
 				type : 'column',
+				legendIndex: 1,
 				data : eventData,
 				color: '#d97706',
 				_isEvent: true
 			},
 			{
 				name      : '4-Week Avg',
+				legendIndex: 3,
 				type      : 'spline',
 				data      : maData,
 				color     : '#059669',
@@ -718,7 +826,7 @@ if ($Type !== 'Event') {
 			enabled     : true,
 			align       : 'center',
 			verticalAlign: 'bottom',
-			itemStyle   : { fontSize: '12px', fontWeight: '600', color: '#4a5568' },
+			itemStyle   : attLegendStyle(),
 			symbolRadius: 3
 		},
 		credits: { enabled: false }
@@ -737,23 +845,23 @@ if ($Type !== 'Event') {
 			yAxis  : { title: { text: 'Distinct Players' }, min: 0 },
 			tooltip: Object.assign({ shared: true,
 				formatter: function() {
-					var s = '<b>' + this.x + '</b>';
+					var i = this.points[0].point.x;
+					var s = '<b>' + this.x + '</b>' + attSplitTip(monthlyInPerson[i], monthlyOnline[i], monthlyOnlineOnly[i], monthlyCounts[i]);
 					this.points.forEach(function(pt) {
-						if (pt.series.type === 'column') {
-							s += '<br/><span style="color:' + pt.color + '">\u25A0</span> Players: <b>' + Highcharts.numberFormat(pt.y, 0) + '</b>';
-						} else {
+						if (pt.series.type !== 'column') {
 							s += '<br/><span style="color:' + pt.color + '">\u2014</span> ' + pt.series.name + ': <b>' + Highcharts.numberFormat(pt.y, 1) + '</b>';
 						}
 					});
 					return s;
 				}
 			}, attTooltipTheme()),
-			plotOptions: { column: { borderRadius: 3, borderWidth: 0, groupPadding: 0, pointPadding: 0.05 } },
+			plotOptions: { column: { stacking: 'normal', borderRadius: 3, borderWidth: 0, groupPadding: 0, pointPadding: 0.05 } },
 			series: [
-				{ name: 'Monthly Players', type: 'column', data: monthlyCounts, color: '#4338ca' },
-				{ name: '3-Month Avg', type: 'spline', data: ma3, color: '#059669', lineWidth: 2.5, marker: { enabled: false }, dashStyle: 'ShortDash', zIndex: 5, connectNulls: false }
+				{ name: 'Online only', legendIndex: 1, type: 'column', data: monthlyOnlineOnly, color: ATT_ONLINE_COLOR },
+				{ name: 'In-Person', legendIndex: 0, type: 'column', data: monthlyInPerson, color: '#4338ca' },
+				{ name: '3-Month Avg', legendIndex: 2, type: 'spline', data: ma3, color: '#059669', lineWidth: 2.5, marker: { enabled: false }, dashStyle: 'ShortDash', zIndex: 5, connectNulls: false }
 			],
-			legend : { enabled: true, align: 'center', verticalAlign: 'bottom', itemStyle: { fontSize: '12px', fontWeight: '600', color: '#4a5568' }, symbolRadius: 3 },
+			legend : { enabled: true, align: 'center', verticalAlign: 'bottom', itemStyle: attLegendStyle(), symbolRadius: 3 },
 			credits: { enabled: false }
 		});
 	}
@@ -782,15 +890,26 @@ if ($Type !== 'Event') {
 	bub.className = 'rp-stat-tip-text';
 	bub.style.cssText = 'display:none;position:fixed;z-index:9999;pointer-events:none;';
 	document.body.appendChild(bub);
-	document.querySelectorAll('.rp-stat-tip-icon[data-tip]').forEach(function(el) {
-		el.addEventListener('mouseenter', function() {
-			bub.textContent = el.dataset.tip;
-			var r = el.getBoundingClientRect();
-			bub.style.display = 'block';
-			bub.style.top  = (r.bottom + 6) + 'px';
-			bub.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 214)) + 'px';
-		});
-		el.addEventListener('mouseleave', function() { bub.style.display = 'none'; });
+	/* Delegated: DataTables moves/clones the table headers that carry .rp-col-tip icons. */
+	document.addEventListener('mouseover', function(e) {
+		var el = e.target.closest ? e.target.closest('.rp-stat-tip-icon[data-tip]') : null;
+		if (!el) return;
+		bub.textContent = el.dataset.tip;
+		var r = el.getBoundingClientRect();
+		bub.style.display = 'block';
+		bub.style.top  = (r.bottom + 6) + 'px';
+		bub.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 214)) + 'px';
+	});
+	/* Header tip icons sit inside sortable <th>s: keep clicks/keys on them from sorting
+	   (capture phase, so it runs before DataTables' header handlers). */
+	['click', 'keydown'].forEach(function(type) {
+		document.addEventListener(type, function(e) {
+			if (e.target.closest && e.target.closest('.rp-col-tip')) e.stopPropagation();
+		}, true);
+	});
+	document.addEventListener('mouseout', function(e) {
+		var el = e.target.closest ? e.target.closest('.rp-stat-tip-icon[data-tip]') : null;
+		if (el && !el.contains(e.relatedTarget)) bub.style.display = 'none';
 	});
 }());
 </script>

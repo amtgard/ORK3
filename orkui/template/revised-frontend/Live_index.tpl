@@ -236,6 +236,7 @@ html[data-theme="dark"] .lv-search-box kbd, html[data-theme="dark"] .lv-pi-key {
 	let initialBounds = null;
 	let focusedKind = null, focusedId = null;
 
+	const ONLINE_BADGE  = <?= json_encode(ork_online_badge()) ?>;
 	const ticker        = document.getElementById('lv-ticker');
 	const tickerCount   = document.getElementById('lv-ticker-count');
 	const activeNowEl   = document.getElementById('lv-active-now');
@@ -590,7 +591,7 @@ html[data-theme="dark"] .lv-search-box kbd, html[data-theme="dark"] .lv-pi-key {
 
 	function pushTicker(s, opts) {
 		const animate = !opts || opts.animate !== false;
-		const [iso, pid, eid, cdid, isFirst, isSelf] = s;
+		const [iso, pid, eid, cdid, isFirst, isSelf, isOnline] = s;
 		const isEvent = (pid === 0 && eid && eventsMeta[eid]);
 		const pname  = isEvent ? eventsMeta[eid].name : (parksMeta[pid] ? parksMeta[pid].name : ('Park #' + pid));
 		const icon   = isEvent ? '📅' : (parksMeta[pid] ? (TIER_ICON[parksMeta[pid].title] || '📍') : '📍');
@@ -599,11 +600,12 @@ html[data-theme="dark"] .lv-search-box kbd, html[data-theme="dark"] .lv-pi-key {
 			: `class="lv-t-park" data-pid="${pid}"`;
 		const iconSpan = `<span class="lv-t-icon">${icon}</span>`;
 		const target = `<span ${linkAttrs}>${pname}</span>`;
+		const onlineBadge = isOnline ? ' ' + ONLINE_BADGE : '';
 		const row = document.createElement('div');
 		row.className = 'lv-t-row' + (animate ? ' enter' : '') + (isFirst ? ' first-ever' : '');
 		const timeStr = fmtClockShort(iso);
 		if (isFirst) {
-			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target} <span class="lv-t-celebrate">🎉 New player</span></span>`;
+			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target}${onlineBadge} <span class="lv-t-celebrate">🎉 New player</span></span>`;
 			if (animate) {
 				const toast = document.createElement('div');
 				toast.className = 'lv-toast';
@@ -618,7 +620,7 @@ html[data-theme="dark"] .lv-search-box kbd, html[data-theme="dark"] .lv-pi-key {
 			const selfBadge = isSelf
 				? ` <span class="lv-t-self" title="Checked in with a QR sign-in link — parks can offer self sign-in from the attendance page!">📱 self sign-in</span>`
 				: '';
-			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target}${selfBadge}</span>`;
+			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target}${onlineBadge}${selfBadge}</span>`;
 		}
 		ticker.insertBefore(row, ticker.firstChild);
 		while (ticker.childNodes.length > 80) ticker.removeChild(ticker.lastChild);
