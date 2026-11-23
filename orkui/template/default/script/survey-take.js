@@ -967,10 +967,13 @@
 
     /* The one way onward from a screen the runner cannot continue past — the
        thank-you, and equally "already completed" / "closed" / "not eligible",
-       which otherwise left the browser Back button as the only exit. */
+       which otherwise left the browser Back button as the only exit. My
+       Amtgard is the viewer's own profile page; Player/index without an id
+       only bounces to the site home, so a signed-out viewer goes there. */
     function homeActionHtml() {
+        var href = VIEWER > 0 ? UIR + 'Player/profile/' + VIEWER : UIR;
         return '<div class="sv-actions"><a class="sv-btn sv-btn-primary" href="' +
-            esc(UIR) + 'Player/index">Back to My Amtgard</a></div>';
+            esc(href) + '">' + (VIEWER > 0 ? 'Back to My Amtgard' : 'Back to the ORK') + '</a></div>';
     }
 
     function renderThanks(html, credit, announceText, opts) {
