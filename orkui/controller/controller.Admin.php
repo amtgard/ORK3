@@ -1100,15 +1100,24 @@ class Controller_Admin extends Controller
                         break;
                     case 'addaward':
                         if (!valid_id($id)) {
-                            $this->data['Error'] = 'You must choose a recipient. Award not added!';
+                            $this->reject_award_grant('You must choose a recipient. Award not added!');
                             break;
                         }
                         if (!valid_id($this->request->Admin_player->KingdomAwardId)) {
-                            $this->data['Error'] = 'You must choose an award. Award not added!';
+                            $this->reject_award_grant('You must choose an award. Award not added!');
                             break;
                         }
                         if (!valid_id($this->request->Admin_player->GivenById)) {
-                            $this->data['Error'] = 'Who gave this award? Award not added!';
+                            $this->reject_award_grant('Who gave this award? Award not added!');
+                            break;
+                        }
+                        // "Where given" is required. Player::AddAward enforces it for
+                        // every grant path; this pre-check only gives the kingdom and
+                        // park Enter Awards modals (knDoSave / pkDoSave) a friendlier
+                        // message.
+                        if (!valid_id($this->request->Admin_player->ParkId)
+                            && !valid_id($this->request->Admin_player->KingdomId)) {
+                            $this->reject_award_grant('Where was this award given? Choose a location from the list. Award not added!');
                             break;
                         }
                         // "Give from rec" forms send the source rec. A Monarchy Only rec's
@@ -1139,11 +1148,24 @@ class Controller_Admin extends Controller
                                 'Note' => $awardNote,
                                 'ParkId' => valid_id($this->request->Admin_player->ParkId) ? $this->request->Admin_player->ParkId : 0,
                                 'KingdomId' => valid_id($this->request->Admin_player->KingdomId) ? $this->request->Admin_player->KingdomId : 0,
-                                'EventId' => valid_id($this->request->Admin_player->EventId) ? $this->request->Admin_player->EventId : 0
+                                'EventId' => valid_id($this->request->Admin_player->EventId) ? $this->request->Admin_player->EventId : 0,
+                                // The lib closes this rec as GRANTED only when the award
+                                // just saved backs it (Player::close_recommendation_as_granted);
+                                // the client never claims "granted" itself.
+                                'RecommendationsId' => $sourceRec
                             ));
                         // add_player_award returns the FLAT shape: Status 0 = saved.
                         if ($noteWithheld && (int)($r['Status'] ?? 1) === 0 && !headers_sent()) {
                             header('X-Ork-Note-Withheld: 1');
+                        }
+                        // The page body is a rendered admin page, so knDoSave / pkDoSave
+                        // read the rec outcome from headers: Closed 1 = the rec is now
+                        // granted; Closed 0 + Error = it was left open, and why.
+                        if ($sourceRec > 0 && (int)($r['Status'] ?? 1) === 0 && isset($r['RecClosed']) && !headers_sent()) {
+                            header('X-Ork-Rec-Closed: ' . (!empty($r['RecClosed']) ? '1' : '0'));
+                            if (!empty($r['RecError'])) {
+                                header('X-Ork-Rec-Error: ' . preg_replace('/[^\x20-\x7E]/', ' ', (string)$r['RecError']));
+                            }
                         }
                         break;
                     case 'deleteaward':
@@ -1888,6 +1910,7 @@ class Controller_Admin extends Controller
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+        $this->data['CanPrintScrolls'] = $this->admin_can_print_scrolls($_uid, AUTH_PARK, (int) $id);
     }
 
     public function new_player_attendance()
@@ -2167,6 +2190,7 @@ class Controller_Admin extends Controller
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
             $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+            $this->data['CanPrintScrolls'] = $this->admin_can_print_scrolls($_uid, AUTH_PARK, (int) $id);
             $this->template = 'Admin_park.tpl';
         }
     }
@@ -2636,6 +2660,33 @@ class Controller_Admin extends Controller
     {
         $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid);
         $this->data['CanEditKingdomReports'] = $this->admin_can_edit_kingdom_reports($uid, $kingdomId);
+        $this->data['CanPrintScrolls'] = $this->admin_can_print_scrolls($uid, AUTH_KINGDOM, $kingdomId);
+    }
+
+    private function admin_can_print_scrolls(int $uid, string $authType, int $scopeId): bool
+    {
+        $this->load_model('Scrollery');
+        return $this->Scrollery->may_issue_for($uid, $authType === AUTH_KINGDOM ? 'kingdom' : 'park', $scopeId);
+    }
+
+    /**
+     * Refuse an award grant so BOTH clients of Admin/player/<id>/addaward can see it.
+     *
+     * The legacy page reads $this->data['Error']. The CRM's kingdom and park Enter
+     * Awards modals (knDoSave / pkDoSave in revised.js) fetch this route and never
+     * look at the body -- it is a whole rendered admin page -- so every rejection
+     * here used to be reported to the officer as a successful grant. The header is a
+     * machine-readable echo of the same message; it costs nothing on the page render
+     * and is same-origin, so the modals can read it.
+     */
+    private function reject_award_grant(string $message): void
+    {
+        $this->data['Error'] = $message;
+        if (!headers_sent()) {
+            // Header values are a single line of ASCII; the messages here are literals,
+            // but strip control characters rather than trusting that to stay true.
+            header('X-Award-Error: ' . preg_replace('/[^\x20-\x7E]/', ' ', $message));
+        }
     }
 
 }

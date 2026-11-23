@@ -75,9 +75,34 @@
     </select>
     <?php } ?>
     <label class="rm-fcheck"><input type="checkbox" id="rm-filter-passlocal"> Passed to local</label>
-    <label class="rm-fcheck" data-tip="Dismissed recommendations are kept, not deleted. Turn this on to see them and restore any that were retired by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show dismissed</label>
+    <label class="rm-fcheck" data-tip="Closed recommendations are kept, not deleted: granted ones (the award was given) and dismissed ones. Turn this on to see them and restore any dismissed by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show granted &amp; dismissed</label>
+    <!-- The table header (and its Rank filter icon) is hidden below 1250px, where
+         rows render as cards — this button opens the same popover there. -->
+    <button type="button" class="rm-fbtn rm-rankf-mbtn" id="rm-rankf-mbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="rm-rankf-pop"><i class="fas fa-filter" aria-hidden="true"></i> Rank: <span id="rm-rankf-msum">All</span></button>
     <div id="rm-chips" class="rm-chips"></div>
     <button type="button" id="rm-export" class="rm-fbtn" data-tip="Download the full current filtered list as a CSV file"><i class="fas fa-download"></i> Export CSV</button>
+  </div>
+
+  <div class="rm-rankf-pop" id="rm-rankf-pop" role="dialog" aria-label="Filter by rank" hidden>
+    <div class="rm-rankf-head">
+      <span class="rm-rankf-title">Show ranks</span>
+      <span class="rm-rankf-status" id="rm-rankf-status">All ranks</span>
+    </div>
+    <div class="rm-rankf-stops" id="rm-rankf-stops" role="group" aria-label="Rank range: pick a start, then an end">
+      <!-- One capsule behind the numbers spans the whole selected range (sized in
+           rmRankPaint); the tick marks where the ladder scale ends and M begins. -->
+      <span class="rm-rankf-div" aria-hidden="true"></span>
+      <span class="rm-rankf-pill" id="rm-rankf-pill" aria-hidden="true" hidden></span>
+      <?php for ($st = 1; $st <= 11; $st++) { ?>
+        <button type="button" class="rm-rankf-stop" data-stop="<?= $st ?>" tabindex="<?= $st === 1 ? '0' : '-1' ?>"<?= $st === 11 ? ' aria-label="M (Master award)" data-tip="Master award (e.g. Master Rose)"' : ($st === 10 ? ' aria-label="10 and above"' : '') ?>><span class="rm-rankf-num"><?= $st === 11 ? 'M' : $st ?></span></button>
+      <?php } ?>
+    </div>
+    <p class="rm-rankf-hint" id="rm-rankf-hint" aria-live="polite">Tap a start rank, then an end rank.</p>
+    <label class="rm-fcheck rm-rankf-nl"><input type="checkbox" id="rm-rankf-nl" checked> Include non-ladder <span class="rm-rankf-sub">(knighthoods, titles&hellip;)</span></label>
+    <div class="rm-rankf-foot">
+      <button type="button" class="rm-btn rm-btn-ghost" id="rm-rankf-reset">Reset</button>
+      <button type="button" class="rm-btn rm-btn-primary" id="rm-rankf-done">Done</button>
+    </div>
   </div>
 
   <div class="rm-gridwrap">
@@ -90,7 +115,7 @@
         <th class="rm-col-recip rm-sortable" data-sort="recip">Recipient</th>
         <th class="rm-col-park">Park</th>
         <th class="rm-col-award rm-sortable" data-sort="award">Award</th>
-        <th class="rm-col-rank rm-sortable" data-sort="rank">Rank</th>
+        <th class="rm-col-rank rm-sortable" data-sort="rank">Rank<span class="rm-rankf-sum" id="rm-rankf-sum" hidden></span><button type="button" class="rm-rankf-btn" id="rm-rankf-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="rm-rankf-pop" aria-label="Filter by rank: all ranks" data-tip="Filter by rank"><i class="fas fa-filter" aria-hidden="true"></i></button></th>
         <th class="rm-col-rec rm-sortable" data-sort="date">Recommended</th>
         <th class="rm-col-reason">Reason</th>
         <th class="rm-col-supp rm-sortable" data-sort="supp">Support</th>
@@ -327,6 +352,8 @@ var RM = { rows: function () { return Array.from(document.querySelectorAll('#rm-
 
 var rmState = {
 	search: '', elig: 'open', court: 'all', park: 'all', passlocal: false,
+	// Rank range: stops 1..10 are ladder ranks, 11 = "M" (Master award); nl = include non-ladder.
+	rmin: 1, rmax: 11, nl: true,
 	sort: 'date', dir: 'desc',
 	offset: RmConfig.nextOffset || 0, total: RmConfig.total || 0,
 	hasMore: !!RmConfig.hasMore, loading: false, seen: {},
@@ -397,19 +424,25 @@ function rmClearFilters() {
     var pk = document.getElementById('rm-filter-park'); if (pk) pk.value = 'all';
     var plc = document.getElementById('rm-filter-passlocal'); if (plc) plc.checked = false;
     var dis = document.getElementById('rm-filter-dismissed'); if (dis) dis.checked = false;
+    rmState.rmin = 1; rmState.rmax = 11; rmState.nl = true;
+    if (typeof rmRankMarkApplied === 'function') { rmRankMarkApplied(); rmRankPaint(); }
     rmReadFilters();
     rmFetch(true);
 }
 function rmIndexSeen() { rmState.seen = {}; RM.rows().forEach(function (tr) { rmState.seen[rmRowKey(tr)] = true; }); }
 function rmFetch(reset) {
-	if (rmState.loading) return;
+	// A filter change made while a batch is in flight (infinite scroll, or a
+	// previous filter change) used to be dropped here. Queue one re-query instead;
+	// it runs as soon as the in-flight request settles.
+	if (rmState.loading) { if (reset) rmState.queuedReset = true; return; }
 	rmState.loading = true;
 	if (reset) { rmState.offset = 0; }
 	var q = new URLSearchParams({
 		search: rmState.search, elig: rmState.elig, court: rmState.court,
 		park: rmState.park, passlocal: rmState.passlocal ? '1' : '',
 		dismissed: rmState.dismissed ? '1' : '', sort: rmState.sort,
-		dir: rmState.dir, offset: String(rmState.offset)
+		dir: rmState.dir, offset: String(rmState.offset),
+		rmin: String(rmState.rmin), rmax: String(rmState.rmax), nl: rmState.nl ? '1' : '0'
 	});
 	var tbody = document.getElementById('rm-tbody');
 	rmClearStateRow();
@@ -449,6 +482,7 @@ function rmFetch(reset) {
 		.finally(function () {
 			rmState.loading = false;
 			document.getElementById('rm-loading').style.display = 'none';
+			if (rmState.queuedReset) { rmState.queuedReset = false; rmFetch(true); }
 		});
 }
 // serverGone: did the row leave the SERVER's result set, or only this client-side
@@ -497,7 +531,8 @@ if (rmExportBtn) rmExportBtn.addEventListener('click', function () {
 		search: rmState.search, elig: rmState.elig, court: rmState.court,
 		park: rmState.park, passlocal: rmState.passlocal ? '1' : '',
 		dismissed: rmState.dismissed ? '1' : '',
-		sort: rmState.sort, dir: rmState.dir
+		sort: rmState.sort, dir: rmState.dir,
+		rmin: String(rmState.rmin), rmax: String(rmState.rmax), nl: rmState.nl ? '1' : '0'
 	});
 	// brief disabled state — a large scope can take a moment to assemble server-side
 	var label = rmExportBtn.innerHTML;
@@ -506,6 +541,167 @@ if (rmExportBtn) rmExportBtn.addEventListener('click', function () {
 	setTimeout(function () { rmExportBtn.disabled = false; rmExportBtn.innerHTML = label; }, 4000);
 	window.location = RmConfig.exportUrl + (RmConfig.exportUrl.indexOf('?') >= 0 ? '&' : '?') + q.toString();
 });
+/* ---------- Rank-range filter (Rank header popover) ----------
+   Stops 1..10 are ladder ranks (10 = rank 10 and above, as the pill clamps), 11 is
+   "M" (a Master award). The range is contiguous: the first tap sets the start, the
+   second the end (tap the same stop twice for a single rank). Filtering is
+   server-side (rows/export carry rmin/rmax/nl), so Total and paging stay exact. */
+(function () {
+	var pop = document.getElementById('rm-rankf-pop');
+	if (!pop) return;
+	var TOP = 11;
+	var stops = Array.prototype.slice.call(pop.querySelectorAll('.rm-rankf-stop'));
+	var nlBox = document.getElementById('rm-rankf-nl');
+	var hint = document.getElementById('rm-rankf-hint');
+	var btn = document.getElementById('rm-rankf-btn');
+	var mbtn = document.getElementById('rm-rankf-mbtn');
+	var opener = null, anchor = null;
+	var applied = { rmin: rmState.rmin, rmax: rmState.rmax, nl: rmState.nl };
+	function lab(n) { return n === TOP ? 'M' : String(n); }
+	function rangeText() {
+		return rmState.rmin === rmState.rmax ? lab(rmState.rmin) : lab(rmState.rmin) + '–' + lab(rmState.rmax);
+	}
+	function isDefault() { return rmState.rmin === 1 && rmState.rmax === TOP && rmState.nl; }
+	function describe() {
+		if (isDefault()) return 'All ranks';
+		var r = (rmState.rmin === 1 && rmState.rmax === TOP) ? 'All ladder ranks and M' : 'Ranks ' + rangeText();
+		return r + (rmState.nl ? ', plus non-ladder' : ', no non-ladder');
+	}
+	window.rmRankPaint = function () {
+		var lo = rmState.rmin, hi = rmState.rmax;
+		var pending = anchor !== null;
+		stops.forEach(function (b) {
+			var n = +b.getAttribute('data-stop');
+			var inR = pending ? n === anchor : (n >= lo && n <= hi);
+			b.classList.toggle('is-in', inR);
+			b.classList.toggle('is-end', !pending && (n === lo || n === hi));
+			b.classList.toggle('is-anchor', pending && n === anchor);
+			b.setAttribute('aria-pressed', inR ? 'true' : 'false');
+		});
+		// The capsule runs from the start stop's centre to the end stop's centre,
+		// padded by half a cap on each side so the round ends wrap the end numbers.
+		var pill = document.getElementById('rm-rankf-pill');
+		var a = pending ? anchor : lo, z = pending ? anchor : hi;
+		var sa = stops[a - 1], sz = stops[z - 1];
+		if (sa && sz && sa.offsetWidth) {
+			var CAP = 15;
+			var c1 = sa.offsetLeft + sa.offsetWidth / 2, c2 = sz.offsetLeft + sz.offsetWidth / 2;
+			pill.style.left = (c1 - CAP) + 'px';
+			pill.style.width = (c2 - c1 + 2 * CAP) + 'px';
+			pill.hidden = false;
+		}
+		nlBox.checked = rmState.nl;
+		var active = !isDefault();
+		var d = describe();
+		document.getElementById('rm-rankf-status').textContent = d;
+		var sum = document.getElementById('rm-rankf-sum');
+		sum.hidden = !active;
+		sum.textContent = active ? rangeText() : '';
+		document.getElementById('rm-rankf-msum').textContent = active ? rangeText() + (rmState.nl ? '' : ' (ladder only)') : 'All';
+		[btn, mbtn].forEach(function (b) {
+			if (!b) return;
+			b.classList.toggle('is-active', active);
+			b.setAttribute('aria-label', 'Filter by rank: ' + d);
+		});
+		if (btn) btn.setAttribute('data-tip', active ? 'Rank filter: ' + d : 'Filter by rank');
+		hint.textContent = anchor !== null
+			? 'Start ' + lab(anchor) + ' — now tap the end rank (or the same one again).'
+			: 'Tap a start rank, then an end rank.';
+	};
+	function apply() {
+		if (applied.rmin === rmState.rmin && applied.rmax === rmState.rmax && applied.nl === rmState.nl) return;
+		applied = { rmin: rmState.rmin, rmax: rmState.rmax, nl: rmState.nl };
+		rmFetch(true);
+	}
+	function commitAnchor() {
+		// Closing mid-pick keeps the single stop that was tapped.
+		if (anchor === null) return;
+		rmState.rmin = rmState.rmax = anchor;
+		anchor = null;
+	}
+	function place() {
+		if (pop.hidden || !opener) return;
+		var r = opener.getBoundingClientRect();
+		var vw = document.documentElement.clientWidth, vh = window.innerHeight;
+		var w = pop.offsetWidth, h = pop.offsetHeight;
+		var left = Math.min(Math.max(8, r.right - w), Math.max(8, vw - w - 8));
+		var top = r.bottom + 6;
+		if (top + h > vh - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
+		pop.style.left = left + 'px';
+		pop.style.top = Math.max(8, top) + 'px';
+	}
+	function open(from) {
+		opener = from;
+		anchor = null;
+		pop.hidden = false;
+		from.setAttribute('aria-expanded', 'true');
+		rmRankPaint();
+		place();
+		var first = pop.querySelector('.rm-rankf-stop.is-end') || stops[0];
+		stops.forEach(function (b) { b.tabIndex = (b === first) ? 0 : -1; });
+		first.focus();
+	}
+	function close(returnFocus) {
+		if (pop.hidden) return;
+		commitAnchor();
+		pop.hidden = true;
+		if (opener) opener.setAttribute('aria-expanded', 'false');
+		rmRankPaint();
+		apply();
+		if (returnFocus && opener) opener.focus();
+		opener = null;
+	}
+	[btn, mbtn].forEach(function (b) {
+		if (!b) return;
+		b.addEventListener('click', function (e) {
+			// The icon sits inside the sortable Rank <th>: never let it sort.
+			e.stopPropagation();
+			if (!pop.hidden && opener === b) close(true); else { if (!pop.hidden) close(false); open(b); }
+		});
+	});
+	stops.forEach(function (b, i) {
+		b.addEventListener('click', function () {
+			var n = +b.getAttribute('data-stop');
+			if (anchor === null) { anchor = n; rmRankPaint(); return; }
+			rmState.rmin = Math.min(anchor, n); rmState.rmax = Math.max(anchor, n);
+			anchor = null;
+			rmRankPaint();
+			apply();
+		});
+		// Roving tabindex: one Tab stop for the whole scale, arrows move along it.
+		b.addEventListener('keydown', function (e) {
+			var j = null;
+			if (e.key === 'ArrowRight' || e.key === 'ArrowUp') j = Math.min(stops.length - 1, i + 1);
+			else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') j = Math.max(0, i - 1);
+			else if (e.key === 'Home') j = 0;
+			else if (e.key === 'End') j = stops.length - 1;
+			if (j === null) return;
+			e.preventDefault();
+			stops.forEach(function (s) { s.tabIndex = -1; });
+			stops[j].tabIndex = 0; stops[j].focus();
+		});
+	});
+	nlBox.addEventListener('change', function () { rmState.nl = nlBox.checked; commitAnchor(); rmRankPaint(); apply(); });
+	document.getElementById('rm-rankf-reset').addEventListener('click', function () {
+		anchor = null; rmState.rmin = 1; rmState.rmax = TOP; rmState.nl = true;
+		rmRankPaint(); apply();
+	});
+	document.getElementById('rm-rankf-done').addEventListener('click', function () { close(true); });
+	document.addEventListener('pointerdown', function (e) {
+		if (pop.hidden) return;
+		if (pop.contains(e.target) || (opener && opener.contains(e.target))) return;
+		close(false);
+	}, true);
+	document.addEventListener('keydown', function (e) {
+		if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); close(true); }
+	});
+	window.addEventListener('resize', function () { if (!pop.hidden) { rmRankPaint(); place(); } });
+	window.addEventListener('scroll', place, true);
+	// Clear filters re-fetches on its own: record that state as applied so the
+	// popover does not fetch it a second time.
+	window.rmRankMarkApplied = function () { anchor = null; applied = { rmin: rmState.rmin, rmax: rmState.rmax, nl: rmState.nl }; };
+	rmRankPaint();
+})();
 // infinite scroll
 if ('IntersectionObserver' in window) {
 	var rmObs = new IntersectionObserver(function (entries) {
@@ -526,7 +722,9 @@ function rmSelected() { return RM.rows().filter(function (tr) { return tr.queryS
 // exact. Every place that checks/unchecks a row programmatically must go through it.
 function rmSetRowChecked(tr, on) {
     var cb = tr && tr.querySelector('.rm-rowsel');
-    if (!cb || cb.checked === !!on) return;
+    // A granted row renders a disabled box: there is nothing to act on, so
+    // select-all and shift-ranges pass over it.
+    if (!cb || cb.disabled || cb.checked === !!on) return;
     cb.checked = !!on;
     rmState.selCount += on ? 1 : -1;
     if (rmState.selCount < 0) rmState.selCount = 0;
@@ -748,7 +946,7 @@ function rmRecLabel(tr) {
     return who + ' (' + what + (rank > 0 ? ', rank ' + rank : '') + ')';
 }
 // Both dismiss paths say the same thing about what dismissal is.
-var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show dismissed” to see them and restore any retired by mistake.';
+var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show granted & dismissed” to see them and restore any dismissed by mistake.';
 // The first member of the cluster — its reason is the one a grant would offer as
 // the public note (the row no longer duplicates it in data-rec).
 function rmFirstMember(tr) {
@@ -1192,7 +1390,9 @@ function rmDoGrant(rec, tr, opts) {
             fd2.append('Rank', rec.Rank || 0);
             return rmPost(rmRecAjaxBase('resolverecommendationcluster'), fd2);
         }).then(function (j) {
-            if (!rmJsonOk(j)) { var e = new Error('resolve cluster failed'); e.granted = true; throw e; }
+            // The lib leaves a rec open when the award just given does not back it
+            // (say a lower rank than the rec asked for); j.error says so.
+            if (!rmJsonOk(j)) { var e = new Error('resolve cluster failed'); e.granted = true; e.recError = (j && j.error) ? String(j.error) : ''; throw e; }
             rmRemoveRow(tr);
             rmToast('Granted.');
         }).catch(function (err) {
@@ -1349,7 +1549,9 @@ rmGid('rm-grant-submit').addEventListener('click', function () {
                 // rather than leaving a live Grant button on an already-granted rec.
                 rmRemoveRow(ctx.tr);
                 rmCloseGrantModal();
-                rmToast('Granted — but the recommendation could not be cleared. Refresh to confirm; do not grant it again.', true);
+                rmToast(err.recError && err.recError.indexOf('left open') !== -1
+                    ? 'Granted. ' + err.recError.replace(/^[^:]*:\s*(?=The recommendation)/, '') + ' Refresh to see it.'
+                    : 'Granted — but the recommendation could not be cleared. Refresh to confirm; do not grant it again.', true);
             } else {
                 submitBtn.disabled = false;
                 rmGrantErr((err && err.message) ? err.message : 'Grant failed.');

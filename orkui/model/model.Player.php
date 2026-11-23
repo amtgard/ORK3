@@ -46,7 +46,22 @@ class Model_Player extends Model
 
     public function fetch_player_details($mundane_id)
     {
-        return $this->_player()->GetPlayerProfileDetails((int) $mundane_id);
+        $details = $this->_player()->GetPlayerProfileDetails((int) $mundane_id);
+        // Scrollery: whether each row may offer a Print control is the domain's
+        // answer (Scroll::IsPrintableRow(): not revoked, and has art once the
+        // dangling-officer correction has run), surfaced here once per row so the
+        // profile template never reaches into Scroll itself.
+        if (is_array($details) && is_array($details['Awards'] ?? null)) {
+            foreach ($details['Awards'] as $i => $row) {
+                if (is_array($row)) {
+                    $row                    = Award::correct_dangling_officer_role($row);
+                    $row['CanPrintScroll']  = Scroll::IsPrintableRow($row);
+                    $details['Awards'][$i]  = $row;
+                }
+            }
+        }
+
+        return $details;
     }
 
     public function fetch_player_attendance($mundane_id)
@@ -256,6 +271,13 @@ class Model_Player extends Model
     public function monarchy_only_level($uid, $kingdom_id, $park_id)
     {
         return (int) Ork3::$Lib->recommendationvisibility->officerLevel((int)$uid, (int)$kingdom_id, (int)$park_id);
+    }
+
+    // The profile's recs gate (Recommendations tab and award info modal), measured
+    // against the recipient's kingdom and home park.
+    public function profile_recs_visible($uid, $kingdom_id, $park_id)
+    {
+        return Ork3::$Lib->recommendationvisibility->profileRecsVisible((int)$uid, (int)$kingdom_id, (int)$park_id);
     }
 
     // Kingdom page Add Rec modal: offer the Monarchy Only checkbox to an officer of the

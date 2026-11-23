@@ -131,7 +131,69 @@ class Controller_PlayerAjax extends Controller
 
         $this->load_model('Player');
 
-        if ($action === 'revokeaward') {
+        if ($action === 'addaward') {
+            // Powers the Add Award modal on the CRM player profile
+            // (Playernew_index.tpl / pnOpenAwardModal). Unlike Admin/player's
+            // legacy 'addaward' case, this is a pure JSON endpoint so the modal
+            // can read back the new row's id and offer a "Print certificate"
+            // link without re-rendering the whole admin page.
+            $kingdom_award_id = (int)($_POST['KingdomAwardId'] ?? 0);
+            $given_by_id      = (int)($_POST['GivenById']      ?? 0);
+            $date             = trim($_POST['Date']            ?? '');
+            if (!valid_id($kingdom_award_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select an award.']);
+                exit;
+            }
+            if (!valid_id($given_by_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select who gave this award.']);
+                exit;
+            }
+            if (!strlen($date)) {
+                echo json_encode(['status' => 1, 'error' => 'Please enter the award date.']);
+                exit;
+            }
+            // "Where given" is required. Player::AddAward enforces it for every grant
+            // path; this pre-check only gives the modal a friendlier message.
+            $at_park_id    = valid_id($_POST['ParkId']    ?? 0) ? (int)$_POST['ParkId'] : 0;
+            $at_kingdom_id = valid_id($_POST['KingdomId'] ?? 0) ? (int)$_POST['KingdomId'] : 0;
+            if ($at_park_id <= 0 && $at_kingdom_id <= 0) {
+                echo json_encode(['status' => 1, 'error' => 'Please choose where this award was given.']);
+                exit;
+            }
+            $r = $this->Player->add_player_award([
+                'Token'          => $this->session->token,
+                'RecipientId'    => $player_id,
+                'KingdomAwardId' => $kingdom_award_id,
+                'CustomName'     => $_POST['AwardName']     ?? '',
+                'AliasAwardId'   => (int)($_POST['AliasAwardId'] ?? 0),
+                'Rank'           => $_POST['Rank']          ?? '',
+                'Date'           => $date,
+                'GivenById'      => $given_by_id,
+                'Note'           => $_POST['Note']          ?? '',
+                'ParkId'         => $at_park_id,
+                'KingdomId'      => $at_kingdom_id,
+                'EventId'        => valid_id($_POST['EventId']   ?? 0) ? (int)$_POST['EventId'] : 0,
+                'RecommendationsId' => (int)($_POST['RecommendationsId'] ?? 0),
+            ]);
+            if (($r['Status'] ?? 1) == 0) {
+                $awards_id = (int)($r['AwardsId'] ?? 0);
+                $this->load_model('Scrollery');
+                $printable = $awards_id > 0 && $this->Scrollery->award_is_printable($awards_id, (int)$this->session->user_id);
+                $out = ['status' => 0, 'awardsId' => $awards_id, 'printable' => $printable];
+                // Opened from a recommendation ("Give from rec"): Player::AddAward closed
+                // it as GRANTED. A failure there never undoes the award; relay it.
+                if (array_key_exists('RecClosed', $r)) {
+                    $out['recClosed'] = (bool)$r['RecClosed'];
+                    if (!$r['RecClosed']) {
+                        $out['recError'] = 'The award was recorded, but its recommendation could not be closed (' . ($r['RecError'] ?? 'error') . '). Close it from the Recommendations tab.';
+                    }
+                }
+                echo json_encode($out);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+            }
+
+        } elseif ($action === 'revokeaward') {
             $awards_id  = (int)($_POST['AwardsId']   ?? 0);
             $revocation = trim($_POST['Revocation'] ?? '');
             if (!valid_id($awards_id)) {
@@ -745,6 +807,29 @@ class Controller_PlayerAjax extends Controller
         $this->load_model('Player');
         $notes = $this->Player->get_notes($mundane_id);
         echo json_encode(['status' => 0, 'notes' => is_array($notes) ? $notes : []]);
+        exit;
+    }
+
+    // GET PlayerAjax/award_info/{awards_id} — the profile's (i) award-info modal.
+    // Open to every viewer, anonymous included: AwardProvenance filters for the
+    // session user (recs need a login and the profile's own recs gate; court data
+    // mirrors the login-free court report). The viewer is never taken from input.
+    public function award_info($p = null)
+    {
+        header('Content-Type: application/json');
+        $awards_id = (int)preg_replace('/[^0-9]/', '', (string)($p ?? ''));
+        if (!valid_id($awards_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid award']);
+            exit;
+        }
+        $viewer = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->load_model('Award');
+        $info = $this->Award->award_provenance($awards_id, $viewer);
+        if ($info === null) {
+            echo json_encode(['status' => 1, 'error' => 'Award not found']);
+            exit;
+        }
+        echo json_encode(['status' => 0, 'info' => $info]);
         exit;
     }
 

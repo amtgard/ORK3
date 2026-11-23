@@ -2,6 +2,11 @@
 
 class Player extends Ork3
 {
+    // ork_recommendations.resolution: how a closed (soft-deleted) rec was closed.
+    // NULL = live. Written by soft_dismiss_recommendation, cleared by Restore.
+    public const REC_RESOLUTION_GRANTED   = 'granted';
+    public const REC_RESOLUTION_DISMISSED = 'dismissed';
+
     public function __construct()
     {
         parent::__construct();
@@ -922,6 +927,71 @@ class Player extends Ork3
         }
     }
 
+    /**
+     * The three facts a certificate needs about its recipient: persona, and enough
+     * pronoun state for Scroll::PossessiveForRecipient() to resolve a
+     * possessive.
+     *
+     * Scrollery used to reach for GetPlayer() here, which for a persona and a
+     * pronoun also runs TWO GetDues() passes and sorts both, a heraldry URL build,
+     * an authorization check, a pronoun-table find, a mundane_design find and (for
+     * recent joiners) an attendance aggregate — none of which a scroll reads. On a
+     * bulk run that cost is paid once per certificate, up to Scroll::MAX_PRINT_RUN
+     * times.
+     *
+     * Deliberately NOT a narrowing of GetPlayer(): that response is a public SOAP
+     * contract with per-field privacy gating (given_name / surname / email honour
+     * the design-modal opt-ins). This returns only fields GetPlayer() exposes
+     * unconditionally to every viewer, so it can skip the gate rather than restate
+     * it — persona is public on every profile in the ORK.
+     *
+     * @return array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string, PronounFreetext:string, HasHeraldry:int}
+     */
+    public function GetScrollRecipient(int $mundaneId): array
+    {
+        $empty = [
+            'MundaneId' => 0,
+            'Persona' => '',
+            'PronounId' => 0,
+            'PronounCustom' => '',
+            'PronounFreetext' => '',
+            'HasHeraldry' => 0,
+            'ParkId' => 0,
+        ];
+        if (!valid_id($mundaneId)) {
+            return $empty;
+        }
+
+        $this->mundane->clear();
+        $this->mundane->mundane_id = $mundaneId;
+        if (!$this->mundane->find()) {
+            return $empty;
+        }
+
+        // pronoun_freetext ships on another branch and is absent from the rendered
+        // test schema, so read it defensively — the same "either side of that merge"
+        // treatment Scroll::PossessiveForRecipient() already gives the key.
+        $freetext = '';
+        try {
+            $freetext = trim((string) $this->mundane->pronoun_freetext);
+        } catch (Throwable $e) {
+            $freetext = '';
+        }
+
+        return [
+            'MundaneId' => (int) $this->mundane->mundane_id,
+            'Persona' => (string) $this->mundane->persona,
+            'PronounId' => (int) $this->mundane->pronoun_id,
+            'PronounCustom' => (string) $this->mundane->pronoun_custom,
+            'PronounFreetext' => $freetext,
+            // Public on every profile (the arms image is); lets the composer offer the
+            // Persona heraldry source without the full GetPlayer() profile build.
+            'HasHeraldry' => (int) $this->mundane->has_heraldry,
+            // Home park, so a kingdom scroll can offer the Park heraldry source.
+            'ParkId' => (int) $this->mundane->park_id,
+        ];
+    }
+
     public function GetPlayer($request)
     {
         $fetchprivate = true;
@@ -1151,11 +1221,147 @@ class Player extends Ork3
         return $response;
     }
 
+    /**
+     * The WHERE predicate for AwardsForPlayer(), split out so
+     * PlayerAwardsForPlayerWhereTest can pin it without a database.
+     *
+     * The single-row branch is the point of this function. This method used to build
+     * an UNPARENTHESISED `awards.mundane_id = '0' or awards.awards_id = 'N'` whenever
+     * a caller asked for one award row by id (Model_Scrollery::award_row(),
+     * SearchService, and — since the Scrollery print link landed — every award grant
+     * in the ORK). 3,075 rows carry mundane_id = 0, so that OR made a 9-table
+     * SELECT DISTINCT return 3,076 rows, sort them on a 6-term ORDER BY and hydrate
+     * 3,076 PHP arrays to keep exactly one. Measured on the dev mirror: 124.4 ms for
+     * the OR form against 0.25 ms for `awards.awards_id = N` alone.
+     *
+     * No caller passes a real MundaneId AND an AwardsId together — the SOAP contract
+     * (orkservice/Player/PlayerService.definitions.php) does not even declare
+     * AwardsId — so the OR is only ever the "0 or this id" shape. The combined branch
+     * is kept anyway, now parenthesised, so a future caller that does pass both is
+     * not silently broken by operator precedence once anything is ANDed on.
+     *
+     * mysql_real_escape_string() is a no-op shim in this codebase; the (int) casts are
+     * what actually protect the interpolation.
+     */
+    public static function awardsForPlayerWhereForTest($mundaneId, $awardsId): string
+    {
+        $hasMundane = valid_id($mundaneId);
+        $hasAward   = valid_id($awardsId);
+
+        if ($hasAward && !$hasMundane) {
+            return 'awards.awards_id = ' . (int) $awardsId;
+        }
+        if ($hasAward) {
+            return '(awards.mundane_id = ' . (int) $mundaneId . ' or awards.awards_id = ' . (int) $awardsId . ')';
+        }
+        if ($hasMundane) {
+            return 'awards.mundane_id = ' . (int) $mundaneId;
+        }
+
+        // Neither id is usable. The predicate is kept — a MundaneId of 0 used to
+        // match the 3,075 rows that carry mundane_id = 0, and this branch preserves
+        // that — but the value is now CAST rather than interpolated raw. It used to
+        // go through mysql_real_escape_string(), which is a no-op shim in this
+        // codebase, so a non-numeric MundaneId (valid_id() is is_numeric && > 0, so
+        // "42 UNION SELECT ..." fails it) reached the statement verbatim. No caller
+        // in the tree passes a non-numeric id, but nothing stopped one.
+        return 'awards.mundane_id = ' . (int) $mundaneId;
+    }
+
+    /**
+     * The award-row WHERE for a BATCH of awards_id values.
+     *
+     * Split out beside awardsForPlayerWhereForTest() and named the same way so
+     * PlayerAwardsForPlayerWhereTest can pin it without a database.
+     *
+     * Fails CLOSED on an empty or entirely invalid list: `awards.awards_id in ()`
+     * is a syntax error and `1=1` would return the whole 391k-row table, so the
+     * unsatisfiable `awards.awards_id = 0` is the safe floor (awards_id is an
+     * auto-increment primary key, so no row carries 0).
+     *
+     * mysql_real_escape_string() is a no-op shim in this codebase; the (int) casts
+     * through valid_id() are what actually protect the interpolation.
+     *
+     * Capped at Scroll::MAX_PRINT_RUN distinct ids (first seen wins): no caller
+     * legitimately asks for more than one print run, and the cap keeps a hostile
+     * list from turning into an unbounded IN ().
+     *
+     * @param array<int, mixed> $awardsIds
+     */
+    public static function awardsForIdsWhereForTest(array $awardsIds): string
+    {
+        $ids = [];
+        foreach ($awardsIds as $id) {
+            if (valid_id($id)) {
+                $ids[(int) $id] = true;
+                if (count($ids) >= Scroll::MAX_PRINT_RUN) {
+                    break;
+                }
+            }
+        }
+
+        if ($ids === []) {
+            return 'awards.awards_id = 0';
+        }
+
+        return 'awards.awards_id in (' . implode(',', array_keys($ids)) . ')';
+    }
+
+    /**
+     * Every award row in one batch, for a list of awards_id values.
+     *
+     * WHY. Scrollery's render route looped one AwardsForPlayer() per id — at
+     * Scroll::MAX_PRINT_RUN that is 200 round trips through a 9-table SELECT
+     * DISTINCT with a 6-term ORDER BY, before a byte of certificate is composed.
+     * The rows are identical in shape; only the predicate differs, so one IN ()
+     * does the same work once.
+     *
+     * Returns the SAME row shape AwardsForPlayer() does — same keys, same
+     * hydration — because it runs the same statement builder and the same
+     * hydrator. A consumer must be able to move between the two without a second
+     * row shape to reason about.
+     *
+     * This is a READ of award rows and decides nothing about authority. Every
+     * caller still runs its own per-(viewer, award) permission gate; see
+     * Scroll::PrintPermission(), which is never cached beyond a single call for a
+     * single viewer.
+     *
+     * NAMED WITH AN UNDERSCORE ON PURPOSE. Player is whitelisted on the JSON
+     * service, which dispatches any public method of a whitelisted class — but
+     * JsonServer::validate_method() refuses a name containing `_` (or starting
+     * lowercase). This returns award notes and grantor details with no token and
+     * no gate, so it must never be reachable there. Do not rename it to PascalCase.
+     *
+     * @param array<int, mixed> $awardsIds
+     * @return array{Awards: array<int, array<string, mixed>>, Status: mixed}
+     */
+    public function awards_for_ids(array $awardsIds)
+    {
+        return $this->awardRowsWhere(self::awardsForIdsWhereForTest($awardsIds));
+    }
+
     public function AwardsForPlayer($request)
     {
-        if (valid_id($request['AwardsId'])) {
-            $player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
-        }
+        $player_where = self::awardsForPlayerWhereForTest(
+            $request['MundaneId'] ?? 0,
+            $request['AwardsId'] ?? 0
+        );
+
+        return $this->awardRowsWhere($player_where);
+    }
+
+    /**
+     * The award-row statement and its hydration, shared by AwardsForPlayer() and
+     * awards_for_ids() so the two can never drift into different row shapes.
+     *
+     * $player_where is built by awardsForPlayerWhereForTest() or
+     * awardsForIdsWhereForTest() — both of which cast every id — and is the only
+     * part of this statement that varies.
+     *
+     * @return array{Awards: array<int, array<string, mixed>>, Status: mixed}
+     */
+    private function awardRowsWhere(string $player_where)
+    {
         $sql = "select distinct awards.*, a.*,
 						GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)) as is_title,
 						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,
@@ -1175,7 +1381,7 @@ class Player extends Ork3
 						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = awards.given_by_id
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
-					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
+					where $player_where
 					order by
 						COALESCE(alias.is_ladder, a.is_ladder, 0), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
@@ -1198,6 +1404,14 @@ class Player extends Ork3
                         'AwardId' => $r->award_id,
                         'KingdomAwardId' => $r->kingdomaward_id,
                         'MundaneId' => $r->mundane_id,
+                        // ork_awards.revoked is NOT NULL DEFAULT 0. Surfaced here so a
+                        // consumer never has to re-query to answer "is this award still
+                        // held?" — Model_Player's CanPrintScroll and
+                        // Model_Scrollery::viewer_may_print() both read it. Revocation
+                        // nulls mundane_id on most rows (2,797 of 2,856), but 59 revoked
+                        // rows still carry a live mundane_id and DO come back on the
+                        // recipient's own Awards tab.
+                        'Revoked' => (int) $r->revoked,
                         'Rank' => $r->rank,
                         'Date' => $r->date,
                         'GivenById' => $r->given_by_id,
@@ -3570,6 +3784,14 @@ class Player extends Ork3
             return InvalidParameter();
         }
 
+        // "Where given" is required on every grant. A blank pair used to be written
+        // as at_park_id = 0 / at_kingdom_id = 0 -- printable and reportable by nobody
+        // but the recipient. This is the enforcement point; controllers only
+        // pre-check it for a friendlier message.
+        if (!valid_id($request['ParkId'] ?? 0) && !valid_id($request['KingdomId'] ?? 0)) {
+            return InvalidParameter('Where was this award given? Choose a location from the list.');
+        }
+
         if (valid_id($mundane_id)
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
             if (valid_id($request['ParkId'])) {
@@ -3650,8 +3872,39 @@ class Player extends Ork3
             // (callers read $r['Status'] as an int, 0 = success) PLUS an extra
             // 'AwardId' key carrying the inserted awards_id. Adding a key leaves
             // every existing Status/Error/Detail reader untouched.
+            //
+            // 'AwardsId' is the same inserted awards_id under the name the Scrollery
+            // callers read (Controller_Award::handle_success, PlayerAjax addaward's
+            // print link). Court finalize and the Recs-Manager grant read 'AwardId'.
+            // Both keys are returned so neither set of callers has to change.
             $success = Success('');
             $success['AwardId'] = $new_award_id;
+            $success['AwardsId'] = $new_award_id;
+
+            // "Give from rec": the award is recorded, so the rec it was given from
+            // closes as GRANTED here, where an award provably exists, never from a
+            // client-sent flag. Like the audit above, a failure here must not undo or
+            // fail the grant; it is reported as RecClosed/RecError instead.
+            $rec_id = (int)($request['RecommendationsId'] ?? 0);
+            if ($rec_id > 0) {
+                try {
+                    $recError = $this->close_recommendation_as_granted(
+                        $rec_id,
+                        (int)$request['RecipientId'],
+                        (int)$mundane_id,
+                        (int)$request['AwardId'],
+                        (int)$request['KingdomAwardId'],
+                        $new_award_id
+                    );
+                } catch (\Throwable $e) {
+                    error_log('Player::AddAward rec close failed (rec ' . $rec_id . '): ' . $e->getMessage());
+                    $recError = 'server error';
+                }
+                $success['RecClosed'] = $recError === '';
+                if ($recError !== '') {
+                    $success['RecError'] = $recError;
+                }
+            }
             return $success;
         } else {
             return NoAuthorization();
@@ -4628,44 +4881,70 @@ class Player extends Ork3
     // so it is ignored here: trusting it let any logged-in user dismiss any
     // recommendation by claiming to be its author or recipient, and forge deleted_by
     // and the Granted notification's actor.
+    //
+    // This is a DISMISSAL, always. A caller-sent Granted flag is ignored: "granted"
+    // is recorded only by the private grant path (grant_recommendation), which
+    // requires a live award on the permanent record to back it.
     public function DeleteAwardRecommendation($request)
     {
         if (($mundane_id = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
             return NoAuthorization();
         }
 
-        // A Monarchy Only rec this viewer may not see answers exactly like a missing
-        // one, before any other check: the recipient must not be able to dismiss (or
-        // probe for) a hidden rec about themselves.
-        if (!valid_id($request['RecommendationsId'] ?? 0)
-            || $this->rec_hidden_from($mundane_id, (int)$request['RecommendationsId'])) {
+        $awardRec = $this->load_rec_for_close($mundane_id, (int)($request['RecommendationsId'] ?? 0));
+        if (is_array($awardRec)) {
+            return $awardRec;
+        }
+
+        // Already closed: leave it as it was closed. Re-stamping would let a stale
+        // Dismiss (a tab opened before the grant) relabel a granted rec as dismissed.
+        if ((int)$awardRec->deleted_by > 0) {
+            return Success('Already closed');
+        }
+
+        $this->soft_dismiss_recommendation($awardRec, $mundane_id, false, $request, __FUNCTION__);
+        return Success('Recommendation Removed!');
+    }
+
+    /**
+     * Load one rec for a token-authorized close (dismiss or cluster grant). Returns the
+     * loaded yapo, or the error response to return. A Monarchy Only rec this viewer may
+     * not see answers exactly like a missing one, before any other check: the
+     * recipient must not be able to close (or probe for) a hidden rec about themselves.
+     * Authority: park CREATE over the recipient's park, or the rec's giver/recipient.
+     */
+    private function load_rec_for_close(int $mundane_id, int $rec_id)
+    {
+        if (!valid_id($rec_id) || $this->rec_hidden_from($mundane_id, $rec_id)) {
             return InvalidParameter('There was a problem with the request.');
         }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
-        $awardRec->recommendations_id = $request['RecommendationsId'] ?? 0;
-
+        $awardRec->recommendations_id = $rec_id;
         if (!$awardRec->find()) {
             return InvalidParameter('There was a problem with the request.');
         }
 
         $recipientInfo = $this->player_info($awardRec->mundane_id);
-        $can_delete_recommendation = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)
+        $can_close = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)
             || $mundane_id === (int)$awardRec->recommended_by_id
             || $mundane_id === (int)$awardRec->mundane_id;
-        if (!$can_delete_recommendation) {
+        if (!$can_close) {
             return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
         }
-
-        $this->soft_dismiss_recommendation($awardRec, $mundane_id, !empty($request['Granted']), $request, __FUNCTION__);
-        return Success('Recommendation Removed!');
+        return $awardRec;
     }
 
     /**
-     * The dismissal itself, shared by DeleteAwardRecommendation (after its own
-     * authorization) and resolve_court_line_recommendation: Granted notification
-     * first, then the soft delete, audit, seconds cascade and cache bust.
+     * The close itself, shared by DeleteAwardRecommendation (dismiss) and
+     * grant_recommendation (grant): Granted notification first, then the soft delete,
+     * audit, seconds cascade and cache bust.
+     *
+     * A grant and a dismissal are both soft deletes; `resolution` is what tells them
+     * apart ('granted' / 'dismissed'), so the closed-recs views can label a granted
+     * rec as granted and refuse to Restore it (see RestoreAwardRecommendation).
+     * Only grant_recommendation may pass $granted = true.
      */
     private function soft_dismiss_recommendation($awardRec, int $actor, bool $granted, array $request, string $fn)
     {
@@ -4692,6 +4971,7 @@ class Player extends Ork3
         }
         $awardRec->deleted_by = $actor;
         $awardRec->deleted_at = $cascade_at;
+        $awardRec->resolution = $granted ? self::REC_RESOLUTION_GRANTED : self::REC_RESOLUTION_DISMISSED;
         $awardRec->save();
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
         // Cascade soft-delete to any active seconds on this recommendation.
@@ -4701,15 +4981,121 @@ class Player extends Ork3
     }
 
     /**
-     * Close (dismiss as granted) the recommendation a court line was drawn from, when
-     * that line commits. In-process only — Court::commitStagedAward calls it; the
-     * underscore keeps it off the JSON service (JsonServer refuses any method name
-     * containing "_"). It deliberately skips the Monarchy Only refusal: the court line
-     * itself authorizes acting on ITS OWN rec (a kingdom officer put it there), and
-     * without this a park court that grants a kingdom-level hide left the rec live,
-     * so it could be granted again. Only that one rec id, only while live, and only
-     * when it is about the line's recipient. Siblings still go through the token-
-     * authorized ResolveRecommendationCluster. Returns true when it closed the rec.
+     * awards_id of a live award on the permanent record that backs granting this rec,
+     * or 0. The one definition of "an award backs this recommendation" (the
+     * resolution backfill migration applies the same rule in SQL):
+     *   - same recipient, not revoked (a revoked award is moved off mundane_id and
+     *     flagged revoked, so both are checked);
+     *   - same kingdomaward, or the same canonical award (a rec for a kingdom's alias
+     *     of an award is backed by the canonical award given under another row),
+     *     except the generic Custom Award / Custom Title ids;
+     *   - ladder: award rank >= rec rank (a rec with rank 0 matches any rank);
+     *   - given or entered on/after the rec: GREATEST(date, DATE(entered_at)) >=
+     *     date_recommended, so a backdated court entry still backs a rec made before
+     *     it was keyed in, but an award held before the rec was written does not.
+     * $only_awards_id restricts the test to that one award (AddAward's own row).
+     */
+    private function backing_award_id($awardRec, int $only_awards_id = 0): int
+    {
+        $mid  = (int)$awardRec->mundane_id;
+        $ka   = (int)$awardRec->kingdomaward_id;
+        $aid  = (int)$awardRec->award_id;
+        $rank = (int)$awardRec->rank;
+        $date = (string)$awardRec->date_recommended;
+        if ($mid <= 0 || $ka <= 0) {
+            return 0;
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}/', $date)) {
+            $date = '0000-00-00';
+        }
+        $date = substr($date, 0, 10);
+        // Custom Award / Custom Title share one canonical id across unrelated honours.
+        $canonical = $aid > 0 && !in_array($aid, AwardProvenance::GENERIC_AWARD_IDS, true);
+        $sql = 'SELECT a.awards_id FROM ' . DB_PREFIX . 'awards a
+			 WHERE a.mundane_id = ' . $mid . '
+			   AND COALESCE(a.revoked, 0) = 0
+			   AND (a.kingdomaward_id = ' . $ka . ($canonical ? ' OR a.award_id = ' . $aid : '') . ')
+			   ' . ($rank > 0 ? 'AND a.rank >= ' . $rank : '') . '
+			   AND GREATEST(a.date, IF(a.entered_at > \'1000-01-01\', DATE(a.entered_at), a.date)) >= \'' . $date . '\'
+			   ' . ($only_awards_id > 0 ? 'AND a.awards_id = ' . $only_awards_id : '') . '
+			 ORDER BY a.awards_id DESC LIMIT 1';
+        $this->db->Clear();
+        $rs = $this->db->DataSet($sql);
+        if ($rs && $rs->Next()) {
+            return (int)$rs->awards_id;
+        }
+        return 0;
+    }
+
+    /**
+     * THE grant path: the only way a recommendation is recorded as 'granted'. Callers
+     * authorize first (AddAward's own authority, load_rec_for_close, or the court line).
+     * Requires a backing award (backing_award_id); without one the rec is left exactly
+     * as it is and the reason is returned, so nothing is ever labelled granted that
+     * the permanent record does not show.
+     *
+     *   - live rec      -> closed as granted (advocates notified, seconds cascaded);
+     *   - already granted -> nothing to do;
+     *   - closed as dismissed (or unlabelled legacy) -> RELABELLED granted. deleted_by /
+     *     deleted_at are re-stamped to the granter / now so the closed-recs panel's
+     *     "Granted by X on D" is true (keeping the dismisser would credit them with the
+     *     grant). No second notification: the rec's advocates already had their
+     *     closure, and its seconds stay as the dismissal left them.
+     *
+     * Returns ['ok' => bool, 'changed' => bool, 'error' => string].
+     */
+    private function grant_recommendation($awardRec, int $actor, array $auditRequest, string $fn, int $only_awards_id = 0): array
+    {
+        $closed = (int)$awardRec->deleted_by > 0;
+        if ($closed && (string)$awardRec->resolution === self::REC_RESOLUTION_GRANTED) {
+            return ['ok' => true, 'changed' => false, 'error' => ''];
+        }
+        $backing = $this->backing_award_id($awardRec, $only_awards_id);
+        if ($backing <= 0) {
+            return ['ok' => false, 'changed' => false, 'error' => 'no award on the player\'s record backs it (a different award, a lower rank, or given before the recommendation)'];
+        }
+        $auditRequest['BackingAwardsId'] = $backing;
+        if (!$closed) {
+            $this->soft_dismiss_recommendation($awardRec, $actor, true, $auditRequest, $fn);
+            return ['ok' => true, 'changed' => true, 'error' => ''];
+        }
+
+        $rec_id = (int)$awardRec->recommendations_id;
+        $prior_rec = [
+            'recommendations_id' => $rec_id,
+            'mundane_id'         => (int)$awardRec->mundane_id,
+            'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
+            'rank'               => (int)$awardRec->rank,
+            'deleted_at'         => $awardRec->deleted_at,
+            'deleted_by'         => (int)$awardRec->deleted_by,
+            'resolution'         => (string)$awardRec->resolution,
+        ];
+        $this->db->Clear();
+        $this->db->Execute(
+            "UPDATE " . DB_PREFIX . "recommendations
+			    SET resolution = '" . self::REC_RESOLUTION_GRANTED . "', deleted_by = " . (int)$actor . ", deleted_at = '" . date('Y-m-d H:i:s') . "'
+			  WHERE recommendations_id = " . $rec_id . "
+			    AND deleted_by > 0
+			    AND (resolution IS NULL OR resolution <> '" . self::REC_RESOLUTION_GRANTED . "')"
+        );
+        $auditRequest['Relabel'] = 1;
+        Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $auditRequest, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+        $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+        return ['ok' => true, 'changed' => true, 'error' => ''];
+    }
+
+    /**
+     * Grant the recommendation a court line was drawn from, when that line commits.
+     * In-process only — Court::commitStagedAward calls it after AddAward saved the
+     * line's award; the underscore keeps it off the JSON service (JsonServer refuses
+     * any method name containing "_"). It deliberately skips the Monarchy Only
+     * refusal: the court line itself authorizes acting on ITS OWN rec (a kingdom
+     * officer put it there), and without this a park court that grants a kingdom-level
+     * hide left the rec live, so it could be granted again. Only that one rec id, and
+     * only when it is about the line's recipient. Goes through grant_recommendation, so
+     * it needs a backing award, and relabels a rec dismissed before the court granted
+     * it. Siblings still go through the token-authorized ResolveRecommendationCluster.
+     * Returns true when the rec is (now) granted.
      */
     public function resolve_court_line_recommendation($rec_id, $line_mundane_id, $actor_uid)
     {
@@ -4722,15 +5108,48 @@ class Player extends Ork3
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
         $awardRec->recommendations_id = $rec_id;
-        if (!$awardRec->find()
-            || (int)$awardRec->mundane_id !== $line_mundane_id
-            || (int)$awardRec->deleted_by > 0) {
+        if (!$awardRec->find() || (int)$awardRec->mundane_id !== $line_mundane_id) {
             return false;
         }
-        $this->soft_dismiss_recommendation($awardRec, $actor_uid, true, [
-            'RecommendationsId' => $rec_id, 'Granted' => 1, 'Source' => 'CourtCommit',
+        $res = $this->grant_recommendation($awardRec, $actor_uid, [
+            'RecommendationsId' => $rec_id, 'Source' => 'CourtCommit',
         ], __FUNCTION__);
-        return true;
+        return $res['ok'];
+    }
+
+    /**
+     * Close the rec an award was just given from as GRANTED. Called only by AddAward,
+     * after the ork_awards row is saved, and backed by THAT row: the rec must exist, be
+     * visible to the actor (a hidden Monarchy Only rec answers like a missing one), be
+     * about the award's recipient, and the award just given must back it
+     * (backing_award_id: same award, rank >= the rec's rank, not before the rec).
+     * Otherwise the rec is left open. AddAward's own park authority over the recipient
+     * already covers DeleteAwardRecommendation's dismiss check. An already-granted rec
+     * is left as it is; one closed as dismissed is relabelled granted. Returns '' when
+     * the rec is (or already was) granted, else why not. Private: never JSON-callable.
+     */
+    private function close_recommendation_as_granted(int $rec_id, int $recipient_id, int $actor, int $award_id, int $kingdomaward_id, int $awards_id): string
+    {
+        if ($rec_id <= 0 || $recipient_id <= 0 || $actor <= 0 || $awards_id <= 0 || $this->rec_hidden_from($actor, $rec_id)) {
+            return 'not found';
+        }
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()) {
+            return 'not found';
+        }
+        if ((int)$awardRec->mundane_id !== $recipient_id) {
+            return 'not about this player';
+        }
+        if ((int)$awardRec->kingdomaward_id !== $kingdomaward_id
+            && !($award_id > 0 && (int)$awardRec->award_id === $award_id)) {
+            return 'it is for a different award';
+        }
+        $res = $this->grant_recommendation($awardRec, $actor, [
+            'RecommendationsId' => $rec_id, 'Source' => 'AddAward', 'AwardsId' => $awards_id,
+        ], __FUNCTION__, $awards_id);
+        return $res['ok'] ? '' : $res['error'];
     }
 
     /**
@@ -4753,22 +5172,28 @@ class Player extends Ork3
         return "({$alias}.deleted_by IS NULL OR {$alias}.deleted_by = 0)";
     }
 
-    // Resolve every live recommendation in a (recipient, kingdomaward, rank) cluster
-    // as "granted": each member runs through DeleteAwardRecommendation(Granted=1), which
-    // notifies that rec's advocates BEFORE soft-deleting it and cascading its seconds.
-    // Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
-    // Authorization is per-rec inside DeleteAwardRecommendation, from the Token alone;
-    // RequestedBy is not forwarded (a caller-chosen id must never authorize or attribute).
-    // Monarchy Only members the token's viewer may not see are skipped the same way:
-    // DeleteAwardRecommendation answers "not found" for them, so they are neither
-    // resolved nor counted (a park court cannot close a kingdom-level hide).
+    // Resolve a (recipient, kingdomaward, rank) cluster as "granted" after the award
+    // was given (Recs Manager group-grant, CourtAjax finalize). Each member is
+    // authorized from the Token alone (load_rec_for_close: Monarchy Only members the
+    // viewer may not see are skipped, so a park court cannot close a kingdom-level
+    // hide; RequestedBy is never forwarded) and then granted through
+    // grant_recommendation, which needs a backing award on the record.
+    //
+    // Members: every live rec in the cluster, plus closed ones not labelled granted
+    // (dismissed before the award was given): those are relabelled when backed, never
+    // re-notified. A LIVE member with no backing award (say the officer granted a lower
+    // rank than the rec asked for) is left open and the call answers with an error and
+    // the counts, so the UI does not report a clean grant. No-ops on an empty cluster.
     public function ResolveRecommendationCluster($request)
     {
+        if (($actor = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
         $mundane_id = (int)($request['MundaneId'] ?? 0);
         $ka_id      = (int)($request['KingdomAwardId'] ?? 0);
         $rank       = (int)($request['Rank'] ?? 0);
         if (!valid_id($mundane_id) || !valid_id($ka_id)) {
-            return ['Status' => 0, 'Resolved' => 0];
+            return ['Status' => 0, 'Resolved' => 0, 'Unbacked' => 0];
         }
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -4776,7 +5201,8 @@ class Player extends Ork3
 			  WHERE mundane_id = ' . $mundane_id . '
 			    AND kingdomaward_id = ' . $ka_id . '
 			    AND COALESCE(recs.rank, 0) = ' . $rank . '
-			    AND ' . self::LiveRecommendationClause('recs')
+			    AND (' . self::LiveRecommendationClause('recs') . "
+			         OR recs.resolution IS NULL OR recs.resolution <> '" . self::REC_RESOLUTION_GRANTED . "')"
         );
         $ids = [];
         if ($rs) {
@@ -4786,17 +5212,31 @@ class Player extends Ork3
         }
 
         $resolved = 0;
+        $unbacked = 0;
+        $lastError = '';
         foreach ($ids as $rid) {
-            $r = $this->DeleteAwardRecommendation([
-                'Token'             => $request['Token'] ?? '',
-                'RecommendationsId' => $rid,
-                'Granted'           => 1,
-            ]);
-            if ((int)($r['Status'] ?? 1) === 0) {
+            $awardRec = $this->load_rec_for_close($actor, $rid);
+            if (is_array($awardRec)) {
+                continue;
+            }
+            $wasLive = (int)$awardRec->deleted_by <= 0;
+            $res = $this->grant_recommendation($awardRec, $actor, [
+                'RecommendationsId' => $rid, 'Source' => 'ResolveRecommendationCluster',
+            ], __FUNCTION__);
+            if ($res['ok'] && $res['changed']) {
                 $resolved++;
+            } elseif (!$res['ok'] && $wasLive) {
+                $unbacked++;
+                $lastError = $res['error'];
             }
         }
-        return ['Status' => 0, 'Resolved' => $resolved];
+        if ($unbacked > 0) {
+            $err = InvalidParameter('The recommendation was left open: ' . $lastError . '.');
+            $err['Resolved'] = $resolved;
+            $err['Unbacked'] = $unbacked;
+            return $err;
+        }
+        return ['Status' => 0, 'Resolved' => $resolved, 'Unbacked' => 0];
     }
 
     public function RestoreAwardRecommendation($request)
@@ -4829,6 +5269,14 @@ class Player extends Ork3
             return Success('Already Active');
         }
 
+        // A granted rec is closed because the award was given. Reopening it would put
+        // a live Grant button back on an honor the player already holds (a double
+        // grant). A grant given in error is undone on the award itself (revoke or
+        // delete), not here.
+        if ((string)$awardRec->resolution === self::REC_RESOLUTION_GRANTED) {
+            return InvalidParameter('This recommendation was granted, so it cannot be restored. To undo the grant, revoke or delete the award on the player\'s profile.');
+        }
+
         $prior_rec = [
             'recommendations_id' => (int)$awardRec->recommendations_id,
             'mundane_id'         => (int)$awardRec->mundane_id,
@@ -4840,6 +5288,7 @@ class Player extends Ork3
             'reason'             => $awardRec->reason,
             'deleted_at'         => $awardRec->deleted_at,
             'deleted_by'         => (int)$awardRec->deleted_by,
+            'resolution'         => (string)$awardRec->resolution,
         ];
         $priorDeletedAt = $awardRec->deleted_at;
         $priorDeletedBy = (int)$awardRec->deleted_by;
@@ -4847,7 +5296,7 @@ class Player extends Ork3
         // Yapo's null-binding doesn't reliably emit SQL NULL on TIMESTAMP columns; use a raw UPDATE.
         $this->db->Clear();
         $this->db->Execute(
-            "UPDATE " . DB_PREFIX . "recommendations SET deleted_at = NULL, deleted_by = NULL WHERE recommendations_id = " . (int)$awardRec->recommendations_id
+            "UPDATE " . DB_PREFIX . "recommendations SET deleted_at = NULL, deleted_by = NULL, resolution = NULL WHERE recommendations_id = " . (int)$awardRec->recommendations_id
         );
 
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);

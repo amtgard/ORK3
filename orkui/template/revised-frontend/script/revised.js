@@ -6,8 +6,17 @@
      held < r <= selected   -> forward (blue  + → watermark; each step
                                forward of the chosen rank)
      r === selected         -> selected (pops up)
-   `prefix` is the class namespace ('pn' | 'kn' | 'pk'). The number is
+   `prefix` is the class namespace ('pn' | 'kn' | 'pk' | 'sc'). The number is
    wrapped in a .<prefix>-rank-num span so the watermark sits behind it.
+
+   Those three states used to be carried by colour alone -- green, blue, a
+   border -- on a control whose only accessible name was "Rank 3" (WCAG 1.4.1
+   and 4.1.2). Each pill now also says which state it is in, and reports its
+   selected-ness as aria-pressed. This is the permanent home for that: the
+   painter is shared by the Add Award, Recommend, Edit Award, Reconcile and
+   Scrollery composer surfaces, so the labelling cannot drift between them.
+   `data-rank-label` lets a surface override the base name; nothing sets it
+   today and everything falls back to "Rank N".
    ============================================================ */
 function tnRankPaint(wrap, prefix, held, selected) {
     if (!wrap) return;
@@ -20,6 +29,10 @@ function tnRankPaint(wrap, prefix, held, selected) {
         if (r <= held)          pill.classList.add(prefix + '-rank-held');
         else if (r <= selected) pill.classList.add(prefix + '-rank-forward');
         if (r === selected)     pill.classList.add(prefix + '-rank-selected');
+        pill.setAttribute('aria-pressed', r === selected ? 'true' : 'false');
+        var base = pill.dataset.rankLabel || ('Rank ' + r);
+        pill.setAttribute('aria-label',
+            base + (r <= held ? ', already earned' : (r <= selected ? ', being awarded' : '')));
     });
 }
 /* Build the inner markup for a single pill (number wrapped for the watermark). */
@@ -1307,7 +1320,14 @@ if (PnConfig.recError) {
         wrap.dataset.rankHeld = held;
         tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
-            var pill = document.createElement('div');
+            // A <button>, not a <div>: tnRankPaint() writes aria-pressed/aria-label,
+            // which a generic element does not expose, and a div pill could not be
+            // reached by keyboard at all. The Edit Award and Reconcile pill builders
+            // below already emit buttons on this same .pn-rank-pill class, so the
+            // styling is unchanged. The click handler is delegated on the wrapper and
+            // keeps working.
+            var pill = document.createElement('button');
+            pill.type      = 'button';
             pill.className = 'pn-rank-pill';
             pill.innerHTML  = tnRankPillInner('pn', r);
             pill.dataset.rank = r;
@@ -2217,6 +2237,138 @@ if (PnConfig.recError) {
         });
     })();
 
+    // ---- Award Info Modal: the (i) at the end of every Awards/Titles row ----
+    // Every viewer. Lazily fetches PlayerAjax/award_info/{AwardsId} (filtered for the
+    // session user server-side) and caches each answer for the page's life.
+    (function() {
+        if (typeof PnConfig === 'undefined' || !PnConfig.playerId) return;
+        var cache = {};
+        var lastTrigger = null;
+        function gid(id) { return document.getElementById(id); }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function fmtDate(s) {
+            if (!s || /^0000/.test(s)) return '';
+            var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+            if (!m) return esc(s);
+            var d = new Date(+m[1], +m[2] - 1, +m[3]);
+            return esc(d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }));
+        }
+        function person(id, name) {
+            if (!name) return '';
+            return id > 0
+                ? '<a href="' + PnConfig.uir + 'Player/profile/' + (+id) + '">' + esc(name) + '</a>'
+                : esc(name);
+        }
+        function section(icon, title, inner) {
+            return '<section class="pn-ai-section"><h4 class="pn-ai-h"><i class="fas ' + icon + '"></i> ' + title + '</h4>' + inner + '</section>';
+        }
+        function empty(text) { return '<p class="pn-ai-empty">' + text + '</p>'; }
+
+        function renderRecs(info) {
+            if (!info.RecsShown) {
+                return section('fa-thumbs-up', 'Recommendations', empty(info.RecsWithheld === 'login'
+                    ? 'Sign in to see the recommendations behind this award.'
+                    : 'This kingdom keeps its recommendations private.'));
+            }
+            var recs = info.Recommendations || [];
+            if (!recs.length) return section('fa-thumbs-up', 'Recommendations', empty('No recommendations on record for this award.'));
+            var html = '<ul class="pn-ai-recs">';
+            recs.forEach(function(r) {
+                var who = r.IsAnonymous ? '<span class="pn-ai-anon">Anonymous</span>' : (person(r.RecommendedById, r.RecommendedBy) || '<span class="pn-ai-anon">Unknown</span>');
+                var seconds = r.Seconds > 0
+                    ? '<span class="pn-ai-seconds" data-tip="Players who seconded this recommendation"><i class="fas fa-user-plus"></i> ' + (+r.Seconds) + '</span>'
+                    : '';
+                html += '<li class="pn-ai-rec">'
+                    + '<div class="pn-ai-rec-head"><span class="pn-ai-rec-who">' + who + '</span>'
+                    + '<span class="pn-ai-rec-meta">' + fmtDate(r.DateRecommended) + seconds + '</span></div>'
+                    + (r.Reason ? '<div class="pn-ai-rec-reason">' + esc(r.Reason) + '</div>' : '')
+                    + '</li>';
+            });
+            return section('fa-thumbs-up', 'Recommendations', html + '</ul>');
+        }
+
+        function row(label, value) {
+            return value ? '<div class="pn-ai-row"><span class="pn-ai-label">' + label + '</span><span class="pn-ai-value">' + value + '</span></div>' : '';
+        }
+        function renderCourt(info) {
+            var c = info.Court;
+            if (!c) return section('fa-gavel', 'Court', empty('No court record for this award.'));
+            var where = c.EventName || c.ParkName || c.KingdomName || '';
+            var courtLink = '<a href="' + PnConfig.uir + 'Reports/court&CourtId=' + (+c.CourtId) + '">' + esc(c.CourtName || 'Court') + '</a>';
+            var html = '<div class="pn-ai-rows">'
+                + row('Court', courtLink)
+                + row('Date', fmtDate(c.CourtDate))
+                + row('Where', esc(where))
+                + row('Given by', person(c.GivenById, c.GivenBy));
+            if (c.Scroll && c.Scroll.Maker) html += row('Scroll', person(c.Scroll.MakerId, c.Scroll.Maker));
+            if (c.Regalia && c.Regalia.Maker) html += row('Regalia', person(c.Regalia.MakerId, c.Regalia.Maker));
+            (c.Artisans || []).forEach(function(a) {
+                html += row(esc(a.Contribution || 'Artisan'), person(a.MundaneId, a.Persona));
+            });
+            html += '</div>';
+            if (c.PrintedWithScrollery) {
+                html += '<p class="pn-ai-note"><i class="fas fa-print"></i> Certificate printed with Scrollery</p>';
+            }
+            if (c.Citation) {
+                html += '<blockquote class="pn-ai-citation">' + esc(c.Citation) + '</blockquote>';
+            }
+            return section('fa-gavel', 'Court', html);
+        }
+
+        function render(info) {
+            gid('pn-award-info-body').innerHTML = renderRecs(info) + renderCourt(info);
+        }
+        function open(btn) {
+            var id = parseInt(btn.getAttribute('data-awards-id'), 10);
+            if (!id) return;
+            lastTrigger = btn;
+            gid('pn-award-info-name').textContent = btn.getAttribute('data-award-name') || 'Award Details';
+            var body = gid('pn-award-info-body');
+            var ov = gid('pn-award-info-overlay');
+            ov.classList.add('pn-open');
+            ov.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            gid('pn-award-info-close-btn').focus();
+            if (cache[id]) { render(cache[id]); return; }
+            body.innerHTML = '<p class="pn-ai-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</p>';
+            fetch(PnConfig.uir + 'PlayerAjax/award_info/' + id, { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d || d.status !== 0 || !d.info) throw new Error((d && d.error) || 'Could not load details');
+                    cache[id] = d.info;
+                    if (d.info.IsLadder && d.info.Rank > 0) {
+                        gid('pn-award-info-name').textContent = (btn.getAttribute('data-award-name') || d.info.AwardName) + ' · Rank ' + d.info.Rank;
+                    }
+                    if (ov.classList.contains('pn-open')) render(d.info);
+                })
+                .catch(function(err) {
+                    body.innerHTML = '<p class="pn-ai-empty pn-ai-error">' + esc(err.message || 'Could not load details') + '</p>';
+                });
+        }
+        function close() {
+            var ov = gid('pn-award-info-overlay');
+            if (!ov || !ov.classList.contains('pn-open')) return;
+            ov.classList.remove('pn-open');
+            ov.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (lastTrigger && document.body.contains(lastTrigger)) lastTrigger.focus();
+        }
+        if (!gid('pn-award-info-overlay')) return;
+        $(document).on('click', '.pn-award-info-btn', function(e) { e.preventDefault(); open(this); });
+        gid('pn-award-info-close-btn').addEventListener('click', close);
+        gid('pn-award-info-done').addEventListener('click', close);
+        var downOnSelf = false;
+        gid('pn-award-info-overlay').addEventListener('mousedown', function(e) { downOnSelf = (e.target === this); });
+        gid('pn-award-info-overlay').addEventListener('click', function(e) { if (downOnSelf && e.target === this) close(); });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) close();
+        });
+    })();
+
     // ---- Edit Qualifications Modal ----
     (function() {
         if (!PnConfig.canEditAdmin) return;
@@ -2311,7 +2463,10 @@ if (PnConfig.recError) {
     // ---- Add Award / Add Title Modal ----
     (function() {
         if (!PnConfig.canManageAwards) return;
-        var AWARD_URL = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/addaward';
+        // PlayerAjax (not Admin/player) so the JSON response carries back the
+        // new row's AwardsId + whether it has certificate art to print —
+        // Admin/player's addaward re-renders the whole admin page instead.
+        var AWARD_URL = PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/addaward';
         var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
         var KINGDOM_ID = PnConfig.kingdomId;
         // Player's held award ranks: canonical AwardId => max rank
@@ -2461,13 +2616,20 @@ if (PnConfig.recError) {
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
             var held      = tnHeldRank(playerRanks, opt, awardId);
             var suggested = Math.min(held + 1, maxRank);
+            // Opened from a rec: the rec's rank is what is being granted, not the
+            // player's next rank.
+            if (pnGrantRank && opt && String(pnGrantRank.awardId) === String(opt.value)) {
+                suggested = Math.min(pnGrantRank.rank, maxRank);
+            }
             // Informational only: never changes the suggested rank above.
             tnSiblingLadderNote(gid('pn-rank-pills'), playerRanks, opt ? opt.value : 0, 'pn-add');
             var hint = gid('pn-rank-hint');
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
-                html += '<div class="pn-rank-pill" data-rank="' + i + '">' + tnRankPillInner('pn', i) + '</div>';
+                // <button>, not <div> — see the Recommend pill builder above.
+                html += '<button type="button" class="pn-rank-pill" data-rank="' + i + '">'
+                     + tnRankPillInner('pn', i) + '</button>';
             }
             var pills = gid('pn-rank-pills');
             pills.dataset.rankHeld = held;
@@ -2603,11 +2765,31 @@ if (PnConfig.recError) {
             el.classList.toggle('pn-char-warn', rem < 50);
         });
 
+        // "Given At" defaults to the officer's own scope (PnConfig.awardScope, stamped
+        // by Playernew_index.tpl behind the same $canManageAwards authority check that
+        // draws the Add Award button) and is blank when there is none to offer. One
+        // triple, so the name shown can never disagree with the ids submitted.
+        function pnResetGivenAt() {
+            var scope = PnConfig.awardScope || { parkId: 0, kingdomId: 0, name: '' };
+            gid('pn-award-givenat-text').value = scope.name || '';
+            gid('pn-award-park-id').value      = String(scope.parkId || 0);
+            gid('pn-award-kingdom-id').value   = String(scope.kingdomId || 0);
+        }
+        function pnHasGivenAt() {
+            return (parseInt(gid('pn-award-park-id').value, 10) > 0)
+                || (parseInt(gid('pn-award-kingdom-id').value, 10) > 0);
+        }
+
         // ---- Required field check ----
         function checkRequired() {
-            var ok = !!gid('pn-award-select').value && !!gid('pn-award-givenby-id').value && !!gid('pn-award-date').value;
+            var ok = !!gid('pn-award-select').value && !!gid('pn-award-givenby-id').value
+                && !!gid('pn-award-date').value && pnHasGivenAt();
             gid('pn-award-save-same').disabled = !ok;
         }
+        // Typing in Given At zeroes the ids until a suggestion is picked, so the button
+        // has to re-evaluate on every keystroke or an unmatched location submits 0/0.
+        gid('pn-award-givenat-text').addEventListener('input', checkRequired);
+        gid('pn-award-givenat-results').addEventListener('click', function() { setTimeout(checkRequired, 0); });
         gid('pn-award-select').addEventListener('change', checkRequired);
         gid('pn-award-date').addEventListener('change',   checkRequired);
         gid('pn-award-date').addEventListener('input',    checkRequired);
@@ -2615,10 +2797,15 @@ if (PnConfig.recError) {
         // ---- Open / Close ----
         window.pnOpenAwardModal = function(type) {
             pnActiveRecId = null; // set again by pnGiveFromRec when opened from a rec
+            pnGrantRank = null;
             // Reset
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
             gid('pn-award-success').style.display  = 'none';
+            if (gid('pn-award-print-link')) {
+                gid('pn-award-print-link').style.display = 'none';
+                gid('pn-award-print-link').removeAttribute('href');
+            }
             gid('pn-award-note').value            = '';
             if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent = '400 characters remaining';
@@ -2626,9 +2813,7 @@ if (PnConfig.recError) {
             gid('pn-award-givenby-text').value    = '';
             gid('pn-award-givenby-id').value      = '';
             gid('pn-award-givenby-results').classList.remove('pn-ac-open');
-            gid('pn-award-givenat-text').value = PnConfig.parkName;
-            gid('pn-award-park-id').value = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value      = String(PnConfig.kingdomId || 0);
+            pnResetGivenAt();
             gid('pn-award-event-id').value        = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             gid('pn-award-custom-name').value     = '';
@@ -2661,16 +2846,17 @@ if (PnConfig.recError) {
         // The rec a "Give from rec" opened this modal from: sent with the save so the
         // server's Monarchy Only gate can check the note (cleared on every other open).
         var pnActiveRecId = null;
+        // { awardId, rank } of that rec, so the rank pills preselect the rec's rank.
+        var pnGrantRank = null;
         // Pre-populate the award modal from a recommendation row
         window.pnGiveFromRec = function(rec) {
             pnOpenAwardModal('awards');
             pnActiveRecId = rec.RecommendationsId || null;
+            var recRank = parseInt(rec.Rank, 10) || 0;
+            pnGrantRank = (rec.KingdomAwardId && recRank > 0) ? { awardId: rec.KingdomAwardId, rank: recRank } : null;
             var sel = gid('pn-award-select');
             sel.value = String(rec.KingdomAwardId || '');
             sel.dispatchEvent(new Event('change'));
-            if (rec.Rank) {
-                setTimeout(function() { selectRankPill(parseInt(rec.Rank)); }, 0);
-            }
             // Monarchy Only: the reason is officer-only and never becomes the public note.
             var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
             if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), recMo);
@@ -2704,11 +2890,30 @@ if (PnConfig.recError) {
 
         // ---- Save helpers ----
         var pnSuccessTimer = null;
+        // The success banner is transient by design — "Add Award" keeps the modal open
+        // to grant another, and the banner resets each time. The print icon lives in the
+        // footer instead and is NOT on this timer: it stays for as long as the modal is
+        // open, pointing at the last printable award granted in this session.
         function pnShowSuccess() {
             var el = gid('pn-award-success');
             el.style.display = '';
             clearTimeout(pnSuccessTimer);
             pnSuccessTimer = setTimeout(function() { el.style.display = 'none'; }, 3000);
+        }
+        // printUrl null means the award just granted has no certificate art, so the icon
+        // is hidden rather than offering a link that would render nothing. A previously
+        // shown icon is cleared too: it would otherwise point at an earlier award while
+        // appearing to belong to the one just granted.
+        function pnSetPrintLink(printUrl) {
+            var linkEl = gid('pn-award-print-link');
+            if (!linkEl) { return; }
+            if (printUrl) {
+                linkEl.href = printUrl;
+                linkEl.style.display = '';
+            } else {
+                linkEl.removeAttribute('href');
+                linkEl.style.display = 'none';
+            }
         }
         function pnClearAward() {
             gid('pn-award-select').value             = '';
@@ -2724,9 +2929,7 @@ if (PnConfig.recError) {
             gid('pn-award-custom-row').style.display = 'none';
             if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
             if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
-            gid('pn-award-givenat-text').value       = PnConfig.parkName;
-            gid('pn-award-park-id').value            = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value         = String(PnConfig.kingdomId || 0);
+            pnResetGivenAt();
             gid('pn-award-event-id').value           = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             checkRequired();
@@ -2743,6 +2946,14 @@ if (PnConfig.recError) {
             if (!awardId) { errEl.textContent = 'Please select an award.';            errEl.style.display = 'block'; return; }
             if (!giverId) { errEl.textContent = 'Please select who gave this award.'; errEl.style.display = 'block'; return; }
             if (!date)    { errEl.textContent = 'Please enter the award date.';       errEl.style.display = 'block'; return; }
+            // "Where given" is required. Blank used to be posted as at_park_id 0 /
+            // at_kingdom_id 0, which is what 30.7% of ork_awards rows carry -- printable
+            // and reportable by nobody but the recipient.
+            if (!pnHasGivenAt()) {
+                errEl.textContent = 'Please choose where this award was given, from the list.';
+                errEl.style.display = 'block';
+                return;
+            }
 
             var fd = new FormData();
             fd.append('KingdomAwardId', awardId);
@@ -2769,8 +2980,21 @@ if (PnConfig.recError) {
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
                     if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                    return resp.json();
+                })
+                .then(function(data) {
+                    if (!data || data.status !== 0) {
+                        throw new Error((data && data.error) || 'Save failed.');
+                    }
                     pnActiveRecId = null;
-                    onSuccess();
+                    pnGrantRank = null;
+                    onSuccess(data);
+                    // Opened from a rec: the server closes it as granted after the
+                    // award saves. If that part failed, say so inline (the award stands).
+                    if (data.recError) {
+                        errEl.textContent = data.recError;
+                        errEl.style.display = 'block';
+                    }
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
@@ -2783,7 +3007,15 @@ if (PnConfig.recError) {
         }
         // Save: add award and stay in modal for another
         gid('pn-award-save-same').addEventListener('click', function() {
-            pnDoSave(function() { pnAwardsDirty = true; pnShowSuccess(); pnClearAward(); });
+            pnDoSave(function(data) {
+                pnAwardsDirty = true;
+                var printUrl = (data && data.printable && data.awardsId)
+                    ? (PnConfig.uir + 'Scrollery/render&awards=' + data.awardsId + '&print=1')
+                    : null;
+                pnShowSuccess();
+                pnSetPrintLink(printUrl);
+                pnClearAward();
+            });
         });
     })();
 
@@ -3651,14 +3883,26 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var knPlayerRanks = {};
+    var knGrantRank = null; // { awardId, rank } while the modal was opened from a rec
 
     function gid(id) { return document.getElementById(id); }
+
+    // "Where given" is required. Blank used to be posted as at_park_id 0 /
+    // at_kingdom_id 0, which is what 30.7% of ork_awards rows carry -- printable and
+    // reportable by nobody but the recipient. The field defaults to this kingdom
+    // (knOpenAwardModal), which is the scope CanManageKingdom already authorised, but
+    // typing over it clears the ids, so the check has to be live.
+    function knHasGivenAt() {
+        return (parseInt(gid('kn-award-park-id').value, 10) > 0)
+            || (parseInt(gid('kn-award-kingdom-id').value, 10) > 0);
+    }
 
     function checkRequired() {
         var ok = !!gid('kn-award-player-id').value
               && !!gid('kn-award-select').value
               && !!gid('kn-award-givenby-id').value
-              && !!gid('kn-award-date').value;
+              && !!gid('kn-award-date').value
+              && knHasGivenAt();
         gid('kn-award-save-new').disabled  = !ok;
         gid('kn-award-save-same').disabled = !ok;
         gid('kn-award-save-next').disabled = !ok;
@@ -3724,6 +3968,12 @@ $(document).ready(function() {
         // Informational only: never changes the suggested rank above.
         tnSiblingLadderNote(wrap, knPlayerRanks, opt.value, 'kn-add');
         var suggested = Math.min(held + 1, maxRank);
+        // Opened from a rec: the rec's rank is what is being granted, not the
+        // player's next rank. Re-applied on every rebuild because the player's
+        // ranks arrive async and rebuild the pills after the rec prefill ran.
+        if (knGrantRank && String(knGrantRank.awardId) === String(awardId)) {
+            suggested = Math.min(knGrantRank.rank, maxRank);
+        }
         wrap.dataset.rankHeld = held;
         tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
@@ -3856,11 +4106,15 @@ $(document).ready(function() {
     // Given At — location search
     gid('kn-award-givenat-text').addEventListener('input', function() {
         var term = this.value.trim();
-        if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenAtTimer);
+        // Cleared unconditionally, before the length guard: deleting the text back to
+        // one character or none used to leave the previous location's ids attached to
+        // a box that no longer named it.
         gid('kn-award-park-id').value    = '0';
         gid('kn-award-kingdom-id').value = '0';
         gid('kn-award-event-id').value   = '0';
+        checkRequired();
+        if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -3884,6 +4138,7 @@ $(document).ready(function() {
         gid('kn-award-kingdom-id').value      = item.dataset.kid || '0';
         gid('kn-award-event-id').value        = item.dataset.eid || '0';
         this.classList.remove('kn-ac-open');
+        checkRequired();
     });
 
     // Keyboard navigation for givenBy and givenAt autocompletes
@@ -3906,6 +4161,7 @@ $(document).ready(function() {
     window.knOpenAwardModal = function() {
         var today = new Date();
         knPlayerRanks = {};
+        knGrantRank = null;
         gid('kn-award-error').style.display      = 'none';
         gid('kn-award-error').textContent        = '';
         gid('kn-award-success').style.display    = 'none';
@@ -3954,11 +4210,18 @@ $(document).ready(function() {
     var knBulkGrantCallback = null;
     var knBulkQueuePos = 0;
     var knBulkQueueTotal = 0;
+    // Bulk "Add and Next": the rec on screen, the recs whose award saved but which
+    // the server left open (shown, never skipped), and whether the modal is parked
+    // on such an item waiting for the officer to read the reason and move on.
+    var knBulkCurrentRec = null;
+    var knBulkLeftOpen   = [];
+    var knBulkPaused     = false;
     function knSetBulkMode(isBulk) {
         var normal = gid('kn-award-footer-normal');
         var next   = gid('kn-award-save-next');
         if (normal) normal.style.display = isBulk ? 'none' : '';
         if (next)   next.style.display   = isBulk ? ''     : 'none';
+        if (!isBulk) knBulkPaused = false;
         var title = gid('kn-award-modal-title');
         if (title && isBulk && knBulkQueueTotal > 1) {
             var icon = title.querySelector('i') ? title.querySelector('i').outerHTML : '';
@@ -3969,9 +4232,21 @@ $(document).ready(function() {
         knBulkGrantCallback = onAfter || null;
         knBulkQueuePos   = queuePos   || 0;
         knBulkQueueTotal = queueTotal || 0;
+        if (knBulkQueuePos <= 1) knBulkLeftOpen = [];
+        knBulkCurrentRec = rec;
+        knBulkPaused     = false;
         gtag('event', 'recommendation_give');
         knOpenAwardModal();
-        knSetBulkMode(!!onAfter);
+        // The last item of a bulk run stays in bulk mode (no callback left, but it
+        // is still "N of N" and its save must finish the run, not reset the form).
+        var inBulk = !!onAfter || knBulkQueueTotal > 1;
+        knSetBulkMode(inBulk);
+        var nextBtn = gid('kn-award-save-next');
+        if (nextBtn && inBulk) {
+            nextBtn.innerHTML = onAfter
+                ? '<i class="fas fa-arrow-right"></i> Add and Next'
+                : '<i class="fas fa-check"></i> Add and Finish';
+        }
         if (rec.Persona || rec.MundaneId) {
             gid('kn-award-player-text').value = rec.Persona || '';
             gid('kn-award-player-id').value   = String(rec.MundaneId || '');
@@ -3986,16 +4261,12 @@ $(document).ready(function() {
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }
+        var recRank = parseInt(rec.Rank, 10) || 0;
+        knGrantRank = (rec.KingdomAwardId && recRank > 0) ? { awardId: rec.KingdomAwardId, rank: recRank } : null;
         if (rec.KingdomAwardId) {
             var sel = gid('kn-award-select');
             sel.value = String(rec.KingdomAwardId);
             sel.dispatchEvent(new Event('change'));
-        }
-        if (rec.Rank) {
-            setTimeout(function() {
-                var pill = document.querySelector('#kn-rank-pills .kn-rank-pill[data-rank="' + rec.Rank + '"]');
-                if (pill) pill.click();
-            }, 0);
         }
         // Monarchy Only: the reason is officer-only and never becomes the public note.
         var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
@@ -4011,19 +4282,33 @@ $(document).ready(function() {
         knActiveRecId = rec.RecommendationsId || null;
     };
 
+    // The rec outcome of the last save, read from Admin/player addaward's headers
+    // (knDoSave). The server closes the rec as GRANTED itself, and only when the
+    // award just saved backs it; the client never claims a grant.
+    var knLastRecResult = null;
+
+    // Runs only after the award from "Give from rec" saved. Nothing is posted: the
+    // save already closed the rec (or left it open, with the reason in the header).
     function knAutoDismissRec() {
         var id = knActiveRecId;
+        var res = knLastRecResult;
         knActiveRecId = null;
+        knGrantRank = null;
+        knLastRecResult = null;
         if (!id) return;
         var row = document.querySelector('#kn-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
-        var fd = new FormData();
-        fd.append('RecommendationsId', id);
-        fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/dismissrecommendation', { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
-            })
-            .catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] autoDismissRec failed:', err); });
+        if (res && res.closed) {
+            if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+            return;
+        }
+        if (res && res.error) {
+            // Inline, after the save callbacks have reset the modal (no native dialog).
+            var msg = 'Award saved. The recommendation was left open: ' + res.error + '.';
+            setTimeout(function() {
+                var errEl = gid('kn-award-error');
+                if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+            }, 0);
+        }
     }
 
     // Recommendations tab: grant + dismiss
@@ -4421,6 +4706,11 @@ $(document).ready(function() {
         if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
         if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
         if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
+        if (!knHasGivenAt()) {
+            errEl.textContent = 'Please choose where this award was given, from the list.';
+            errEl.style.display = 'block';
+            return;
+        }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -4452,6 +4742,15 @@ $(document).ready(function() {
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
                 if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                // Admin/player answers with a whole rendered admin page, so there is no
+                // body worth parsing -- a server-side refusal used to be reported here as
+                // a successful grant. Controller_Admin::reject_award_grant() echoes the
+                // message in a header for exactly this.
+                var refused = resp.headers.get('X-Award-Error');
+                if (refused) throw new Error(refused);
+                var recClosed = resp.headers.get('X-Ork-Rec-Closed');
+                knLastRecResult = recClosed === null ? null
+                    : { closed: recClosed === '1', error: resp.headers.get('X-Ork-Rec-Error') || '' };
                 onSuccess();
             })
             .catch(function(err) {
@@ -4461,7 +4760,9 @@ $(document).ready(function() {
             .finally(function() {
                 btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
                 btnSame.innerHTML = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player';
-                btnNext.innerHTML = '<i class="fas fa-arrow-right"></i> Add and Next';
+                btnNext.innerHTML = knBulkGrantCallback
+                    ? '<i class="fas fa-arrow-right"></i> Add and Next'
+                    : '<i class="fas fa-check"></i> Add and Finish';
                 checkRequired();
             });
     }
@@ -4492,13 +4793,61 @@ $(document).ready(function() {
             gid('kn-award-select').focus();
         });
     });
-    // "Add and Next" — bulk mode: save, dismiss rec, advance to next in queue
+    // "Add and Next" — bulk mode: save, close the rec, advance to next in queue.
+    // When the award saved but the rec stayed open, the modal stays on that item
+    // with the reason inline and the button becomes Continue/Finish; nothing is
+    // re-saved. Finishing a run that left any rec open lists them all in the modal
+    // instead of closing it, so no error is lost behind a closed modal.
+    function knBulkAdvance() {
+        var btnNext = gid('kn-award-save-next');
+        knBulkPaused = false;
+        var cb = knBulkGrantCallback;
+        knBulkGrantCallback = null;
+        if (cb) { cb(); return; }
+        if (!knBulkLeftOpen.length) { knCloseAwardModal(); return; }
+        var errEl = gid('kn-award-error');
+        var n = knBulkLeftOpen.length;
+        errEl.textContent = '';
+        errEl.appendChild(document.createTextNode('Awards saved, but ' + n + ' recommendation'
+            + (n === 1 ? ' was' : 's were') + ' left open:'));
+        var ul = document.createElement('ul');
+        ul.className = 'kn-bulk-leftopen-list';
+        knBulkLeftOpen.forEach(function(item) {
+            var li = document.createElement('li');
+            li.textContent = item.label + ' \u2014 ' + item.error;
+            ul.appendChild(li);
+        });
+        errEl.appendChild(ul);
+        errEl.style.display = 'block';
+        knBulkLeftOpen = [];
+        if (btnNext) btnNext.style.display = 'none';
+    }
     gid('kn-award-save-next').addEventListener('click', function() {
+        if (knBulkPaused) { knBulkAdvance(); return; }
+        var rec = knBulkCurrentRec || {};
+        var sel = gid('kn-award-select');
+        var opt = sel && sel.options[sel.selectedIndex];
+        var rank = gid('kn-award-rank-val').value;
+        var label = (rec.Persona || 'Player') + ': ' + (opt ? opt.text.trim() : 'award')
+            + (rank ? ' (rank ' + rank + ')' : '');
         knDoSave(function() {
+            var res = knLastRecResult;
             knAutoDismissRec(); knShowSuccess();
-            var cb = knBulkGrantCallback;
-            knBulkGrantCallback = null;
-            if (cb) { cb(); } else { knCloseAwardModal(); }
+            if (res && !res.closed) {
+                knBulkLeftOpen.push({ label: label, error: res.error || 'not closed' });
+                knBulkPaused = true;
+                // After knDoSave's finally has reset the button label.
+                setTimeout(function() {
+                    var b = gid('kn-award-save-next');
+                    if (!b) return;
+                    b.disabled = false;
+                    b.innerHTML = knBulkGrantCallback
+                        ? '<i class="fas fa-arrow-right"></i> Continue to Next'
+                        : '<i class="fas fa-check"></i> Finish';
+                }, 0);
+                return;
+            }
+            knBulkAdvance();
         });
     });
 })();
@@ -7782,6 +8131,7 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var pkPlayerRanks = {};
+    var pkGrantRank = null; // { awardId, rank } while the modal was opened from a rec
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7789,11 +8139,20 @@ $(document).ready(function() {
         tnPositionAcFixed(inputEl, dropdownEl);
     }
 
+    // "Where given" is required -- see knHasGivenAt() for why. The field defaults to
+    // this park (pkOpenAwardModal), the scope CanManagePark already authorised, but
+    // typing over it clears the ids, so the check has to be live.
+    function pkHasGivenAt() {
+        return (parseInt(gid('pk-award-park-id').value, 10) > 0)
+            || (parseInt(gid('pk-award-kingdom-id').value, 10) > 0);
+    }
+
     function checkRequired() {
         var ok = !!gid('pk-award-player-id').value
               && !!gid('pk-award-select').value
               && !!gid('pk-award-givenby-id').value
-              && !!gid('pk-award-date').value;
+              && !!gid('pk-award-date').value
+              && pkHasGivenAt();
         gid('pk-award-save-new').disabled  = !ok;
         gid('pk-award-save-same').disabled = !ok;
     }
@@ -7858,6 +8217,12 @@ $(document).ready(function() {
         // Informational only: never changes the suggested rank above.
         tnSiblingLadderNote(wrap, pkPlayerRanks, opt.value, 'pk-add');
         var suggested = Math.min(held + 1, maxRank);
+        // Opened from a rec: the rec's rank is what is being granted, not the
+        // player's next rank. Re-applied on every rebuild because the player's
+        // ranks arrive async and rebuild the pills after the rec prefill ran.
+        if (pkGrantRank && String(pkGrantRank.awardId) === String(awardId)) {
+            suggested = Math.min(pkGrantRank.rank, maxRank);
+        }
         wrap.dataset.rankHeld = held;
         tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
@@ -7994,11 +8359,12 @@ $(document).ready(function() {
     // Given At — location search
     gid('pk-award-givenat-text').addEventListener('input', function() {
         var term = this.value.trim();
-        if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenAtTimer);
         gid('pk-award-park-id').value    = '0';
         gid('pk-award-kingdom-id').value = '0';
         gid('pk-award-event-id').value   = '0';
+        checkRequired();
+        if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -8022,6 +8388,7 @@ $(document).ready(function() {
         gid('pk-award-park-id').value         = item.dataset.pid || '0';
         gid('pk-award-kingdom-id').value      = item.dataset.kid || '0';
         gid('pk-award-event-id').value        = item.dataset.eid || '0';
+        checkRequired();
         this.classList.remove('pk-ac-open');
     });
 
@@ -8045,6 +8412,7 @@ $(document).ready(function() {
     window.pkOpenAwardModal = function() {
         var today = new Date();
         pkPlayerRanks = {};
+        pkGrantRank = null;
         gid('pk-award-error').style.display      = 'none';
         gid('pk-award-error').textContent        = '';
         gid('pk-award-success').style.display    = 'none';
@@ -8104,16 +8472,12 @@ $(document).ready(function() {
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }
+        var recRank = parseInt(rec.Rank, 10) || 0;
+        pkGrantRank = (rec.KingdomAwardId && recRank > 0) ? { awardId: rec.KingdomAwardId, rank: recRank } : null;
         if (rec.KingdomAwardId) {
             var sel = gid('pk-award-select');
             sel.value = String(rec.KingdomAwardId);
             sel.dispatchEvent(new Event('change'));
-        }
-        if (rec.Rank) {
-            setTimeout(function() {
-                var pill = document.querySelector('#pk-rank-pills .pk-rank-pill[data-rank="' + rec.Rank + '"]');
-                if (pill) pill.click();
-            }, 0);
         }
         // Monarchy Only: the reason is officer-only and never becomes the public note.
         var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
@@ -8129,19 +8493,33 @@ $(document).ready(function() {
         pkActiveRecId = rec.RecommendationsId || null;
     };
 
+    // The rec outcome of the last save, read from Admin/player addaward's headers
+    // (pkDoSave). The server closes the rec as GRANTED itself, and only when the
+    // award just saved backs it; the client never claims a grant.
+    var pkLastRecResult = null;
+
+    // Runs only after the award from "Give from rec" saved. Nothing is posted: the
+    // save already closed the rec (or left it open, with the reason in the header).
     function pkAutoDismissRec() {
         var id = pkActiveRecId;
+        var res = pkLastRecResult;
         pkActiveRecId = null;
+        pkGrantRank = null;
+        pkLastRecResult = null;
         if (!id) return;
         var row = document.querySelector('#pk-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
-        var fd = new FormData();
-        fd.append('RecommendationsId', id);
-        fetch(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/dismissrecommendation', { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
-            })
-            .catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] autoDismissRec failed:', err); });
+        if (res && res.closed) {
+            if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+            return;
+        }
+        if (res && res.error) {
+            // Inline, after the save callbacks have reset the modal (no native dialog).
+            var msg = 'Award saved. The recommendation was left open: ' + res.error + '.';
+            setTimeout(function() {
+                var errEl = gid('pk-award-error');
+                if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+            }, 0);
+        }
     }
 
     // Recommendations tab: grant + dismiss
@@ -8263,6 +8641,11 @@ $(document).ready(function() {
         if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
         if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
         if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
+        if (!pkHasGivenAt()) {
+            errEl.textContent = 'Please choose where this award was given, from the list.';
+            errEl.style.display = 'block';
+            return;
+        }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -8292,6 +8675,15 @@ $(document).ready(function() {
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
                 if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                // Admin/player answers with a whole rendered admin page, so there is no
+                // body worth parsing -- a server-side refusal used to be reported here as
+                // a successful grant. Controller_Admin::reject_award_grant() echoes the
+                // message in a header for exactly this.
+                var refused = resp.headers.get('X-Award-Error');
+                if (refused) throw new Error(refused);
+                var recClosed = resp.headers.get('X-Ork-Rec-Closed');
+                pkLastRecResult = recClosed === null ? null
+                    : { closed: recClosed === '1', error: resp.headers.get('X-Ork-Rec-Error') || '' };
                 onSuccess();
             })
             .catch(function(err) {
@@ -17505,7 +17897,10 @@ window.initUsernameAvailabilityCheck = function(opts) {
 };
 
 /* ===========================================================
- * Deleted Recommendations panel (Park + Kingdom Recs tabs)
+ * Closed (granted + dismissed) Recommendations panel
+ * (Park + Kingdom Recs tabs). A granted rec and a dismissed rec are both
+ * soft deletes; r.Resolution says which. Granted rows are history (the award
+ * was given) and never offer Restore; the server refuses it too.
  * =========================================================== */
 (function () {
     function escHtml(s) {
@@ -17522,33 +17917,90 @@ window.initUsernameAvailabilityCheck = function(opts) {
         if (typeof KnConfig !== 'undefined' && KnConfig.uir) return KnConfig.uir;
         return '/orkui/';
     }
+    // Column index of the Status cell; the filter searches it by data-search.
+    var STATUS_COL = 6;
+    var RESTORE_HTML = '<i class="fas fa-undo"></i> Restore';
 
     function renderRows(tbody, recs) {
         var html = '';
         for (var i = 0; i < recs.length; i++) {
             var r = recs[i];
             var rid = parseInt(r.RecommendationsId, 10) || 0;
+            var granted = r.Resolution === 'granted';
             var rank = parseInt(r.Rank, 10) > 0 ? parseInt(r.Rank, 10) : '&mdash;';
             var notes = r.Reason ? escHtml(r.Reason) : '&mdash;';
             var recBy = r.RecommendedById
                 ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.RecommendedById, 10) + '">' + escHtml(r.RecommendedByName || '') + '</a>'
                 : '&mdash;';
-            var delBy = r.DeletedById
-                ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
+            var verb = granted ? 'Granted' : 'Dismissed';
+            var closedBy = r.DeletedById
+                ? '<span class="pk-closed-verb">' + verb + ' by</span> <a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
                 : '&mdash;';
-            html += '<tr data-rec-id="' + rid + '">'
+            var status = '<span class="pk-closed-pill pk-closed-pill-' + (granted ? 'granted' : 'dismissed') + '">' + verb + '</span>';
+            var action = granted
+                ? '<span class="pk-closed-noaction" data-tip="The award was given. To undo a grant, revoke or delete the award on the player\'s profile.">&mdash;</span>'
+                : '<button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '">' + RESTORE_HTML + '</button>';
+            html += '<tr data-rec-id="' + rid + '" data-resolution="' + (granted ? 'granted' : 'dismissed') + '">'
                 + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
                 + '<td>' + escHtml(r.AwardName || '') + '</td>'
                 + '<td data-order="' + (parseInt(r.Rank, 10) || 0) + '">' + rank + '</td>'
                 + '<td>' + notes + '</td>'
                 + '<td data-order="' + (Date.parse(r.DateRecommended) || 0) + '">' + escHtml(r.DateRecommended || '') + '</td>'
                 + '<td>' + recBy + '</td>'
+                + '<td data-search="' + (granted ? 'granted' : 'dismissed') + '">' + status + '</td>'
                 + '<td data-order="' + (Date.parse(r.DeletedAt) || 0) + '">' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
-                + '<td>' + delBy + '</td>'
-                + '<td style="text-align:right;white-space:nowrap"><button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '"><i class="fas fa-undo"></i> Restore</button></td>'
+                + '<td>' + closedBy + '</td>'
+                + '<td style="text-align:right;white-space:nowrap">' + action + '</td>'
                 + '</tr>';
         }
         tbody.innerHTML = html;
+    }
+
+    function showMsg(panel, text) {
+        var el = panel.querySelector('.pk-deleted-recs-msg');
+        if (!el) return;
+        el.textContent = text || '';
+        el.style.display = text ? '' : 'none';
+    }
+
+    // Header badge + filter counts, from the rows the table holds right now.
+    function updateCounts(panel) {
+        var n = { all: 0, granted: 0, dismissed: 0 };
+        if (panel.__dt) {
+            panel.__dt.rows().every(function () {
+                var res = this.node().getAttribute('data-resolution');
+                n.all++;
+                if (n[res] !== undefined) n[res]++;
+            });
+        }
+        var countEl = panel.querySelector('.pk-deleted-recs-count');
+        if (countEl) {
+            countEl.textContent = n.all;
+            countEl.style.display = n.all > 0 ? '' : 'none';
+        }
+        panel.querySelectorAll('.pk-closed-filter-n').forEach(function (el) {
+            el.textContent = n[el.getAttribute('data-n')] || 0;
+        });
+        var filter = panel.querySelector('.pk-closed-filter');
+        if (filter) filter.style.display = n.all > 0 ? '' : 'none';
+        if (n.all === 0) {
+            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
+            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+            if (wrap)    wrap.style.display = 'none';
+            if (emptyEl) emptyEl.style.display = '';
+        }
+    }
+
+    function applyFilter(panel, which) {
+        panel.querySelectorAll('.pk-closed-filter-btn').forEach(function (b) {
+            var on = b.getAttribute('data-filter') === which;
+            b.classList.toggle('pk-closed-filter-on', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (!panel.__dt) return;
+        panel.__dt.column(STATUS_COL)
+            .search(which === 'all' ? '' : '^' + which + '$', true, false)
+            .draw();
     }
 
     function loadDeleted(panel, fetchUrl, onRendered) {
@@ -17556,11 +18008,11 @@ window.initUsernameAvailabilityCheck = function(opts) {
         var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
         var wrap    = panel.querySelector('.pk-deleted-recs-table-wrap');
         var tbody   = panel.querySelector('tbody');
-        var countEl = panel.querySelector('.pk-deleted-recs-count');
 
         if (loading) loading.style.display = '';
         if (emptyEl) emptyEl.style.display = 'none';
         if (wrap)    wrap.style.display = 'none';
+        showMsg(panel, '');
 
         fetch(fetchUrl, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
@@ -17571,23 +18023,20 @@ window.initUsernameAvailabilityCheck = function(opts) {
                     return;
                 }
                 var recs = Array.isArray(d.recommendations) ? d.recommendations : [];
-                if (countEl) {
-                    countEl.textContent = recs.length;
-                    countEl.style.display = recs.length > 0 ? '' : 'none';
-                }
                 if (recs.length === 0) {
-                    if (emptyEl) emptyEl.style.display = '';
+                    updateCounts(panel);
                     return;
                 }
                 renderRows(tbody, recs);
                 if (wrap) wrap.style.display = '';
                 var $delTable = $(panel).find('.pk-deleted-recs-table');
                 panel.__dt = window.orkInitDataTable($delTable, {
-                    order: [[6, 'desc']],   // Deleted At, newest first
-                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Dismissed Recommendations',
-                    columnDefs: [{ targets: 8, orderable: false, searchable: false }]
+                    order: [[7, 'desc']],   // Closed, newest first
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Granted and Dismissed Recommendations',
+                    columnDefs: [{ targets: 9, orderable: false, searchable: false }]
                 });
                 window.orkAdjustDataTables($(panel));
+                updateCounts(panel);
                 panel.dataset.loaded = '1';
                 if (onRendered) onRendered();
             })
@@ -17595,6 +18044,13 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 if (loading) loading.style.display = 'none';
                 if (emptyEl) { emptyEl.textContent = 'Network error.'; emptyEl.style.display = ''; }
             });
+    }
+
+    function resetRestoreBtn(btn) {
+        btn.disabled = false;
+        btn.dataset.confirm = '';
+        btn.innerHTML = RESTORE_HTML;
+        btn.classList.remove('pk-deleted-restore-confirm');
     }
 
     function wirePanel(panelId, listUrl, restoreUrl) {
@@ -17614,7 +18070,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var open = panel.classList.toggle('pk-deleted-open');
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
             var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
-            if (lbl) lbl.textContent = open ? 'Hide Dismissed Recommendations' : 'Show Dismissed Recommendations';
+            if (lbl) lbl.textContent = open ? 'Hide Granted & Dismissed Recommendations' : 'Show Granted & Dismissed Recommendations';
             body.style.display = open ? '' : 'none';
             if (open && panel.dataset.loaded !== '1') {
                 loadDeleted(panel, listUrl);
@@ -17622,24 +18078,24 @@ window.initUsernameAvailabilityCheck = function(opts) {
         });
 
         panel.addEventListener('click', function (e) {
+            var fbtn = e.target.closest ? e.target.closest('.pk-closed-filter-btn') : null;
+            if (fbtn && panel.contains(fbtn)) {
+                applyFilter(panel, fbtn.getAttribute('data-filter') || 'all');
+                return;
+            }
             var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;
             if (!btn || !panel.contains(btn)) return;
             if (!btn.dataset.confirm) {
                 btn.dataset.confirm = '1';
-                var origHtml = btn.innerHTML;
-                btn._origHtml = origHtml;
                 btn.innerHTML = 'Click again to confirm';
                 btn.classList.add('pk-deleted-restore-confirm');
-                btn._confirmTimer = setTimeout(function () {
-                    btn.dataset.confirm = '';
-                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
-                    btn.classList.remove('pk-deleted-restore-confirm');
-                }, 4000);
+                btn._confirmTimer = setTimeout(function () { resetRestoreBtn(btn); }, 4000);
                 return;
             }
             clearTimeout(btn._confirmTimer);
             btn.dataset.confirm = '';
             btn.disabled = true;
+            showMsg(panel, '');
             var recId = btn.getAttribute('data-rec-id');
             var fd = new FormData();
             fd.append('RecommendationsId', recId);
@@ -17647,40 +18103,24 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     if (d.status !== 0) {
-                        alert(d.error || 'Failed to restore.');
-                        btn.disabled = false;
-                        btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
-                        btn.classList.remove('pk-deleted-restore-confirm');
+                        showMsg(panel, d.error || 'Failed to restore.');
+                        resetRestoreBtn(btn);
                         return;
                     }
                     var row = btn.closest('tr');
                     if (row) row.classList.add('pk-deleted-restored');
-                    var recIdDone = btn.getAttribute('data-rec-id');
                     setTimeout(function () {
                         if (panel.__dt) {
                             panel.__dt.rows(function (i, data, node) {
-                                return node.getAttribute('data-rec-id') === recIdDone;
+                                return node.getAttribute('data-rec-id') === recId;
                             }).remove().draw(false);
                         }
-                        var remaining = panel.__dt ? panel.__dt.rows().count() : 0;
-                        var countEl = panel.querySelector('.pk-deleted-recs-count');
-                        if (countEl) {
-                            countEl.textContent = remaining;
-                            countEl.style.display = remaining > 0 ? '' : 'none';
-                        }
-                        if (remaining === 0) {
-                            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
-                            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
-                            if (wrap)    wrap.style.display = 'none';
-                            if (emptyEl) emptyEl.style.display = '';
-                        }
+                        updateCounts(panel);
                     }, 500);
                 })
                 .catch(function () {
-                    alert('Network error.');
-                    btn.disabled = false;
-                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
-                    btn.classList.remove('pk-deleted-restore-confirm');
+                    showMsg(panel, 'Network error. The recommendation was not restored.');
+                    resetRestoreBtn(btn);
                 });
         });
     }

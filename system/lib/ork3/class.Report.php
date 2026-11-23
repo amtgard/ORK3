@@ -20,8 +20,9 @@ class Report extends Ork3
      * v4: the row shape gained monarchy_only, and the badge count became public-only.
      * v5: "already has" stopped matching on shared award_ids and learned
      *     cross-kingdom ladder equivalents (Award::pseudoLadderEquivalenceGroups).
+     * v6: rows carry IsGranted (ork_recommendations.resolution).
      */
-    public const REC_CACHE_VERSION = 5;
+    public const REC_CACHE_VERSION = 6;
 
     /**
      * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
@@ -640,6 +641,7 @@ class Report extends Ork3
                     'OldestDate'     => $rec['DateRecommended'] ?? '',
                     'RepRecId'       => (int)($rec['RecommendationsId'] ?? 0),
                     'IsDismissed'        => false,
+                    'IsGranted'          => false,
                     'DismissedAt'        => null,
                     'DismissedByPersona' => '',
                     '_advocates'     => [],
@@ -659,11 +661,20 @@ class Report extends Ork3
                 $g['OldestDate']    = $rec['DateRecommended'] ?? '';
                 $g['RepRecId']      = (int)($rec['RecommendationsId'] ?? 0);
             }
-            if (!empty($rec['IsDismissed'])
-                && ($g['DismissedAt'] === null || (string)($rec['DismissedAt'] ?? '') > (string)$g['DismissedAt'])
-            ) {
-                $g['DismissedAt']        = $rec['DismissedAt'] ?? null;
-                $g['DismissedByPersona'] = $rec['DismissedByPersona'] ?? '';
+            // Provenance of a closed cluster: the latest close, except that a
+            // granted member outranks any dismissed one — once any filing was
+            // granted the honor was given, and the row must say so (and must not
+            // offer Restore). The DismissedAt/By fields then name the grant.
+            if (!empty($rec['IsDismissed'])) {
+                $recGranted = !empty($rec['IsGranted']);
+                $later      = $g['DismissedAt'] === null || (string)($rec['DismissedAt'] ?? '') > (string)$g['DismissedAt'];
+                if (($recGranted && !$g['IsGranted']) || ($recGranted === $g['IsGranted'] && $later)) {
+                    $g['DismissedAt']        = $rec['DismissedAt'] ?? null;
+                    $g['DismissedByPersona'] = $rec['DismissedByPersona'] ?? '';
+                }
+                if ($recGranted) {
+                    $g['IsGranted'] = true;
+                }
             }
             if (!empty($rec['RecommendedById'])) {
                 $g['_advocates'][(int)$rec['RecommendedById']] = true;
@@ -693,6 +704,9 @@ class Report extends Ork3
             unset($g['_advocates'][$g['MundaneId']]);
             $groups[$k]['SupportCount']  = max(0, count($g['_advocates']) - ($g['_hasNamedRec'] ? 1 : 0));
             $groups[$k]['IsDismissed']   = !isset($liveByKey[$k]);
+            // Only a closed cluster can be granted (dismissed members of a live
+            // cluster were dropped above, so this is already false for live ones).
+            $groups[$k]['IsGranted']     = $groups[$k]['IsDismissed'] && $g['IsGranted'];
             $groups[$k]['IsSnoozed']     = $g['_allSnoozed'];
             $groups[$k]['PassedToLocal'] = $g['_allPassed'];
             $groups[$k]['MonarchyOnlyLevel'] = $g['_moMax'];
@@ -796,6 +810,7 @@ class Report extends Ork3
 			recs.mask_giver,
 			recs.deleted_at,
 			recs.deleted_by,
+			recs.resolution,
 			dbm.persona as deleted_by_persona,
 			recs.snoozed_monarch_id,
 			recs.snoozed_regent_id,
@@ -905,6 +920,7 @@ class Report extends Ork3
                     'deleted_by'         => $r->deleted_by,
                     'deleted_at'         => $r->deleted_at,
                     'deleted_by_persona' => $r->deleted_by_persona,
+                    'resolution'         => (string)$r->resolution,
                 ];
                 $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
                 if (isset($ladderMap[$recAwardId])) {
@@ -1011,6 +1027,9 @@ class Report extends Ork3
                     // Dismissal is surfaced only when the caller asked for it; a
                     // live-only page never carries these.
                     'IsDismissed'        => !empty($row->deleted_by),
+                    // A grant is a close too: IsDismissed stays "closed" (it gates the
+                    // live-vs-closed split everywhere), IsGranted says why it closed.
+                    'IsGranted'          => !empty($row->deleted_by) && $row->resolution === Player::REC_RESOLUTION_GRANTED,
                     'DismissedAt'        => $row->deleted_at,
                     'DismissedByPersona' => $row->deleted_by_persona,
                     'RecommendedByName' => $row->recommended_by_persona,
@@ -1072,6 +1091,53 @@ class Report extends Ork3
         // Filter BEFORE applyViewerFlags (masking nulls RecommendedById, which the
         // author rule reads) and AFTER the cache write, so the cache stays viewer-agnostic.
         return $this->applyViewerFlags(Ork3::$Lib->recommendationvisibility->filterRecommendations($cached, $hideViewer), $viewer_id);
+    }
+
+    /** Top stop of the Recs Manager rank scale: "M" (a Master award), above ladder 10. */
+    public const RANK_FILTER_MASTER = 11;
+
+    /**
+     * SQL predicate for the Recs Manager rank-range filter, or null when the
+     * selection is the default (full 1..M plus non-ladder) and filters nothing.
+     *
+     * Stops 1..10 are ladder ranks (10 means rank >= 10, as the pill clamps there),
+     * stop 11 (RANK_FILTER_MASTER) is "M". Inputs are clamped and int-cast, so
+     * the request values never reach the SQL as text. A ladder rec with no rank
+     * set (0) sorts into the bottom stop: it is kept whenever the range starts at 1.
+     *
+     * @param string $ladderExpr   SQL yielding 1 for a ladder award (Award::sqlEffectiveIsLadder)
+     * @param string $isMasterExpr SQL boolean, true for a rec whose award is a Master award
+     */
+    public static function sqlRankRangePredicate(int $min, int $max, bool $includeNonLadder, string $ladderExpr, string $isMasterExpr): ?string
+    {
+        $top = self::RANK_FILTER_MASTER;
+        $min = max(1, min($top, $min));
+        $max = max(1, min($top, $max));
+        if ($min > $max) {
+            [$min, $max] = [$max, $min];
+        }
+        if ($min === 1 && $max === $top && $includeNonLadder) {
+            return null;
+        }
+        $rk    = 'COALESCE(recs.rank,0)';
+        $parts = [];
+        if ($min <= 10) {
+            $cond = ["NOT $isMasterExpr", "$ladderExpr = 1"];
+            if ($min > 1) {
+                $cond[] = "$rk >= $min";
+            }
+            if ($max < 10) {
+                $cond[] = "$rk <= $max";
+            }
+            $parts[] = '(' . implode(' AND ', $cond) . ')';
+        }
+        if ($max === $top) {
+            $parts[] = $isMasterExpr;
+        }
+        if ($includeNonLadder) {
+            $parts[] = "(NOT $isMasterExpr AND $ladderExpr = 0)";
+        }
+        return '(' . implode(' OR ', $parts) . ')';
     }
 
     /**
@@ -1211,6 +1277,32 @@ class Report extends Ork3
         } elseif ($elig === 'open') {
             $where[] = "($undecidableExpr OR NOT $alreadyExpr)";
             $where[] = "NOT $snoozedExpr";
+        }
+
+        // Rank range (the Rank header's filter popover): ladder ranks 1..10 plus
+        // stop 11 = "M" (recs for a Master award — the master side of the same
+        // Award::GetLadderMasterMap the AlreadyHas cover above is built from), and a
+        // separate switch for everything outside the scale (knighthoods, titles...).
+        // Classification matches the row pills: ladder-ness is $ladderExpr, the SQL
+        // twin of the IsLadder flag _rm_row.tpl renders from.
+        $masterIds = [];
+        foreach (Award::GetLadderMasterMap() as $lmInfo) {
+            foreach ((array)($lmInfo['MasterAwardIds'] ?? []) as $mAid) {
+                $masterIds[] = (int)$mAid;
+            }
+        }
+        $isMasterExpr = $masterIds
+            ? '(IF(IFNULL(ka.award_id,0)=0, recs.award_id, ka.award_id) IN (' . implode(',', array_unique($masterIds)) . '))'
+            : '(0 = 1)';
+        $rankPred = self::sqlRankRangePredicate(
+            (int)($request['RankMin'] ?? 1),
+            (int)($request['RankMax'] ?? self::RANK_FILTER_MASTER),
+            !isset($request['IncludeNonLadder']) || !empty($request['IncludeNonLadder']),
+            $ladderExpr,
+            $isMasterExpr
+        );
+        if ($rankPred !== null) {
+            $where[] = $rankPred;
         }
 
         $whereSql = $where ? (' AND ' . implode(' AND ', $where)) : '';
@@ -1593,6 +1685,7 @@ class Report extends Ork3
 			recs.mask_giver,
 			recs.deleted_at,
 			recs.deleted_by,
+			recs.resolution,
 			dm.persona as deleted_by_persona,
 			ka.award_id as ka_award_id,
 			ka.kingdomaward_id as ka_kaward_id
@@ -1632,6 +1725,10 @@ class Report extends Ork3
                     'DeletedAt'         => $r->deleted_at,
                     'DeletedById'       => (int)$r->deleted_by,
                     'DeletedByName'     => $r->deleted_by_persona,
+                    // 'granted' | 'dismissed'. A close the backfill could not reach
+                    // (NULL) reads as dismissed, the conservative label: it keeps
+                    // Restore available rather than hiding a real dismissal.
+                    'Resolution'        => $r->resolution === Player::REC_RESOLUTION_GRANTED ? Player::REC_RESOLUTION_GRANTED : Player::REC_RESOLUTION_DISMISSED,
                 ];
             }
             $response['Status'] = Success();
@@ -6979,8 +7076,12 @@ class Report extends Ork3
         );
 
         // --- Scrolls, regalia & artisan credit --------------------------------
-        // Tracking status: 0 = not tracked, 1 = in progress, 2 = done.
+        // Tracking status: 0 Pending, 1 Assigned, 2 Complete, 3 Scrollery Print (scroll only),
+        // 4 In Progress, 5 Not Needed. Tracked = any non-zero value; done = 2; in progress =
+        // tracked minus done minus Not Needed (5, which needs no work).
         $scrollTracked  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status > 0");
+        $scrollNotNeeded  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status = 5");
+        $regaliaNotNeeded = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status = 5");
         $scrollDone     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status = 2");
         $regaliaTracked = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status > 0");
         $regaliaDone    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status = 2");
@@ -7001,8 +7102,8 @@ class Report extends Ork3
             'title'       => 'Scrolls, Regalia & Artisans',
             'description' => 'Each court award can track whether its scroll and regalia are ready, and credit the people who made them — credit the herald reads out and the public Court Report prints.',
             'kpis' => array(
-                $this->_rfuKpi('Awards with scroll tracking', $scrollTracked, $courtAwards, $share($scrollTracked, $courtAwards), $scrollDone . ' marked done, ' . ($scrollTracked - $scrollDone) . ' in progress', null, null, 'of court awards'),
-                $this->_rfuKpi('Awards with regalia tracking', $regaliaTracked, $courtAwards, $share($regaliaTracked, $courtAwards), $regaliaDone . ' marked done, ' . ($regaliaTracked - $regaliaDone) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with scroll tracking', $scrollTracked, $courtAwards, $share($scrollTracked, $courtAwards), $scrollDone . ' marked done, ' . ($scrollTracked - $scrollDone - $scrollNotNeeded) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with regalia tracking', $regaliaTracked, $courtAwards, $share($regaliaTracked, $courtAwards), $regaliaDone . ' marked done, ' . ($regaliaTracked - $regaliaDone - $regaliaNotNeeded) . ' in progress', null, null, 'of court awards'),
                 $this->_rfuKpi('Awards with a scroll maker credited', $scrollMakers, $courtAwards, $share($scrollMakers, $courtAwards), 'court awards naming the scribe who made the scroll', null, null, 'of court awards'),
                 $this->_rfuKpi('Awards with a regalia maker credited', $regaliaMakers, $courtAwards, $share($regaliaMakers, $courtAwards), 'court awards naming who made the belt, medallion or other regalia', null, null, 'of court awards'),
                 $this->_rfuKpi('Contributing artisan credits', $artisanCredits, null, null, 'additional "artisans to thank" entries beyond the scroll and regalia makers'),

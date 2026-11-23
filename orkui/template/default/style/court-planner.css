@@ -2,7 +2,7 @@
  * Court Planner — shared cp-* chrome (Task 6 fix round 1)
  *
  * Extracted from Court_detail.tpl's inline <style> block: the shell, hero,
- * buttons, badges, modals, autocomplete, tracking icons, toast, the mode
+ * buttons, badges, modals, autocomplete, toast, the mode
  * badge, the staged-count indicator, the Finalize/Complete modal, tooltips,
  * and their shared dark-mode + responsive rules. Court_detail.tpl and
  * Court_record.tpl both link this file so the two Court Planner surfaces
@@ -93,8 +93,8 @@
    because a ::after here is clipped by .cp-award-list / .cp-rm-list /
    .cp-sidebar-card, which is why the JS node exists at all. */
 .cp-page [data-tip]:hover::after, #cp-note-popup [data-tip]:hover::after, .cp-overlay [data-tip]:hover::after { display: none !important; content: attr(data-tip); position: absolute; top: 100%; left: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 1001; pointer-events: none; }
-/* Right-anchor tooltips in the tracking / flags columns so they don't overflow the row edge */
-.cp-tracking-icon[data-tip]:hover::after, .cp-hdr-scroll[data-tip]:hover::after, .cp-hdr-regalia[data-tip]:hover::after, .cp-flag-local[data-tip]:hover::after,
+/* Right-anchor tooltips in the flags columns so they don't overflow the row edge */
+.cp-flag-local[data-tip]:hover::after,
 .cp-rm-qualified[data-tip]:hover::after, .cp-rm-snooze-chip[data-tip]:hover::after, .cp-rm-onother[data-tip]:hover::after, .cp-rm-seconds[data-tip]:hover::after, .cp-rm-age-badge[data-tip]:hover::after, .cp-btn-undo[data-tip]:hover::after { left: auto; right: 0; }
 
 /* ---- Toast surface for network/AJAX failures ---- */
@@ -149,36 +149,6 @@ html[data-theme="dark"] .cp-grant-related { background: #1a202c; border-color: #
 .cp-rank-pills .cp-rank-pill.cp-rank-pill-planned { background: #ed8936 !important; color: #fff; opacity: 1; }
 .cp-rank-pill-selected { opacity: 1; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2b6cb0; }
 
-/* ---- Tracking icons ---- */
-.cp-tracking-icon {
-    display: inline-block;
-    position: relative;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    text-align: center;
-    line-height: 24px;
-    cursor: pointer;
-    font-size: 14px;
-    margin-left: 4px;
-}
-/* Always rendered, hidden until the stacked-card layout — the tracking state must not be
-   hover-only on touch. Text comes from cp_track_label()/cpTrackLabel(), never a 3rd copy. */
-.cp-track-label { display: none; }
-.cp-tracking-icon[data-status="0"] { background-color: #ccc; color: #fff; } /* Gray */
-.cp-tracking-icon[data-status="1"] { background-color: #e53e3e; color: #fff; } /* Red */
-.cp-tracking-icon[data-status="2"] { background-color: #38a169; color: #fff; } /* Green */
-/* QW#8: state must not be color-alone — a corner glyph distinguishes the three states
-   (− not tracked, … in progress, ✓ done). aria-label/data-tip are kept in sync in JS. */
-.cp-tracking-icon::after {
-    content: ''; position: absolute; right: -3px; bottom: -3px;
-    min-width: 12px; height: 12px; padding: 0 1px; border-radius: 6px; box-sizing: border-box;
-    font-size: 9px; font-weight: 700; line-height: 12px; text-align: center;
-    background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.10);
-}
-.cp-tracking-icon[data-status="0"]::after { content: '\2212'; color: #718096; } /* minus */
-.cp-tracking-icon[data-status="1"]::after { content: '\2026'; color: #c05621; } /* ellipsis */
-.cp-tracking-icon[data-status="2"]::after { content: '\2713'; color: #276749; } /* check */
 
 
 /* ---- Staged-not-finalized safeguard indicator (spec 5.3) ---- */
@@ -232,9 +202,6 @@ html[data-theme="dark"] .cp-btn-outline { background: #1f2733; border-color: #2d
 html[data-theme="dark"] .cp-btn-outline:hover { background: #2d3748; }
 html[data-theme="dark"] .cp-btn-danger-sm { color: #fc8181; }
 
-html[data-theme="dark"] .cp-tracking-icon[data-status="0"] { background-color: #2d3748; color: #718096; }
-html[data-theme="dark"] .cp-tracking-icon[data-status="1"] { background-color: #c53030; color: #fff; }
-html[data-theme="dark"] .cp-tracking-icon[data-status="2"] { background-color: #276749; color: #fff; }
 
 html[data-theme="dark"] .cp-overlay { background: rgba(0,0,0,.65); }
 html[data-theme="dark"] .cp-modal { background: #161b22; box-shadow: 0 8px 32px rgba(0,0,0,.6); }
@@ -301,7 +268,6 @@ html[data-theme="dark"] .cp-cite-note i { color: #90cdf4; }
 /* ---- Rescued from light-mode section (dedup pass) ---- */
 
 
-html[data-theme="dark"] .cp-tracking-icon::after { background: #161b22; box-shadow: 0 0 0 1px rgba(255,255,255,.14); }
 html[data-theme="dark"] .cp-page [data-tip]:hover::after, html[data-theme="dark"] #cp-note-popup [data-tip]:hover::after, html[data-theme="dark"] .cp-overlay [data-tip]:hover::after { background: #000; }
 
 html[data-theme="dark"] .cp-toast { background: #9b2c2c; }
@@ -316,11 +282,6 @@ html[data-theme="dark"] .cp-toast { background: #9b2c2c; }
    checklist warns about. */
 html[data-theme="dark"] .cp-toast-info { background: #2b6cb0; }
 
-html[data-theme="dark"] .cp-tracking-icon[data-status="0"]::after { color: #a0aec0; }
-
-html[data-theme="dark"] .cp-tracking-icon[data-status="1"]::after { color: #fbd38d; }
-
-html[data-theme="dark"] .cp-tracking-icon[data-status="2"]::after { color: #9ae6b4; }
 
 /* ============================================================
    Responsive
@@ -338,8 +299,8 @@ html[data-theme="dark"] .cp-tracking-icon[data-status="2"]::after { color: #9ae6
    etc.) are Court_detail.tpl-only, but Court_detail.tpl also links this file,
    so splitting the block would only add risk for no behavior change. */
 @media (pointer: coarse) {
-    /* NOTE: the tracking-icon and reorder-arrow touch sizes are deliberately NOT here.
-       Above 600px .cp-row-grid is still the fixed spreadsheet grid (…30px 30px 96px 22px
+    /* NOTE: the status-chip and reorder-arrow touch sizes are deliberately NOT here.
+       Above 600px .cp-row-grid is still the fixed spreadsheet grid (…132px 96px 22px
        with an 8px column-gap), so 44px controls overflow their tracks and the scroll and
        regalia pills overlap — on any touch device at tablet width. Those rules live in the
        @media (max-width: 600px) block instead, where the grid has already collapsed to
@@ -378,7 +339,7 @@ html[data-theme="dark"] .cp-tracking-icon[data-status="2"]::after { color: #9ae6
    is entirely Court_detail.tpl-specific (its two-column sidebar layout) and
    stays there. Only the hero-stacking and overlay/modal mobile rules are
    shared; the rest of Court_detail.tpl's 600px block (award-list collapse,
-   tracking-icon captions, the run-mode sticky bar, recommendation-row
+   scroll/regalia chips, the run-mode sticky bar, recommendation-row
    stacking, script stacking) is page-specific and stays in that file. */
 @media (max-width: 600px) {
     /* --- Hero: stack so the <h1> court name isn't squeezed to 0px and the run-mode

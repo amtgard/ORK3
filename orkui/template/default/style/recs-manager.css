@@ -215,6 +215,12 @@ html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
 .rm-row[data-dismissed="1"]:hover { opacity: 1; }
 .rm-badge-dismissed { color: #5a6472; background: rgba(90, 100, 114, 0.12); border-color: rgba(90, 100, 114, 0.4); }
 html[data-theme="dark"] .rm-badge-dismissed { color: #b7bec9; background: rgba(183, 190, 201, 0.14); border-color: rgba(183, 190, 201, 0.35); }
+/* A granted cluster is closed too, but because the award was given — green, so a
+   grant never reads as a dismissal. Same muted row, green rule instead of grey. */
+.rm-row[data-granted="1"] { box-shadow: inset 3px 0 0 #2f855a; }
+.rm-badge-granted { color: #276749; background: rgba(47, 133, 90, 0.12); border-color: rgba(47, 133, 90, 0.4); }
+html[data-theme="dark"] .rm-row[data-granted="1"] { box-shadow: inset 3px 0 0 #68d391; }
+html[data-theme="dark"] .rm-badge-granted { color: #9ae6b4; background: rgba(154, 230, 180, 0.14); border-color: rgba(154, 230, 180, 0.35); }
 /* Two classes, not one: the base .rm-act rule below also sets color at (0,1,0)
    and comes later in source order, so a bare .rm-act-undelete silently loses. */
 .rm-act.rm-act-undelete { color: #2f855a; }
@@ -716,4 +722,89 @@ html[data-theme="dark"] .rm-rank-pill.rm-rank-held { background: #38a169; border
 }
 @media (max-width: 1250px) {
   html[data-theme="dark"] .rm-grid tr.rm-row { background: var(--rm-bg2); }
+}
+
+/* Rank-range filter: icon in the Rank <th> (desktop table) or a filter-bar button
+   (card layout, where the thead is hidden), both opening one fixed popover. */
+.rm-rankf-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 6px; width: 22px; height: 22px; padding: 0;
+    vertical-align: middle; cursor: pointer;
+    border: 1px solid transparent; border-radius: 4px;
+    background: transparent; color: var(--rm-muted); font-size: 11px;
+}
+.rm-rankf-btn:hover { color: var(--rm-accent); border-color: var(--rm-line); }
+.rm-rankf-btn.is-active,
+.rm-rankf-mbtn.is-active { color: #fff; background: var(--rm-accent); border-color: var(--rm-accent); }
+.rm-rankf-btn:focus-visible,
+.rm-rankf-mbtn:focus-visible { outline: 2px solid var(--rm-accent); outline-offset: 2px; }
+.rm-rankf-sum {
+    margin-left: 6px; padding: 0 6px; border-radius: 9px;
+    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: var(--rm-accent); border: 1px solid var(--rm-accent);
+}
+.rm-rankf-sum[hidden] { display: none; }
+.rm-rankf-mbtn { display: none; margin-left: 0; }
+.rm-rankf-pop {
+    position: fixed; z-index: 60;
+    width: 340px; max-width: calc(100vw - 16px); box-sizing: border-box;
+    padding: 12px; border: 1px solid var(--rm-line); border-radius: 8px;
+    background: var(--rm-bg); color: var(--rm-fg);
+    box-shadow: var(--ork-shadow-dropdown);
+    font-size: 13px; font-weight: 400;
+}
+.rm-rankf-pop[hidden] { display: none; }
+.rm-rankf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.rm-rankf-title { font-weight: 700; }
+.rm-rankf-status { color: var(--rm-muted); font-size: 12px; text-align: right; }
+/* The scale is a rounded track; the selected range is ONE capsule laid behind
+   the numbers (.rm-rankf-pill, sized in JS) in one uniform fill. M joins the track after a thin tick, which the capsule covers
+   whenever the range crosses it, so a selection never reads as broken. */
+.rm-rankf-stops {
+    position: relative; display: flex;
+    border-radius: 999px; background: var(--rm-bg2);
+    box-shadow: inset 0 0 0 1px var(--rm-line);
+}
+.rm-rankf-div {
+    position: absolute; top: 9px; bottom: 9px; left: calc(100% * 10 / 11);
+    width: 1px; background: var(--rm-muted); opacity: .6;
+}
+.rm-rankf-pill {
+    position: absolute; top: 50%; height: 30px; margin-top: -15px;
+    border-radius: 999px; background: var(--rm-accent);
+    transition: left .12s ease, width .12s ease;
+}
+.rm-rankf-pill[hidden] { display: none; }
+.rm-rankf-stop {
+    position: relative; z-index: 1;
+    flex: 1 1 0; min-width: 0; min-height: 34px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: 0; border-radius: 999px; background: transparent;
+    color: var(--rm-fg); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.rm-rankf-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 999px;
+}
+.rm-rankf-stop:hover .rm-rankf-num { box-shadow: inset 0 0 0 1px currentColor; }
+/* One uniform fill: every stop inside the capsule gets the same on-accent text;
+   the two ends are marked only by a faint inner ring, never a different fill. */
+.rm-rankf-stop.is-in .rm-rankf-num { color: #fff; }
+.rm-rankf-stop.is-end .rm-rankf-num,
+.rm-rankf-stop.is-anchor .rm-rankf-num { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55); }
+.rm-rankf-stop:focus-visible { outline: none; }
+.rm-rankf-stop:focus-visible .rm-rankf-num { box-shadow: 0 0 0 2px var(--rm-bg), 0 0 0 4px var(--rm-accent); }
+.rm-rankf-hint { margin: 8px 0 10px; font-size: 12px; color: var(--rm-muted); }
+.rm-rankf-nl { display: flex; flex-wrap: wrap; }
+.rm-rankf-sub { color: var(--rm-muted); font-size: 12px; }
+.rm-rankf-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; }
+html[data-theme="dark"] .rm-rankf-btn.is-active,
+html[data-theme="dark"] .rm-rankf-mbtn.is-active,
+html[data-theme="dark"] .rm-rankf-stop.is-in .rm-rankf-num { color: #10161d; }
+html[data-theme="dark"] .rm-rankf-stop.is-end .rm-rankf-num,
+html[data-theme="dark"] .rm-rankf-stop.is-anchor .rm-rankf-num { box-shadow: inset 0 0 0 1.5px rgba(16, 22, 29, 0.45); }
+@media (max-width: 1250px) {
+  .rm-rankf-mbtn { display: inline-flex; }
+  .rm-rankf-stop { min-height: 44px; }
+  .rm-rankf-foot .rm-btn { min-height: 44px; }
 }

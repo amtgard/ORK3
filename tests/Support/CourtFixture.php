@@ -24,6 +24,8 @@ final class CourtFixture
     private array $recIds = [];
     /** @var list<int> */
     private array $authIds = [];
+    /** @var list<int> ork_awards rows (the permanent record) seeded by createLedgerAward */
+    private array $ledgerIds = [];
     /** @var list<string> */
     private array $tokens = [];
 
@@ -138,18 +140,21 @@ final class CourtFixture
             'pass_to_local'   => 0,
             'scroll_maker_id' => null,
             'regalia_maker_id' => null,
+            'scroll_status'   => 0,
+            'given_by_mundane_id' => null,
         ], $overrides);
 
         $st = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'court_award
              (court_id, mundane_id, kingdomaward_id, rank, status, sort_order, notes, public_comment,
-              pass_to_local, scroll_maker_id, regalia_maker_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              pass_to_local, scroll_maker_id, regalia_maker_id, scroll_status, given_by_mundane_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $st->execute([
             $courtId, $mundaneId, $row['kingdomaward_id'], $row['rank'], $row['status'],
             $row['sort_order'], $row['notes'], $row['public_comment'], $row['pass_to_local'],
-            $row['scroll_maker_id'], $row['regalia_maker_id'],
+            $row['scroll_maker_id'], $row['regalia_maker_id'], $row['scroll_status'],
+            $row['given_by_mundane_id'],
         ]);
         $id = (int) $this->pdo->lastInsertId();
         $this->awardIds[] = $id;
@@ -267,6 +272,28 @@ final class CourtFixture
     }
 
     /** A player with a live ork_session token, so domain calls can IsAuthorized() them. */
+    /**
+     * A row on the player's permanent record (ork_awards), e.g. the award that backs
+     * granting a recommendation. entered_at defaults to now.
+     */
+    public function createLedgerAward(int $mundaneId, int $kaId, int $awardId, int $rank, string $date = '', string $enteredAt = '', int $revoked = 0): int
+    {
+        $st = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'awards
+             (kingdomaward_id, mundane_id, rank, date, given_by_id, note, at_park_id,
+              at_kingdom_id, at_event_id, custom_name, award_id, by_whom_id, entered_at, revoked)
+             VALUES (?, ?, ?, ?, 0, \'\', 0, 0, 0, \'\', ?, 0, ?, ?)'
+        );
+        $st->execute([
+            $kaId, $mundaneId, $rank, $date !== '' ? $date : date('Y-m-d'), $awardId,
+            $enteredAt !== '' ? $enteredAt : date('Y-m-d H:i:s'), $revoked,
+        ]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->ledgerIds[] = $id;
+
+        return $id;
+    }
+
     public function createPlayerWithToken(string $tag, int $kingdomId, int $parkId): array
     {
         $p = $this->createPlayer($tag, $kingdomId, $parkId);
@@ -373,6 +400,8 @@ final class CourtFixture
         $this->deleteIn('court', 'court_id', $this->courtIds);
         $this->deleteIn('recommendation_seconds', 'recommendations_id', $this->recIds);
         $this->deleteIn('recommendations', 'recommendations_id', $this->recIds);
+        $this->deleteIn('awards', 'awards_id', $this->ledgerIds);
+        $this->ledgerIds = [];
 
         // Put borrowed officer seats back before the stand-in players go away.
         $restore = $this->pdo->prepare(

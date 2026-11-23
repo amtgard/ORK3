@@ -1373,15 +1373,24 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
     .pn-award-type-btn { font-size: 11px; }
 }
 /* Rank pills */
-.pn-rank-pills-wrap {
+.pn-rank-pills-wrap,
+.sc-rank-pills-wrap {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     margin-top: 4px;
 }
-.pn-rank-pill {
+/* padding:0 + font-family:inherit because every rank pill is a <button>: the UA's
+   default button padding sits OUTSIDE the 36x36 content box (nothing sets
+   box-sizing here), which stretched the circle into an ellipse, and the UA button
+   font overrode the page's. Deliberately NOT box-sizing:border-box -- that would
+   shrink the pill from its established 40px outer size. */
+.pn-rank-pill,
+.sc-rank-pill {
     width: 36px;
     height: 36px;
+    padding: 0;
+    font-family: inherit;
     border: 2px solid var(--ork-input-border);
     border-radius: 50%;
     display: flex;
@@ -1407,7 +1416,7 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
    Identical on every surface — no kingdom/park divergence.
    ============================================================ */
 /* the number sits above the watermark — big & bold for legibility */
-.pn-rank-num, .kn-rank-num, .pk-rank-num {
+.pn-rank-num, .kn-rank-num, .pk-rank-num, .sc-rank-num {
     position: relative; z-index: 1;
     font-weight: 800; font-size: 1.25em; line-height: 1;
     text-shadow: 0 1px 2px rgba(0,0,0,0.20);
@@ -1415,42 +1424,51 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 /* watermark glyph — large + faint so the number reads clearly through it */
 .pn-rank-held::before, .pn-rank-forward::before,
 .kn-rank-held::before, .kn-rank-forward::before,
-.pk-rank-held::before, .pk-rank-forward::before {
+.pk-rank-held::before, .pk-rank-forward::before,
+.sc-rank-held::before, .sc-rank-forward::before {
     position: absolute; inset: 0; z-index: 0;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Font Awesome 7 Free'; font-weight: 900;
     font-size: 2em; line-height: 1; color: #fff; opacity: 0.25;
     pointer-events: none;
 }
-.pn-rank-held::before, .kn-rank-held::before, .pk-rank-held::before { content: '\f00c'; } /* check — already earned */
-.pn-rank-forward::before, .kn-rank-forward::before, .pk-rank-forward::before { content: '\f061'; } /* arrow-right — skipped/intermediate step */
+.pn-rank-held::before, .kn-rank-held::before, .pk-rank-held::before,
+.sc-rank-held::before { content: '\f00c'; } /* check — already earned */
+.pn-rank-forward::before, .kn-rank-forward::before, .pk-rank-forward::before,
+.sc-rank-forward::before { content: '\f061'; } /* arrow-right — skipped/intermediate step */
 /* the chosen rank itself = up arrow ("leveling up to here") */
 .pn-rank-forward.pn-rank-selected::before,
 .kn-rank-forward.kn-rank-selected::before,
-.pk-rank-forward.pk-rank-selected::before { content: '\f062'; } /* arrow-up */
+.pk-rank-forward.pk-rank-selected::before,
+.sc-rank-forward.sc-rank-selected::before { content: '\f062'; } /* arrow-up */
 
 /* held — ranks the player already has (green, soft gradient) */
-.pn-rank-pill.pn-rank-held, .kn-rank-pill.kn-rank-held, .pk-rank-pill.pk-rank-held {
+.pn-rank-pill.pn-rank-held, .kn-rank-pill.kn-rank-held, .pk-rank-pill.pk-rank-held,
+.sc-rank-pill.sc-rank-held {
     background: linear-gradient(135deg, #a7ecbd, #7fd99e);
     border-color: #48bb78; color: #1c4532;
 }
 /* forward — ranks being granted / recommended (blue, soft gradient) */
-.pn-rank-pill.pn-rank-forward, .kn-rank-pill.kn-rank-forward, .pk-rank-pill.pk-rank-forward {
+.pn-rank-pill.pn-rank-forward, .kn-rank-pill.kn-rank-forward, .pk-rank-pill.pk-rank-forward,
+.sc-rank-pill.sc-rank-forward {
     background: linear-gradient(135deg, #9fd6f7, #6cb8ef);
     border-color: #3182ce; color: #15314f;
 }
 /* selected — pops up over its underlying held/forward color */
-.pn-rank-pill.pn-rank-selected, .kn-rank-pill.kn-rank-selected, .pk-rank-pill.pk-rank-selected {
+.pn-rank-pill.pn-rank-selected, .kn-rank-pill.kn-rank-selected, .pk-rank-pill.pk-rank-selected,
+.sc-rank-pill.sc-rank-selected {
     transform: translateY(-3px) scale(1.16);
     box-shadow: 0 7px 16px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.55);
     border-width: 2px;
     z-index: 2;
 }
 /* colored glow ring keyed to the underlying state */
-.pn-rank-forward.pn-rank-selected, .kn-rank-forward.kn-rank-selected, .pk-rank-forward.pk-rank-selected {
+.pn-rank-forward.pn-rank-selected, .kn-rank-forward.kn-rank-selected, .pk-rank-forward.pk-rank-selected,
+.sc-rank-forward.sc-rank-selected {
     box-shadow: 0 7px 16px rgba(0,0,0,0.32), 0 0 0 3px rgba(49,130,206,0.45), inset 0 1px 0 rgba(255,255,255,0.55);
 }
-.pn-rank-held.pn-rank-selected, .kn-rank-held.kn-rank-selected, .pk-rank-held.pk-rank-selected {
+.pn-rank-held.pn-rank-selected, .kn-rank-held.kn-rank-selected, .pk-rank-held.pk-rank-selected,
+.sc-rank-held.sc-rank-selected {
     box-shadow: 0 7px 16px rgba(0,0,0,0.32), 0 0 0 3px rgba(56,161,105,0.45), inset 0 1px 0 rgba(255,255,255,0.55);
 }
 /* Gate hover lift on real pointer devices — on iOS :hover sticks after a tap.
@@ -1458,12 +1476,14 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 @media (hover: hover) {
     .pn-rank-pill:hover:not(.pn-rank-selected),
     .kn-rank-pill:hover:not(.kn-rank-selected),
-    .pk-rank-pill:hover:not(.pk-rank-selected) { box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
+    .pk-rank-pill:hover:not(.pk-rank-selected),
+    .sc-rank-pill:hover:not(.sc-rank-selected) { box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
     /* Dark mode: a dark box-shadow on a dark surface is invisible — give a
        visible background/border shift instead so hover feedback survives. */
     html[data-theme="dark"] .pn-rank-pill:hover:not(.pn-rank-selected),
     html[data-theme="dark"] .kn-rank-pill:hover:not(.kn-rank-selected),
-    html[data-theme="dark"] .pk-rank-pill:hover:not(.pk-rank-selected) {
+    html[data-theme="dark"] .pk-rank-pill:hover:not(.pk-rank-selected),
+    html[data-theme="dark"] .sc-rank-pill:hover:not(.sc-rank-selected) {
         background: var(--ork-bg-tertiary);
         border-color: var(--ork-text-lighter);
     }
@@ -1471,14 +1491,17 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 /* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
 /* held / forward / selected styling is unified in the rank-pill scheme block above */
 @media (max-width: 600px) {
-    .pn-rank-pills-wrap { gap: 5px; }
-    .pn-rank-pill { width: 25px; height: 25px; font-size: 11px; border-width: 1.5px; }
+    .pn-rank-pills-wrap,
+    .sc-rank-pills-wrap { gap: 5px; }
+    .pn-rank-pill,
+    .sc-rank-pill { width: 25px; height: 25px; font-size: 11px; border-width: 1.5px; }
     /* The desktop selected lift (translateY(-3px) scale(1.16)) is proportionally
        too aggressive on the shrunken 25px pills — soften it so the pop stays
        inside the row. */
     .pn-rank-pill.pn-rank-selected,
     .kn-rank-pill.kn-rank-selected,
-    .pk-rank-pill.pk-rank-selected { transform: translateY(-2px) scale(1.08); }
+    .pk-rank-pill.pk-rank-selected,
+    .sc-rank-pill.sc-rank-selected { transform: translateY(-2px) scale(1.08); }
 }
 /* Officer / giver quick chips */
 .pn-officer-chips,
@@ -1586,6 +1609,57 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 }
 .pn-award-success,
 .pk-award-success { background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#276749; font-size:13px; }
+/* Small print icon in the Add Award modal's footer, beside the Add Award button.
+   Icon-only on purpose: it is a secondary affordance next to the primary action and
+   should not compete with it. Sized to match .pn-btn's height so the footer row does
+   not shift when it appears. */
+.pn-award-print-icon,
+.pn-award-print-icon:link,
+.pn-award-print-icon:visited {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* Matches .pn-btn's rendered height so the footer row keeps one baseline; the
+       border is inside the box, hence 29 + 2 rather than 31. */
+    width: 29px;
+    height: 29px;
+    border-radius: 6px;
+    border: 1px solid var(--ork-border, #cbd5e0);
+    color: #2c5282;
+    background: transparent;
+    text-decoration: none;
+    font-size: 13px;
+}
+.pn-award-print-icon:hover {
+    background: var(--ork-surface-light, #edf2f7);
+    color: #1a365d;
+    text-decoration: none;
+}
+/* !important and the :link/:visited variants are the project's established way of
+   beating the global `html[data-theme="dark"] a { color:#63b3ed }` link tint — the
+   same pattern .pn-crumb and the .ev-table / .en-table overrides use. Without it the
+   icon renders in the generic link blue; confirmed by computed style, not by eye. */
+html[data-theme="dark"] .pn-award-print-icon,
+html[data-theme="dark"] .pn-award-print-icon:link,
+html[data-theme="dark"] .pn-award-print-icon:visited {
+    color: #90cdf4 !important;
+    border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-award-print-icon:hover {
+    background: var(--ork-bg-secondary, #2d3748);
+    color: #bee3f8 !important;
+}
+/* The icon sits at the modal's bottom edge, so the generic [data-tip] tooltip's
+   default above-anchoring is correct here — it needs only to be kept on screen and
+   allowed to wrap (see reference_data_tip_tooltips.md). Right-anchored because the
+   icon is near the right edge of the footer. */
+#pn-award-print-link[data-tip]:hover::after {
+    left: auto !important;
+    right: 0 !important;
+    transform: none !important;
+    white-space: normal !important;
+    max-width: 220px !important;
+}
 .pn-btn-ghost,
 .kn-btn-ghost { background:transparent; border:1px solid transparent; color:var(--ork-text-secondary); padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
 .pn-btn-ghost:hover { background:#f7fafc; border-color:#e2e8f0; }
@@ -2394,6 +2468,14 @@ html[data-theme="dark"] .kn-events-loadmore .kn-events-loadmore-link:hover {
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     gap: 14px;
 }
+/* Admin Tasks tab (Kingdom + Park) — Reports-style card grid, capped at 5 columns
+   (each track is at least a fifth of the row, so a sixth never fits) */
+.kn-report-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(max(190px, calc((100% - 4 * 14px) / 5)), 1fr));
+    gap: 14px;
+    align-items: start;
+}
 .kn-report-group {
     background: var(--ork-bg-inset);
     border: 1px solid var(--ork-border);
@@ -2450,7 +2532,8 @@ html[data-theme="dark"] .kn-events-loadmore .kn-events-loadmore-link:hover {
     .kn-sidebar { width: 100%; order: 2; }
     .kn-stats-row { display: grid; grid-template-columns: 1fr 1fr; }
     .kn-stat-card { flex: unset; }
-    .kn-reports-grid { grid-template-columns: 1fr 1fr; }
+    .kn-reports-grid,
+    .kn-report-cols { grid-template-columns: 1fr 1fr; }
     /* Calendar view not supported on mobile — hide the toggle button */
     #kn-ev-view-cal { display: none; }
     /* Hero buttons wrap to a row below heraldry+name */
@@ -2492,7 +2575,8 @@ html[data-theme="dark"] .kn-events-loadmore .kn-events-loadmore-link:hover {
     .kn-hero-actions { align-items: center; flex-direction: row; flex-wrap: wrap; justify-content: center; }
     .kn-tab-nav li { padding: 10px 4px; font-size: 15px; }
     .kn-tab-panel { padding: 12px 10px; overflow-x: auto; }
-    .kn-reports-grid { grid-template-columns: 1fr; }
+    .kn-reports-grid,
+    .kn-report-cols { grid-template-columns: 1fr; }
 }
 
 /* Map tab */
@@ -2781,7 +2865,7 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 .kn-award-type-btn:hover:not(.kn-active) { border-color:var(--ork-border-dark); background:var(--ork-bg-secondary); }
 @media (max-width: 400px) { .kn-award-type-btn { font-size:11px; } }
 .kn-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
-.kn-rank-pill { width:36px; height:36px; border:2px solid var(--ork-input-border); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s, color 0.12s; user-select:none; position:relative; overflow:hidden; }
+.kn-rank-pill { width:36px; height:36px; padding:0; font-family:inherit; border:2px solid var(--ork-input-border); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s, color 0.12s; user-select:none; position:relative; overflow:hidden; }
 /* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
 @media (max-width: 600px) {
     .kn-rank-pills-wrap { gap: 5px; }
@@ -2866,6 +2950,8 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 #kn-rec-overlay .pk-acct-field textarea:focus { outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12); }
 #kn-award-overlay .kn-form-error, #kn-rec-overlay .pk-form-error,
 #pk-award-overlay .pk-form-error, #pk-rec-overlay .pk-form-error { display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px; }
+/* Bulk "Add and Next": recs whose award saved but which stayed open */
+#kn-award-overlay .kn-bulk-leftopen-list { margin:6px 0 0; padding-left:18px; overflow-wrap:anywhere; }
 #kn-award-overlay .kn-char-count, #kn-rec-overlay .pk-char-count { font-size:11px; color:var(--ork-text-muted); margin-top:3px; display:block; }
 /* ---- Events calendar container ---- */
 #kn-events-cal {
@@ -3961,7 +4047,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .pk-award-type-btn:hover:not(.pk-active) { border-color:#a0aec0; background:var(--ork-bg-tertiary); }
 @media (max-width: 400px) { .pk-award-type-btn { font-size:11px; } }
 .pk-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
-.pk-rank-pill { width:36px; height:36px; border:2px solid var(--ork-input-border); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s, color 0.12s; user-select:none; position:relative; overflow:hidden; }
+.pk-rank-pill { width:36px; height:36px; padding:0; font-family:inherit; border:2px solid var(--ork-input-border); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s, color 0.12s; user-select:none; position:relative; overflow:hidden; }
 /* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
 @media (max-width: 600px) {
     .pk-rank-pills-wrap { gap: 5px; }
@@ -6090,8 +6176,64 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pn-award-action-btn:hover { color:#4a5568; background:#f7fafc; }
 .pn-award-action-btn.pn-award-edit-btn:hover { color:#0891b2; }
 .pn-award-action-btn.pn-award-del-btn:hover  { color:#e53e3e; }
+/* Scrollery print and view are <a>, not <button> — normalise them into the row of icons. */
+.pn-award-action-btn.pn-award-print-btn,
+.pn-award-action-btn.pn-award-view-btn { display:inline-block; text-decoration:none; line-height:1.2; }
+.pn-award-action-btn.pn-award-print-btn:hover { color:#b8860b; }
+.pn-award-action-btn.pn-award-view-btn:hover { color:#2b6cb0; }
+html[data-theme="dark"] .pn-award-action-btn.pn-award-view-btn:hover { color:#63b3ed; }
 .pn-awards-action-col { white-space:nowrap; text-align:right; }
 .pn-award-actions-cell { white-space:nowrap; text-align:right; }
+/* .pn-tabs is overflow:hidden for its rounded corners and this is the last column
+   of a right-aligned cell, so the generic centred [data-tip] tooltip loses its
+   right-hand half to the card edge. Right-anchor it — the same fix
+   .ev-meal-card-header carries, and !important for the same reason: the generic
+   [data-tip]:not(...):not(...):not(...):not(...):not(...) rule outweighs a plain
+   class selector. */
+.pn-award-actions-cell [data-tip]:hover::after {
+    left: auto !important;
+    right: 0 !important;
+    transform: none !important;
+}
+
+/* Award Info modal — the (i) at the end of every Awards/Titles row (every viewer). */
+.pn-award-action-btn.pn-award-info-btn { font-size:14px; }
+.pn-award-action-btn.pn-award-info-btn:hover { color:var(--ork-link); }
+html[data-theme="dark"] .pn-award-action-btn:hover { background:var(--ork-bg-tertiary); }
+.pn-modal-box.pn-ai-box { width:560px; max-width:calc(100vw - 32px); }
+.pn-ai-body { display:flex; flex-direction:column; gap:18px; overflow-wrap:anywhere; }
+.pn-ai-body a { color:var(--ork-link); text-decoration:none; }
+.pn-ai-body a:hover { text-decoration:underline; }
+.pn-ai-section .pn-ai-h {
+    margin:0 0 8px; padding:0 0 6px; font-size:13px; font-weight:700; letter-spacing:.02em;
+    text-transform:uppercase; color:var(--ork-text-secondary);
+    background:none; border:none; border-bottom:1px solid var(--ork-divider); border-radius:0; text-shadow:none;
+}
+.pn-ai-section .pn-ai-h i { color:var(--ork-text-muted); margin-right:4px; }
+.pn-ai-empty { margin:0; font-size:13px; color:var(--ork-text-muted); font-style:italic; }
+.pn-ai-empty.pn-ai-error { color:var(--ork-red-danger); font-style:normal; }
+.pn-ai-recs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.pn-ai-rec { background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:8px; padding:8px 10px; }
+.pn-ai-rec-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:4px 12px; font-size:13px; }
+.pn-ai-rec-who { font-weight:600; color:var(--ork-text); }
+.pn-ai-rec-meta { display:inline-flex; align-items:center; gap:10px; font-size:12px; color:var(--ork-text-muted); white-space:nowrap; }
+.pn-ai-seconds { display:inline-flex; align-items:center; gap:4px; }
+.pn-ai-rec-reason { margin-top:4px; font-size:13px; line-height:1.45; color:var(--ork-text-secondary); white-space:pre-line; }
+.pn-ai-anon { color:var(--ork-text-muted); font-style:italic; font-weight:normal; }
+.pn-ai-rows { display:grid; grid-template-columns:max-content 1fr; gap:6px 14px; font-size:13px; }
+.pn-ai-row { display:contents; }
+.pn-ai-label { color:var(--ork-text-muted); }
+.pn-ai-value { color:var(--ork-text); min-width:0; }
+.pn-ai-note { margin:10px 0 0; font-size:12px; color:var(--ork-text-muted); }
+.pn-ai-citation {
+    margin:10px 0 0; padding:6px 10px; border-left:3px solid var(--ork-border-dark);
+    font-size:13px; font-style:italic; line-height:1.45; color:var(--ork-text-secondary); background:none;
+}
+@media (max-width: 600px) {
+    .pn-ai-rows { grid-template-columns:1fr; gap:0; }
+    .pn-ai-label { margin-top:8px; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+    .pn-award-action-btn.pn-award-info-btn { min-width:36px; min-height:36px; }
+}
 .pn-edit-award-name-display { font-size:14px; font-weight:600; color:var(--ork-text); padding:8px 10px; background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:6px; min-height:36px; }
 .pn-award-edit-success { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 12px; color:#276749; font-size:13px; margin-bottom:12px; }
 
@@ -6516,9 +6658,12 @@ table.dataTable.pk-recs-table { width: 100% !important; }
 .kn-rec-export-btns { display:flex; gap:6px; margin-left:auto; }
 .kn-rec-export-btn { padding:4px 10px; border-radius:6px; border:1.5px solid var(--ork-input-border); background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; }
 .kn-rec-export-btn:hover { border-color:#90cdf4; color:#2b6cb0; background:#ebf8ff; }
-.kn-rec-filter-btn { padding:4px 12px; border-radius:20px; border:1.5px solid var(--ork-input-border); background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; }
-.kn-rec-filter-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
-.kn-rec-filter-btn.kn-rec-filter-active { background:var(--ork-link); border-color:var(--ork-link); color:#fff; }
+.kn-rec-filter-btn,
+.pk-closed-filter-btn { padding:4px 12px; border-radius:20px; border:1.5px solid var(--ork-input-border); background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.kn-rec-filter-btn:hover,
+.pk-closed-filter-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
+.kn-rec-filter-btn.kn-rec-filter-active,
+.pk-closed-filter-btn.pk-closed-filter-on { background:var(--ork-link); border-color:var(--ork-link); color:#fff; }
 .kn-rec-filter-info { position:relative; display:inline-flex; align-items:center; }
 .kn-rec-filter-info-btn { background:none; border:none; cursor:pointer; color:#a0aec0; font-size:15px; padding:2px 4px; line-height:1; transition:color 0.15s; }
 .kn-rec-filter-info-btn:hover { color:#2b6cb0; }
@@ -6580,6 +6725,22 @@ html[data-theme="dark"] .pk-deleted-recs-toggle:hover { background: rgba(255,255
 .pk-deleted-recs-table .pk-deleted-restore-btn.pk-deleted-restore-confirm { background: #fff5f5; border-color: #fc8181; color: #c53030; font-weight: 600; }
 html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-deleted-restore-confirm { background: rgba(252,129,129,0.12); border-color: #fc8181; color: #fed7d7; }
 .pk-deleted-recs-table tr.pk-deleted-restored { transition: opacity 0.5s ease; opacity: 0; }
+/* Granted vs Dismissed: a grant is a close, not a dismissal. Status pill, the
+   per-row "Granted by / Dismissed by" verb, and an All/Granted/Dismissed filter. */
+.pk-deleted-recs-msg { margin: 10px 0 0; padding: 8px 12px; border-radius: 6px; font-size: 13px; background: var(--ork-alert-danger-bg); border: 1px solid var(--ork-alert-danger-border); color: var(--ork-alert-danger-text); }
+.pk-closed-filter { display: inline-flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+/* Buttons share the .kn-rec-filter-btn palette (selector lists above); not the class itself,
+   since revised.js binds .kn-rec-filter-btn[data-filter] document-wide. */
+.pk-closed-filter-btn:focus-visible { outline: 2px solid var(--ork-link); outline-offset: 2px; }
+@media (max-width: 768px) {
+    .pk-closed-filter-btn { min-height: 36px; }
+}
+.pk-closed-filter-n { font-weight: 700; opacity: 0.85; }
+.pk-closed-pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.pk-closed-pill-granted { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+.pk-closed-pill-dismissed { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
+.pk-deleted-recs-table .pk-closed-verb { color: var(--ork-text-muted); }
+.pk-deleted-recs-table .pk-closed-noaction { color: var(--ork-text-muted); padding: 0 10px; }
 
 /* ---- Tournament table delete button ---- */
 .kn-tournament-del-btn { background:none; border:none; color:#a0aec0; font-size:16px; line-height:1; cursor:pointer; padding:2px 6px; border-radius:4px; transition:color 0.15s,background 0.15s; }
@@ -6659,8 +6820,14 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Form inputs */
 .adm-input { padding: 6px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; color: #2d3748; background: var(--ork-input-bg); width: 100%; box-sizing: border-box; }
 .adm-input-abbr { width: 60px; text-align: center; text-transform: uppercase; }
-.adm-select { padding: 6px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; color: var(--ork-text); background: var(--ork-input-bg); cursor: pointer; }
+.adm-select { padding: 6px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; color: var(--ork-text); background: var(--ork-input-bg); cursor: pointer; width: 100%; box-sizing: border-box; }
 .adm-select:focus { outline: none; border-color: #90cdf4; }
+/* The third member of the .adm-input / .adm-select pair. Written here rather than
+   scoped to one page because every form surface in the CRM that needed a textarea
+   so far restated the same rule locally (.pn-acct-field, .ec-field, .ev-modal-field,
+   #kn-rec-overlay …); this is the shared one those should collapse onto. */
+.adm-textarea { padding: 6px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; color: var(--ork-text); background: var(--ork-input-bg); width: 100%; box-sizing: border-box; font-family: inherit; line-height: 1.5; resize: vertical; }
+.adm-textarea:focus { outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15); }
 .adm-toggle input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
 .adm-toggle-track { display: inline-block; width: 34px; height: 18px; border-radius: 9px; background: #e2e8f0; transition: background 0.2s; flex-shrink: 0; position: relative; }
 .adm-toggle-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: transform 0.2s; }
@@ -6674,6 +6841,12 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Footer / buttons */
 .adm-form-footer { padding: 14px 20px; border-top: 1px solid var(--ork-divider); display: flex; align-items: center; justify-content: space-between; background: var(--ork-bg-secondary); }
 .adm-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; border: none; transition: opacity 0.15s; white-space: nowrap; }
+/* An author `display` rule beats the UA's `[hidden] { display: none }`, so setting the
+   hidden attribute on an .adm-btn did nothing at all — the button stayed on screen.
+   Restated here rather than locally in each template: every .adm-btn in the CRM has
+   this, and the alternative is each caller discovering it the hard way. Found when a
+   "Show more" button refused to disappear after the last row. */
+.adm-btn[hidden] { display: none; }
 .adm-btn:hover:not(:disabled) { opacity: 0.85; }
 .adm-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .adm-btn-primary { background: #3182ce; color: #fff; }
@@ -7047,7 +7220,8 @@ html[data-theme="dark"] .pk-stat-number { color: #90cdf4; }
    the theme-agnostic .X-rank-selected rule above). */
 html[data-theme="dark"] .kn-rank-pill,
 html[data-theme="dark"] .pk-rank-pill,
-html[data-theme="dark"] .pn-rank-pill {
+html[data-theme="dark"] .pn-rank-pill,
+html[data-theme="dark"] .sc-rank-pill {
   background: var(--ork-bg-secondary);
   color: var(--ork-text);
   border-color: var(--ork-border);
@@ -7055,7 +7229,8 @@ html[data-theme="dark"] .pn-rank-pill {
 /* held — already earned (dark green gradient, near-white number) */
 html[data-theme="dark"] .pn-rank-pill.pn-rank-held,
 html[data-theme="dark"] .kn-rank-pill.kn-rank-held,
-html[data-theme="dark"] .pk-rank-pill.pk-rank-held {
+html[data-theme="dark"] .pk-rank-pill.pk-rank-held,
+html[data-theme="dark"] .sc-rank-pill.sc-rank-held {
   background: linear-gradient(135deg, #2f6b4f, #1d4733);
   border-color: #48bb78;
   color: #eafff3;
@@ -7063,7 +7238,8 @@ html[data-theme="dark"] .pk-rank-pill.pk-rank-held {
 /* forward — being granted / recommended (dark blue gradient, near-white number) */
 html[data-theme="dark"] .pn-rank-pill.pn-rank-forward,
 html[data-theme="dark"] .kn-rank-pill.kn-rank-forward,
-html[data-theme="dark"] .pk-rank-pill.pk-rank-forward {
+html[data-theme="dark"] .pk-rank-pill.pk-rank-forward,
+html[data-theme="dark"] .sc-rank-pill.sc-rank-forward {
   background: linear-gradient(135deg, #345083, #23375a);
   border-color: #4299e1;
   color: #eaf4ff;
@@ -7071,12 +7247,14 @@ html[data-theme="dark"] .pk-rank-pill.pk-rank-forward {
 /* selected — pops up, colored glow ring keyed to the underlying state */
 html[data-theme="dark"] .pn-rank-forward.pn-rank-selected,
 html[data-theme="dark"] .kn-rank-forward.kn-rank-selected,
-html[data-theme="dark"] .pk-rank-forward.pk-rank-selected {
+html[data-theme="dark"] .pk-rank-forward.pk-rank-selected,
+html[data-theme="dark"] .sc-rank-forward.sc-rank-selected {
   box-shadow: 0 7px 18px rgba(0,0,0,0.6), 0 0 0 3px rgba(66,153,225,0.55), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 html[data-theme="dark"] .pn-rank-held.pn-rank-selected,
 html[data-theme="dark"] .kn-rank-held.kn-rank-selected,
-html[data-theme="dark"] .pk-rank-held.pk-rank-selected {
+html[data-theme="dark"] .pk-rank-held.pk-rank-selected,
+html[data-theme="dark"] .sc-rank-held.sc-rank-selected {
   box-shadow: 0 7px 18px rgba(0,0,0,0.6), 0 0 0 3px rgba(72,187,120,0.55), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 /* Award type toggle (Awards / Officer Titles) */
@@ -7087,6 +7265,7 @@ html[data-theme="dark"] .pk-officer-chip,
    DARK MODE — Recommendations filter bar
    ===================================================== */
 html[data-theme="dark"] .kn-rec-filter-btn,
+html[data-theme="dark"] .pk-closed-filter-btn,
 html[data-theme="dark"] .kn-rec-export-btn,
 html[data-theme="dark"] .kn-view-btn,
 html[data-theme="dark"] .kn-page-btn,
@@ -7108,12 +7287,14 @@ html[data-theme="dark"] .pk-award-type-btn:hover:not(.pk-active) {
 }
 /* Form feedback */
 html[data-theme="dark"] #pk-award-overlay .pk-form-error,
+html[data-theme="dark"] #kn-award-overlay .kn-form-error,
 html[data-theme="dark"] #pk-rec-overlay .pk-form-error {
   background: rgba(197,48,48,0.15);
   border-color: #fc8181;
   color: #feb2b2;
 }
 html[data-theme="dark"] .pk-award-success,
+html[data-theme="dark"] .pn-award-success,
 html[data-theme="dark"] .pk-att-feedback.pk-att-ok {
   background: rgba(72,187,120,0.15);
   border-color: #68d391;
@@ -7450,11 +7631,13 @@ html[data-theme="dark"] .kn-report-group h5 {
 }
 html[data-theme="dark"] .kn-report-group ul li a { color: var(--ork-link-bright); }
 html[data-theme="dark"] .kn-report-group ul li a:hover { color: var(--ork-link); }
-html[data-theme="dark"] .kn-rec-filter-btn:hover {
+html[data-theme="dark"] .kn-rec-filter-btn:hover,
+html[data-theme="dark"] .pk-closed-filter-btn:hover {
   border-color: var(--ork-link-bright);
   color: var(--ork-link-bright);
 }
-html[data-theme="dark"] .kn-rec-filter-btn.kn-rec-filter-active {
+html[data-theme="dark"] .kn-rec-filter-btn.kn-rec-filter-active,
+html[data-theme="dark"] .pk-closed-filter-btn.pk-closed-filter-on {
   background: var(--ork-link);
   border-color: var(--ork-link);
   color: #fff;
@@ -9105,6 +9288,7 @@ html[data-theme="dark"] .adm-input { background: var(--ork-input-bg); color: var
 html[data-theme="dark"] .adm-input:focus { border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(144,205,244,0.15); }
 html[data-theme="dark"] .adm-select { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
 html[data-theme="dark"] .adm-select:focus { border-color: #90cdf4; }
+html[data-theme="dark"] .adm-textarea:focus { border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(144,205,244,0.15); }
 
 html[data-theme="dark"] .adm-toggle-track { background: var(--ork-bg-tertiary); }
 

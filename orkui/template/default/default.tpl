@@ -664,6 +664,11 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 				<i class="fas fa-users"></i> Companies &amp; Households
 			</a>
 			<?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Scrollery">
+				<i class="fas fa-scroll"></i> Scrollery: Digital Scroll Builder
+			</a>
+<?php endif; ?>
 			<a class="hm-find-item" href="<?= UIR ?>Search/event">
 				<i class="fas fa-flag"></i> Find Events
 			</a>

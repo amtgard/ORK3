@@ -174,6 +174,8 @@ final class RecommendationMonarchyOnlyActionsTest extends TestCase
         $c   = $this->cast();
         $pub = $this->rec($c, 0, ['rank' => 1]);
         $hid = $this->rec($c, 2, ['rank' => 1]);
+        // Granting needs a backing award on the record.
+        $this->fx->createLedgerAward($c['recipient']['mundane_id'], $this->ka['kingdomaward_id'], $this->ka['award_id'], 1);
         $resolve = function (string $tok) use ($c) {
             unset($_SESSION['is_authorized_mundane_id']);
 

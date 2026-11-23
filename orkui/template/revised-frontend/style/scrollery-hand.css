@@ -1,0 +1,193 @@
+/* ==========================================================================
+   The hand picker — a real listbox, because a <select> cannot do this.
+
+   The whole point of this control is that each row is SET IN THE FACE IT NAMES,
+   so the officer picks a typeface by looking at it rather than by reading an
+   adjective. A native <select> cannot deliver that: macOS Chrome and Safari draw
+   the popup as an AppKit menu and ignore font-family on <option> entirely, so
+   ten faces rendered as ten lines of system UI type. Windows Chrome and Firefox
+   do honour it, which is exactly the kind of "works on my machine" that should
+   not decide whether a feature exists.
+
+   So the <select> stays in the DOM as the value holder — every `sel.value` read
+   and every `change` listener elsewhere keeps working, the same contract
+   revised.js's awInitPicker() keeps for the award dropdown — and this draws on
+   top of it.
+
+   Its own stylesheet rather than scrollery.css, because three of the four
+   surfaces that carry the picker (`mine`, `bulk`, and the composer's sidebar)
+   are CRM pages that must not load the certificate sheet. See the CSS boundary
+   note in project docs.
+   ========================================================================== */
+
+/* Tokens, light first and complete, so no colour is only defined inside a media
+   query. The render page sets no data-theme at all, so dark has to come from
+   prefers-color-scheme as well as the attribute. */
+.sc-hand {
+    --sch-bg: #ffffff;
+    --sch-ink: #1a202c;
+    --sch-ink-dim: #4a5568;
+    --sch-line: #cbd5e0;
+    --sch-hover: rgba(0, 0, 0, 0.06);
+    --sch-sel: #2b6cb0;
+    --sch-sel-ink: #ffffff;
+    --sch-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+    .sc-hand {
+        --sch-bg: #1f2733;
+        --sch-ink: #e2e8f0;
+        --sch-ink-dim: #a0aec0;
+        --sch-line: #3a4557;
+        --sch-hover: rgba(255, 255, 255, 0.07);
+        --sch-sel: #3b82f6;
+        --sch-sel-ink: #ffffff;
+        --sch-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    }
+}
+
+html[data-theme="dark"] .sc-hand {
+    --sch-bg: #1f2733;
+    --sch-ink: #e2e8f0;
+    --sch-ink-dim: #a0aec0;
+    --sch-line: #3a4557;
+    --sch-hover: rgba(255, 255, 255, 0.07);
+    --sch-sel: #3b82f6;
+    --sch-sel-ink: #ffffff;
+    --sch-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme="light"] .sc-hand {
+    --sch-bg: #ffffff;
+    --sch-ink: #1a202c;
+    --sch-ink-dim: #4a5568;
+    --sch-line: #cbd5e0;
+    --sch-hover: rgba(0, 0, 0, 0.06);
+    --sch-sel: #2b6cb0;
+    --sch-sel-ink: #ffffff;
+    --sch-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.sc-hand-trigger {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 12rem;
+    padding: 7px 12px;
+    border: 1px solid var(--sch-line);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--sch-ink);
+    font: inherit;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sc-hand-trigger:hover,
+.sc-hand-trigger:focus-visible {
+    background: var(--sch-hover);
+}
+
+/* The trigger's label is a specimen too — it is drawn in the chosen face, set by
+   the script from the option's own data-face-family. A fixed line-height keeps the
+   control from resizing as faces with different metrics come and go. */
+.sc-hand-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1.05em;
+}
+
+.sc-hand-caret {
+    flex: 0 0 auto;
+    opacity: 0.6;
+    font-size: 0.7em;
+}
+
+.sc-hand-menu {
+    position: absolute;
+    box-sizing: border-box;   /* max-height caps the whole box, padding and border included */
+    z-index: 60;         /* over the render page's sticky toolbar (z-index 5) and
+                            the CRM's own filter cards */
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 100%;
+    max-width: calc(100vw - 32px);   /* a long specimen truncates inside the 16px gutters
+                                        instead of widening the page on a phone */
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    border: 1px solid var(--sch-line);
+    border-radius: 6px;
+    background: var(--sch-bg);
+    box-shadow: var(--sch-shadow);
+    list-style: none;
+}
+
+/* Opens upward when there is more room above — a toolbar picker near the bottom of
+   a short window would otherwise drop off-screen. The script sets the attribute. */
+.sc-hand-menu[data-drop="up"] {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
+.sc-hand-opt {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 9px 12px;
+    border-radius: 4px;
+    color: var(--sch-ink);
+    cursor: pointer;
+    /* The specimen wants room to be a specimen. 1.25em against the control's own
+       size is enough to read a display face's joins and terminals without turning
+       the list into a poster. */
+    font-size: 1.25em;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+/* The flex item has to do the ellipsizing: text-overflow on the flex row itself
+   never reaches the text inside a blockified child. clip, not hidden: hidden
+   would also crop the swash faces' ascenders and descenders vertically. */
+.sc-hand-text {
+    min-width: 0;
+    overflow-x: clip;
+    overflow-y: visible;
+    text-overflow: ellipsis;
+}
+
+.sc-hand-opt[aria-selected="true"] {
+    background: var(--sch-sel);
+    color: var(--sch-sel-ink);
+}
+
+/* Keyboard focus is tracked separately from selection: arrowing through the list
+   moves this, and only Enter commits. Without the distinction a keyboard user
+   cannot see where they are. */
+.sc-hand-opt.is-active:not([aria-selected="true"]) {
+    background: var(--sch-hover);
+}
+
+.sc-hand-check {
+    flex: 0 0 1em;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.6em;
+    opacity: 0.9;
+}
+
+/* Never on paper: the picker is chrome on a page whose whole purpose is printing. */
+@media print {
+    .sc-hand {
+        display: none !important;
+    }
+}

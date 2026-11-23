@@ -163,6 +163,7 @@ class Controller
             'Controller_PlayerAjax',
             'Controller_AdminAjax',
             'Controller_WnAjax',
+            'Controller_ScrolleryAjax',
             'Controller_DuesAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {

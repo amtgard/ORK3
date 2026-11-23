@@ -2224,12 +2224,24 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if (!empty($awardsList)): ?>
 				<button class="pn-btn pn-btn-sm btn-danger-confirm" style="margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
+				<?php if ($isOwnProfile): ?>
+				<?php /* An officer on their own profile takes this branch, not the one below,
+				          so the self-service link has to be offered here as well. */ ?>
+				<a href="<?= UIR ?>Scrollery/mine" class="pn-btn pn-btn-sm" style="margin-left:8px">
+					<i class="fas fa-scroll"></i> Print My Certificates
+				</a>
+				<?php endif; ?>
 				</div>
-				<?php elseif ($isOwnProfile && $hasHistoricalTip): ?>
+				<?php elseif ($isOwnProfile): ?>
 				<div class="pn-tab-toolbar">
+					<?php if ($hasHistoricalTip): ?>
 					<a href="<?= UIR ?>Player/reconcile/<?= (int)$Player['MundaneId'] ?>"
 					   class="pn-btn pn-btn-sm" style="background:#2b6cb0;color:#fff">
 						<i class="fas fa-history"></i> View Historical Awards
+					</a>
+					<?php endif; ?>
+					<a href="<?= UIR ?>Scrollery/mine" class="pn-btn pn-btn-sm">
+						<i class="fas fa-scroll"></i> Print My Certificates
 					</a>
 				</div>
 				<?php endif; ?>
@@ -2297,7 +2309,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+							<th class="pn-nosort" style="width:52px;min-width:52px" aria-label="Actions"></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -2315,8 +2327,8 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; elseif (trimlen($detail['ParkName']) > 0) echo $detail['ParkName'] . (trimlen($detail['KingdomName']) > 0 ? ', ' . $detail['KingdomName'] : ''); else echo $detail['KingdomName']; ?></td>
 								<td><?= $detail['Note'] ?></td>
 								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-								<?php if ($canManageAwards): ?>
 								<td class="pn-award-actions-cell">
+									<?php if ($canManageAwards): ?>
 									<?php $awardData = json_encode([
 										'AwardsId'      => (int)$detail['AwardsId'],
 										'displayName'   => ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
@@ -2343,16 +2355,46 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									<button class="pn-award-action-btn pn-award-edit-btn"
 									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
 									        data-award="<?= htmlspecialchars($awardData, ENT_QUOTES) ?>"
-									        title="Edit award"><i class="fas fa-pencil-alt"></i></button>
+									        data-tip="Edit award"><i class="fas fa-pencil-alt"></i></button>
 									<button class="pn-award-action-btn pn-award-del-btn"
 									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
-									        title="Delete award"><i class="fas fa-trash"></i></button>
+									        data-tip="Delete award"><i class="fas fa-trash"></i></button>
 									<button class="pn-award-action-btn pn-award-revoke-btn"
 									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
 									        data-award="<?= htmlspecialchars($awardData, ENT_QUOTES) ?>"
-									        title="Revoke award"><i class="fas fa-ban"></i></button>
+									        data-tip="Revoke award"><i class="fas fa-ban"></i></button>
+									<?php /* Scrollery: only where certificate artwork exists — no dead buttons.
+									          Sits under $canManageAwards with the buttons above, but CanPrintScroll is
+									          viewer-aware: for an officer, controller.Player.php runs the rows through
+									          Model_Scrollery::flag_viewer_printable_awards(), the render route's own
+									          gate (where GIVEN, not the recipient's home park), so an award given
+									          elsewhere or unattributed shows no button the render tab would refuse.
+									          A player prints their own from Scrollery/mine.
+
+									          Revoked rows are covered by this same flag — Model_Player folds
+									          ork_awards.revoked into CanPrintScroll — so there is deliberately no
+									          second revoked test here. It matters on this table specifically: the
+									          Revoked Awards table below keys on stripped_from, and the 59 revocations
+									          that left mundane_id intact appear HERE, among the live grants. */ ?>
+									<?php if (!empty($detail['CanPrintScroll'])): ?>
+									<?php /* View first, Print second: "View" opens the same certificate WITHOUT
+									          print=1, so the officer can look at it before the OS print dialog opens.
+									          Print stays one click — a single sheet does not justify an extra one. */ ?>
+									<a class="pn-award-action-btn pn-award-view-btn"
+									   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>"
+									   target="_blank" rel="noopener"
+									   data-tip="View certificate"><i class="fas fa-eye"></i></a>
+									<a class="pn-award-action-btn pn-award-print-btn"
+									   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>&print=1"
+									   target="_blank" rel="noopener"
+									   data-tip="Print certificate"><i class="fas fa-print"></i></a>
+									<?php endif; ?>
+									<?php endif; ?>
+									<button type="button" class="pn-award-action-btn pn-award-info-btn"
+									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+									        data-award-name="<?= htmlspecialchars($displayName, ENT_QUOTES) ?>"
+									        aria-label="Award details" data-tip="Award details"><i class="fas fa-info-circle"></i></button>
 								</td>
-								<?php endif; ?>
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
@@ -2419,7 +2461,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+								<th class="pn-nosort" style="width:52px;min-width:52px" aria-label="Actions"></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -2464,8 +2506,8 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									</td>
 									<td><?= $detail['Note'] ?></td>
 									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-									<?php if ($canManageAwards): ?>
 									<td class="pn-award-actions-cell">
+										<?php if ($canManageAwards): ?>
 										<?php $titleData = json_encode([
 											'AwardsId'       => (int)$detail['AwardsId'],
 											'displayName'    => ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
@@ -2493,16 +2535,40 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 										<button class="pn-award-action-btn pn-award-edit-btn"
 										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
 										        data-award="<?= htmlspecialchars($titleData, ENT_QUOTES) ?>"
-										        title="Edit title"><i class="fas fa-pencil-alt"></i></button>
+										        data-tip="Edit title"><i class="fas fa-pencil-alt"></i></button>
 										<button class="pn-award-action-btn pn-award-del-btn"
 										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
-										        title="Delete title"><i class="fas fa-trash"></i></button>
+										        data-tip="Delete title"><i class="fas fa-trash"></i></button>
 										<button class="pn-award-action-btn pn-award-revoke-btn"
 										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
 										        data-award="<?= htmlspecialchars($titleData, ENT_QUOTES) ?>"
-										        title="Revoke title"><i class="fas fa-ban"></i></button>
+										        data-tip="Revoke title"><i class="fas fa-ban"></i></button>
+										<?php /* Model_Player stamps CanPrintScroll on EVERY award row, titles included,
+										          and this cell was the only one of the two that never rendered the offer.
+										          Gated on the same flag as the Awards cell so the pending Scrollery scope
+										          exclusion (knighthoods, masterhoods, paragons, associate titles, noble
+										          titles above Lord) turns these off automatically, with no second
+										          predicate here — that includes revoked, which Model_Player already
+										          folds into the flag. Enough survives the exclusion for the button to
+										          earn its place: Lord (1,841 live grants), Lady (957), Weaponmaster
+										          (338), Dragonmaster (282), Defender (235) and Custom Title (207).
+										          Officer positions were already out via Scroll::IsOfficerPosition(). */ ?>
+										<?php if (!empty($detail['CanPrintScroll'])): ?>
+										<a class="pn-award-action-btn pn-award-view-btn"
+										   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>"
+										   target="_blank" rel="noopener"
+										   data-tip="View certificate"><i class="fas fa-eye"></i></a>
+										<a class="pn-award-action-btn pn-award-print-btn"
+										   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>&print=1"
+										   target="_blank" rel="noopener"
+										   data-tip="Print certificate"><i class="fas fa-print"></i></a>
+										<?php endif; ?>
+										<?php endif; ?>
+										<button type="button" class="pn-award-action-btn pn-award-info-btn"
+										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+										        data-award-name="<?= htmlspecialchars($displayName, ENT_QUOTES) ?>"
+										        aria-label="Title details" data-tip="Title details"><i class="fas fa-info-circle"></i></button>
 									</td>
-									<?php endif; ?>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -3091,6 +3157,23 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 <?php endif; ?>
 
 <!-- =============================================
+     Award Info Modal — the (i) button at the end of every Awards/Titles row.
+     Every viewer; filled lazily from PlayerAjax/award_info (revised.js).
+     ============================================= -->
+<div class="pn-overlay" id="pn-award-info-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-award-info-title" aria-hidden="true">
+	<div class="pn-modal-box pn-ai-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title" id="pn-award-info-title"><i class="fas fa-info-circle pn-modal-title-icon"></i><span id="pn-award-info-name">Award Details</span></h3>
+			<button type="button" class="pn-modal-close-btn" id="pn-award-info-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body pn-ai-body" id="pn-award-info-body"></div>
+		<div class="pn-modal-footer">
+			<button type="button" class="pn-btn pn-btn-secondary" id="pn-award-info-done">Close</button>
+		</div>
+	</div>
+</div>
+
+<!-- =============================================
      Add Award / Add Title Modal
      ============================================= -->
 <?php if ($canManageAwards): ?>
@@ -3163,8 +3246,16 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 
 			<!-- Rank Picker (only for ladder awards) -->
 			<div class="pn-acct-field" id="pn-award-rank-row" style="display:none">
-				<label>Rank <span id="pn-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
-				<div class="pn-rank-pills-wrap" id="pn-rank-pills"></div>
+				<label><span id="pn-rank-label">Rank</span> <span id="pn-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
+				<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+				         so this bare <label> named nothing and the pill group had no accessible
+				         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+				         through aria-labelledby is the shape that works, with aria-describedby
+				         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+				         The label text is split into its own span so the hint is a DESCRIPTION and
+				         not swallowed into the group's NAME. */ ?>
+				<div class="pn-rank-pills-wrap" id="pn-rank-pills" role="group"
+				     aria-labelledby="pn-rank-label" aria-describedby="pn-rank-hint"></div>
 				<input type="hidden" name="Rank" id="pn-award-rank-val" value="" />
 			</div>
 
@@ -3217,7 +3308,21 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 		</div>
 		<div class="pn-modal-footer" style="display:flex;align-items:center;justify-content:space-between">
 			<button class="pn-btn pn-btn-ghost" id="pn-award-cancel">Close</button>
-			<div style="display:flex;gap:8px">
+			<div style="display:flex;gap:8px;align-items:center">
+				<?php /* Scrollery. Deliberately down here beside Add Award rather than in the
+				         success banner above: "Add Award" keeps the modal open to grant another,
+				         so the banner is transient and resets on the next grant, while this stays
+				         put for as long as the modal is open. It points at the LAST printable
+				         award granted in this session, and stays hidden until there is one —
+				         printability is decided server-side by Model_Scrollery::award_is_printable()
+				         on the AwardsId the grant actually wrote, for THIS officer (the render
+				         route's own permission gate), so it is never a dead link. */ ?>
+				<a href="#" id="pn-award-print-link" class="pn-award-print-icon" style="display:none"
+				   target="_blank" rel="noopener"
+				   data-tip="Print the certificate for the award you just granted"
+				   aria-label="Print the certificate for the award you just granted">
+					<i class="fas fa-print"></i>
+				</a>
 				<button class="pn-btn pn-btn-primary" id="pn-award-save-same" disabled>
 					<i class="fas fa-plus"></i> Add Award
 				</button>
@@ -3255,8 +3360,16 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 						</select>
 					</div>
 					<div class="pn-acct-field" id="pn-edit-reconcile-rank-row" style="display:none;">
-						<label>Rank <span style="font-weight:400;color:#a0aec0;font-size:11px">— click to select</span></label>
-						<div class="pn-rank-pills-wrap" id="pn-edit-reconcile-rank-pills"></div>
+						<label><span id="pn-edit-reconcile-rank-label">Rank</span> <span id="pn-edit-reconcile-rank-hint" style="font-weight:400;color:#a0aec0;font-size:11px">— click to select</span></label>
+						<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+						         so this bare <label> named nothing and the pill group had no accessible
+						         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+						         through aria-labelledby is the shape that works, with aria-describedby
+						         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+						         The label text is split into its own span so the hint is a DESCRIPTION and
+						         not swallowed into the group's NAME. */ ?>
+						<div class="pn-rank-pills-wrap" id="pn-edit-reconcile-rank-pills" role="group"
+						     aria-labelledby="pn-edit-reconcile-rank-label" aria-describedby="pn-edit-reconcile-rank-hint"></div>
 						<input type="hidden" id="pn-edit-reconcile-rank-val" value="">
 					</div>
 					<div style="font-size:11px;color:#975a16;margin-top:4px;">
@@ -3309,8 +3422,16 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 			</div>
 
 			<div class="pn-acct-field" id="pn-edit-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select</span></label>
-				<div class="pn-rank-pills-wrap" id="pn-edit-rank-pills"></div>
+				<label><span id="pn-edit-rank-label">Rank</span> <span id="pn-edit-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— click to select</span></label>
+				<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+				         so this bare <label> named nothing and the pill group had no accessible
+				         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+				         through aria-labelledby is the shape that works, with aria-describedby
+				         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+				         The label text is split into its own span so the hint is a DESCRIPTION and
+				         not swallowed into the group's NAME. */ ?>
+				<div class="pn-rank-pills-wrap" id="pn-edit-rank-pills" role="group"
+				     aria-labelledby="pn-edit-rank-label" aria-describedby="pn-edit-rank-hint"></div>
 				<input type="hidden" id="pn-edit-rank-val" value="" />
 			</div>
 
@@ -3959,8 +4080,16 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 					<div id="pn-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 				</div>
 				<div class="pn-rec-field" id="pn-rec-rank-row" style="display:none">
-					<label>Rank <span id="pn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
-					<div class="pn-rank-pills-wrap" id="pn-rec-rank-pills"></div>
+					<label><span id="pn-rec-rank-label">Rank</span> <span id="pn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
+					<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+					         so this bare <label> named nothing and the pill group had no accessible
+					         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+					         through aria-labelledby is the shape that works, with aria-describedby
+					         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+					         The label text is split into its own span so the hint is a DESCRIPTION and
+					         not swallowed into the group's NAME. */ ?>
+					<div class="pn-rank-pills-wrap" id="pn-rec-rank-pills" role="group"
+					     aria-labelledby="pn-rec-rank-label" aria-describedby="pn-rec-rank-hint"></div>
 					<input type="hidden" name="Rank" id="pn-rec-rank-val" value="" />
 				</div>
 				<div class="pn-form-error" id="pn-rec-warn" style="margin-top:4px"></div>
@@ -4166,6 +4295,26 @@ var PnConfig = {
 	parkId:         <?= (int)($Player['ParkId'] ?? 0) ?>,
 	parkName:       <?= json_encode($this->__session->park_name ?? '') ?>,
 	kingdomId:      <?= (int)($KingdomId ?? 0) ?>,
+	<?php /* Add Award's "Given At" default, as one self-consistent triple rather than
+	         three fields that could disagree. The Add Award button -- and this whole
+	         modal -- is gated on $canManageAwards, which IS the authority check on this
+	         surface (has_authority(AUTH_PARK, the player's park, AUTH_CREATE)), so a
+	         park here is a park this officer may attribute a grant to. A player with no
+	         park leaves it blank -- attributing a grant to a guessed scope is worse than
+	         making the officer pick. pnDoSave() then refuses to submit until they do,
+	         and Controller_PlayerAjax refuses it again server-side.
+
+	         The NAME comes off $Player, not $this->__session->park_name. Those session
+	         keys are scratch values -- Controller_Login never writes them and
+	         Controller_Admin clears them -- refreshed here only as a side effect of this
+	         controller's own get_park_info() call. That call does currently cover every
+	         player who has a park (retired parks included, and no player points at a
+	         missing park row), so this is hardening rather than a fix for something
+	         observed: the id and the name now come from one object instead of two
+	         sources that are only kept in step by a side effect. */ ?>
+	awardScope:     <?= json_encode(valid_id($Player['ParkId'] ?? 0)
+		? ['parkId' => (int)$Player['ParkId'], 'kingdomId' => (int)($KingdomId ?? 0), 'name' => (string)($Player['Park'] ?? $Player['ParkName'] ?? '')]
+		: ['parkId' => 0, 'kingdomId' => 0, 'name' => '']) ?>,
 	recError:       <?= !empty($recError) ? 'true' : 'false' ?>,
 	canEditImages:  <?= !empty($canEditImages)  ? 'true' : 'false' ?>,
 	canEditAccount: <?= !empty($canEditAccount) ? 'true' : 'false' ?>,
