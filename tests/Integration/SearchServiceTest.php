@@ -246,6 +246,123 @@ final class SearchServiceTest extends TestCase
         }
     }
 
+    /**
+     * Two players sharing a persona stem in parks A and B of the same kingdom.
+     *
+     * @return array{kid: int, parkA: int, parkB: int, stem: string, p: array{mundane_id: int}, q: array{mundane_id: int}}
+     */
+    private function twoParkScopeFixture(): array
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkA = $this->fixture->parkIdInKingdom($kid);
+        $parkB = $this->fixture->secondParkIdInKingdom($kid, $parkA);
+        if ($parkB <= 0) {
+            $this->markTestSkipped('Need two parks in kingdom for scope filter tests.');
+        }
+        $stem = 'Scope' . bin2hex(random_bytes(3));
+        $p = $this->fixture->createPlayer($parkA, 'scopea', 'T11SRC ' . $stem . ' Alpha');
+        $q = $this->fixture->createPlayer($parkB, 'scopeb', 'T11SRC ' . $stem . ' Beta');
+
+        return ['kid' => $kid, 'parkA' => $parkA, 'parkB' => $parkB, 'stem' => $stem, 'p' => $p, 'q' => $q];
+    }
+
+    public function testPrefixCannotEscapeRestrictToPark(): void
+    {
+        $f = $this->twoParkScopeFixture();
+        $kAbbr = $this->fixture->kingdomAbbreviation($f['kid']);
+        $pAbbrB = $this->fixture->parkAbbreviation($f['parkB']);
+        if (!preg_match('/^[a-z0-9]{2,3}$/i', $kAbbr) || !preg_match('/^[a-z0-9]{2,3}$/i', $pAbbrB)) {
+            $this->markTestSkipped('Fixture abbreviations are not prefix-shaped.');
+        }
+
+        $results = $this->searchService->RankedPlayers([
+            'q'          => "{$kAbbr}:{$pAbbrB} {$f['stem']}",
+            'parkId'     => $f['parkA'],
+            'restrictTo' => 'park',
+            'limit'      => 50,
+        ]);
+        $ids = array_column($results, 'MundaneId');
+        $this->assertNotContains($f['q']['mundane_id'], $ids);
+        foreach ($results as $row) {
+            $this->assertSame($f['parkA'], (int) $row['ParkId']);
+        }
+    }
+
+    public function testExplicitFilterNarrowsWithinKingdomScope(): void
+    {
+        $f = $this->twoParkScopeFixture();
+
+        $results = $this->searchService->RankedPlayers([
+            'q'            => $f['stem'],
+            'kingdomId'    => $f['kid'],
+            'restrictTo'   => 'kingdom',
+            'filterParkId' => $f['parkA'],
+            'limit'        => 50,
+        ]);
+        $ids = array_column($results, 'MundaneId');
+        $this->assertContains($f['p']['mundane_id'], $ids);
+        $this->assertNotContains($f['q']['mundane_id'], $ids);
+        foreach ($results as $row) {
+            $this->assertSame($f['parkA'], (int) $row['ParkId']);
+        }
+    }
+
+    public function testFilterOutsideRestrictScopeReturnsEmpty(): void
+    {
+        $f = $this->twoParkScopeFixture();
+        $family = array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($f['kid']));
+        $otherKid = $this->fixture->kingdomIdNotIn($family);
+        if ($otherKid <= 0) {
+            $this->markTestSkipped('Need a kingdom outside the family.');
+        }
+        $outsider = $this->fixture->createPlayer($this->fixture->parkIdInKingdom($otherKid), 'scopeo', 'T11SRC ' . $f['stem'] . ' Outsider');
+
+        $results = $this->searchService->RankedPlayers([
+            'q'               => $f['stem'],
+            'kingdomId'       => $f['kid'],
+            'restrictTo'      => 'kingdom',
+            'filterKingdomId' => $otherKid,
+            'limit'           => 50,
+        ]);
+        $this->assertSame([], $results);
+        // Sanity: the outsider exists and is findable without the hard scope.
+        $open = $this->searchService->RankedPlayers(['q' => $f['stem'], 'filterKingdomId' => $otherKid, 'limit' => 50]);
+        $this->assertContains($outsider['mundane_id'], array_column($open, 'MundaneId'));
+    }
+
+    public function testFilterParkOutsideKingdomReturnsEmpty(): void
+    {
+        $f = $this->twoParkScopeFixture();
+        $otherKid = $this->fixture->kingdomIdNotIn([$f['kid']]);
+        if ($otherKid <= 0) {
+            $this->markTestSkipped('Need a second kingdom.');
+        }
+        $otherPark = $this->fixture->parkIdInKingdom($otherKid);
+        $this->fixture->createPlayer($otherPark, 'scopeop', 'T11SRC ' . $f['stem'] . ' Elsewhere');
+
+        $results = $this->searchService->RankedPlayers([
+            'q'               => $f['stem'],
+            'filterKingdomId' => $f['kid'],
+            'filterParkId'    => $otherPark,
+            'limit'           => 50,
+        ]);
+        $this->assertSame([], $results);
+    }
+
+    public function testUniversalSearchHonorsFilter(): void
+    {
+        $f = $this->twoParkScopeFixture();
+
+        $results = $this->searchService->UniversalSearch([
+            'Query'     => $f['stem'],
+            'FilterPid' => $f['parkB'],
+            'Focus'     => 'player',
+        ]);
+        $ids = array_column($results['players'], 'id');
+        $this->assertContains($f['q']['mundane_id'], $ids);
+        $this->assertNotContains($f['p']['mundane_id'], $ids);
+    }
+
     public function testGlobalSearchRespectsLimit(): void
     {
         $kid = $this->fixture->firstKingdomId();

@@ -87,6 +87,23 @@ final class SearchFixture
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * An active kingdom (with an active park, never kingdom 15) whose id is not in $excludeKingdomIds.
+     *
+     * @param list<int> $excludeKingdomIds
+     */
+    public function kingdomIdNotIn(array $excludeKingdomIds): int
+    {
+        $ids = implode(',', array_map('intval', $excludeKingdomIds ?: [0]));
+
+        return (int) $this->pdo->query(
+            'SELECT k.kingdom_id FROM ' . DB_PREFIX . 'kingdom k'
+            . ' JOIN ' . DB_PREFIX . "park p ON p.kingdom_id = k.kingdom_id AND p.active = 'Active'"
+            . " WHERE k.active = 'Active' AND k.kingdom_id != 15 AND k.kingdom_id NOT IN ({$ids})"
+            . ' ORDER BY k.kingdom_id ASC LIMIT 1'
+        )->fetchColumn();
+    }
+
     public function parkAbbreviation(int $parkId): string
     {
         $stmt = $this->pdo->prepare('SELECT abbreviation FROM ' . DB_PREFIX . 'park WHERE park_id = ?');

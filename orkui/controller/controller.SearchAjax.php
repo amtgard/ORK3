@@ -17,6 +17,8 @@ class Controller_SearchAjax extends Controller
             'Query'           => $q,
             'Kid'             => (int)($_GET['kid'] ?? 0),
             'Pid'             => (int)($_GET['pid'] ?? 0),
+            'FilterKid'       => (int)($_GET['fk'] ?? 0),
+            'FilterPid'       => (int)($_GET['fp'] ?? 0),
             'IncludeInactive' => !empty($_GET['inactive']),
             'Focus'           => trim($_GET['focus'] ?? ''),
             'CallerUserId'    => isset($this->session->user_id) ? (int)$this->session->user_id : 0,
@@ -65,6 +67,9 @@ class Controller_SearchAjax extends Controller
             'excludeKingdomId'   => (int)($_GET['excludeKingdomId'] ?? 0) ?: null,
             'excludeParkId'      => (int)($_GET['excludeParkId']    ?? 0) ?: null,
             'excludeIds'         => $csvIds('excludeIds'),
+            // Filter pill: narrows within the hard scope above, never widens it.
+            'filterKingdomId'    => (int)($_GET['filterKingdomId'] ?? 0),
+            'filterParkId'       => (int)($_GET['filterParkId']    ?? 0),
             // Banned scope is derived server-side from the viewer's grants; the client may only
             // narrow it ('kingdom'), never widen it.
             'bannedScope'        => (($_GET['bannedScope'] ?? '') === 'kingdom') ? 'kingdom' : '',

@@ -942,6 +942,30 @@ class SearchService extends Ork3
         list($filterKid, $filterPid, $search) = $this->resolveAbbrevPrefix($q);
         $term = $this->likeEscape($search);
 
+        // Explicit filter (the search pill) wins over a typed "KD:PK" prefix; the prefix text is
+        // still stripped from the search term above. Either way the filter only NARROWS the hard
+        // scope below — it is ANDed with restrictKingdomIds / restrictTo, never replaces them.
+        $opt_filter_kid = (int)($o['filterKingdomId'] ?? 0);
+        $opt_filter_pid = (int)($o['filterParkId'] ?? 0);
+        if ($opt_filter_kid > 0 || $opt_filter_pid > 0) {
+            $filterKid = max($opt_filter_kid, 0);
+            $filterPid = max($opt_filter_pid, 0);
+        }
+        if ($filterPid > 0) {
+            // A park filter implies its kingdom; a park outside the filtered kingdom (or unknown) matches nothing.
+            $this->db->clear();
+            $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$filterPid} LIMIT 1");
+            $filter_park_kid = 0;
+            if ($rs !== false && $rs->size() > 0) {
+                $rs->Next();
+                $filter_park_kid = (int)$rs->kingdom_id;
+            }
+            if ($filter_park_kid <= 0 || ($filterKid > 0 && $filterKid !== $filter_park_kid)) {
+                return [];
+            }
+            $filterKid = $filter_park_kid;
+        }
+
         // Derive the ring-centre kingdom from the park whenever a park id is supplied; a
         // mismatching client kingdomId is ignored.
         if ($park_id > 0) {
@@ -1002,11 +1026,8 @@ class SearchService extends Ork3
         } else {
             $where[] = "__NAME__";
         }
-        if ($filterPid > 0) {
-            $where[] = "m.park_id = {$filterPid}";
-        } elseif ($filterKid > 0) {
-            $where[] = "m.kingdom_id = {$filterKid}";
-        } elseif (!empty($restrict_kids)) {
+        // Hard scope (the field's surface) is always applied...
+        if (!empty($restrict_kids)) {
             $where[] = "m.kingdom_id IN (" . implode(',', $restrict_kids) . ")";
         } elseif ($restrict_to === 'park' && $park_id > 0) {
             $where[] = "m.park_id = {$park_id}";
@@ -1016,6 +1037,13 @@ class SearchService extends Ork3
             // principality members. (Centralised here so callers just pass restrictTo:'kingdom'.)
             $fam = array_filter(array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)));
             $where[] = "m.kingdom_id IN (" . implode(',', $fam ?: [$kingdom_id]) . ")";
+        }
+        // ...and the filter / prefix is ANDed on top, so it can only narrow (an out-of-scope
+        // filter yields no rows).
+        if ($filterPid > 0) {
+            $where[] = "m.park_id = {$filterPid}";
+        } elseif ($filterKid > 0) {
+            $where[] = "m.kingdom_id = {$filterKid}";
         }
         if ($exclude_kingdom_id > 0) {
             $where[] = "m.kingdom_id != {$exclude_kingdom_id}";
@@ -1412,7 +1440,7 @@ class SearchService extends Ork3
     }
 
     /**
-     * @param array{Query?: string, Kid?: int, Pid?: int, IncludeInactive?: bool, Focus?: string, CallerUserId?: int, Token?: string} $request
+     * @param array{Query?: string, Kid?: int, Pid?: int, FilterKid?: int, FilterPid?: int, IncludeInactive?: bool, Focus?: string, CallerUserId?: int, Token?: string} $request
      * @return array{players: list<array<string, mixed>>, parks: list<array<string, mixed>>, kingdoms: list<array<string, mixed>>, units: list<array<string, mixed>>}
      */
     public function UniversalSearch(array $request): array
@@ -1541,12 +1569,15 @@ class SearchService extends Ork3
         $players = [];
         if ($playerBudget > 0) {
             $rows = $this->RankedPlayers([
-                'q'           => $q,
-                'parkId'      => ($pid > 0 ? $pid : null),
-                'kingdomId'   => ($kid > 0 ? $kid : null),
-                'limit'       => $playerBudget,
-                'bannedScope' => 'all',
-                'token'       => $token,
+                'q'               => $q,
+                'parkId'          => ($pid > 0 ? $pid : null),
+                'kingdomId'       => ($kid > 0 ? $kid : null),
+                // Explicit header filter pill (player section only); wins over a typed prefix.
+                'filterKingdomId' => (int)($request['FilterKid'] ?? 0),
+                'filterParkId'    => (int)($request['FilterPid'] ?? 0),
+                'limit'           => $playerBudget,
+                'bannedScope'     => 'all',
+                'token'           => $token,
             ]);
             foreach ($rows as $row) {
                 $players[] = [
