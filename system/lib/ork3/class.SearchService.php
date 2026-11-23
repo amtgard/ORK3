@@ -761,6 +761,21 @@ class SearchService extends Ork3
         return self::$abbrevMemo[$q] = [$filterKid, $filterPid, $search];
     }
 
+    /** Kingdom id of a park, or 0 when the park is unknown. */
+    private function parkKingdomId(int $parkId): int
+    {
+        if ($parkId <= 0) {
+            return 0;
+        }
+        $this->db->clear();
+        $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = " . (int)$parkId . " LIMIT 1");
+        if ($rs !== false && $rs->size() > 0) {
+            $rs->Next();
+            return (int)$rs->kingdom_id;
+        }
+        return 0;
+    }
+
     /** @var array<string, array> per-request memo of viewerCaps(), keyed by token */
     private static $viewerCapsMemo = [];
 
@@ -953,13 +968,7 @@ class SearchService extends Ork3
         }
         if ($filterPid > 0) {
             // A park filter implies its kingdom; a park outside the filtered kingdom (or unknown) matches nothing.
-            $this->db->clear();
-            $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$filterPid} LIMIT 1");
-            $filter_park_kid = 0;
-            if ($rs !== false && $rs->size() > 0) {
-                $rs->Next();
-                $filter_park_kid = (int)$rs->kingdom_id;
-            }
+            $filter_park_kid = $this->parkKingdomId($filterPid);
             if ($filter_park_kid <= 0 || ($filterKid > 0 && $filterKid !== $filter_park_kid)) {
                 return [];
             }
@@ -969,12 +978,7 @@ class SearchService extends Ork3
         // Derive the ring-centre kingdom from the park whenever a park id is supplied; a
         // mismatching client kingdomId is ignored.
         if ($park_id > 0) {
-            $kingdom_id = 0;
-            $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
-            if ($rs !== false && $rs->size() > 0) {
-                $rs->Next();
-                $kingdom_id = (int)$rs->kingdom_id;
-            }
+            $kingdom_id = $this->parkKingdomId($park_id);
         }
 
         // Authorisation comes only from the viewer's grants (see viewerCaps).

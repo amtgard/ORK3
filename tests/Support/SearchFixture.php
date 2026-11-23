@@ -104,6 +104,14 @@ final class SearchFixture
         )->fetchColumn();
     }
 
+    public function parkName(int $parkId): string
+    {
+        $stmt = $this->pdo->prepare('SELECT name FROM ' . DB_PREFIX . 'park WHERE park_id = ?');
+        $stmt->execute([$parkId]);
+
+        return (string) $stmt->fetchColumn();
+    }
+
     public function parkAbbreviation(int $parkId): string
     {
         $stmt = $this->pdo->prepare('SELECT abbreviation FROM ' . DB_PREFIX . 'park WHERE park_id = ?');

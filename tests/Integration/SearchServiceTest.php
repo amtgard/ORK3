@@ -286,6 +286,36 @@ final class SearchServiceTest extends TestCase
         foreach ($results as $row) {
             $this->assertSame($f['parkA'], (int) $row['ParkId']);
         }
+
+        // Positive control: an in-scope prefix on the same park-locked field still finds P.
+        $pAbbrA = $this->fixture->parkAbbreviation($f['parkA']);
+        if (preg_match('/^[a-z0-9]{2,3}$/i', $pAbbrA)) {
+            $inScope = $this->searchService->RankedPlayers([
+                'q'          => "{$kAbbr}:{$pAbbrA} {$f['stem']}",
+                'parkId'     => $f['parkA'],
+                'restrictTo' => 'park',
+                'limit'      => 50,
+            ]);
+            $this->assertContains($f['p']['mundane_id'], array_column($inScope, 'MundaneId'));
+        }
+    }
+
+    public function testFilterOutsideRestrictKingdomIdsReturnsEmpty(): void
+    {
+        $f = $this->twoParkScopeFixture();
+        $otherKid = $this->fixture->kingdomIdNotIn([$f['kid']]);
+        if ($otherKid <= 0) {
+            $this->markTestSkipped('Need a second kingdom.');
+        }
+        $this->fixture->createPlayer($this->fixture->parkIdInKingdom($otherKid), 'scoperk', 'T11SRC ' . $f['stem'] . ' Listed');
+
+        $results = $this->searchService->RankedPlayers([
+            'q'                  => $f['stem'],
+            'restrictKingdomIds' => [$f['kid']],
+            'filterKingdomId'    => $otherKid,
+            'limit'              => 50,
+        ]);
+        $this->assertSame([], $results);
     }
 
     public function testExplicitFilterNarrowsWithinKingdomScope(): void
@@ -361,6 +391,10 @@ final class SearchServiceTest extends TestCase
         $ids = array_column($results['players'], 'id');
         $this->assertContains($f['q']['mundane_id'], $ids);
         $this->assertNotContains($f['p']['mundane_id'], $ids);
+        $parkBName = $this->fixture->parkName($f['parkB']);
+        foreach ($results['players'] as $row) {
+            $this->assertSame($parkBName, $row['park']);
+        }
     }
 
     public function testGlobalSearchRespectsLimit(): void
