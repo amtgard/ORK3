@@ -814,6 +814,7 @@ $(function() {
 	function spAttachPlayerSearch() {
 		var parkId = parseInt(document.getElementById('sp-park').value, 10) || 0;
 		OrkPlayerSearch.reattach(document.getElementById('sp-player-text'), {
+			filter: false,
 			uir: '<?=UIR ?>',
 			kingdomId: <?= (int)$_scopeId ?>,
 			parkId: parkId || undefined,

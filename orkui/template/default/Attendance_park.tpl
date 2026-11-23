@@ -768,6 +768,7 @@ $(function() {
 
 	/* ── Player autocomplete (park + kingdom + global ranked server-side) */
 	OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+		filter: false,
 		uir: '<?=UIR ?>',
 		parkId:    parseInt($('#ParkId').val())    || <?=intval($pid) ?>,
 		kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?>,

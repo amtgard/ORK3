@@ -86,6 +86,7 @@
 				$(this).trigger('keydown.autocomplete');
 		});
 		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			filter: false,
 			uir: '<?=UIR ?>',
 			parkId: <?=intval($EventDetailInfo['AtParkId'] ?? 0) ?>,
 			kingdomId: <?=intval($EventInfo[0]['KingdomId'] ?? 0) ?>,

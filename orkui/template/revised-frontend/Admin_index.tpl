@@ -1050,6 +1050,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		return opts;
 	}
 	OrkPlayerSearch.attach(document.getElementById('cp-mp-player-name'), {
+		filter: false,
 		uir: UIR,
 		onSelect: function(p) {
 			document.getElementById('cp-mp-player-id').value = p.MundaneId;
@@ -1099,6 +1100,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		document.getElementById('cp-mgp-submit').disabled = !(keep && remove);
 	}
 	OrkPlayerSearch.attach(document.getElementById('cp-mgp-keep-name'), {
+		filter: false,
 		uir: UIR,
 		includeInactive: true,
 		excludeIds: function() { return [ parseInt(document.getElementById('cp-mgp-remove-id').value) || 0 ]; },
@@ -1112,6 +1114,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		}
 	});
 	OrkPlayerSearch.attach(document.getElementById('cp-mgp-remove-name'), {
+		filter: false,
 		uir: UIR,
 		includeInactive: true,
 		excludeIds: function() { return [ parseInt(document.getElementById('cp-mgp-keep-id').value) || 0 ]; },

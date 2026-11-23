@@ -64,6 +64,7 @@
 			}
 		});
 		OrkPlayerSearch.attach(document.getElementById('FromPlayerName'), {
+			filter: false,
 			uir: '<?=UIR ?>',
 			parkId: <?=valid_id($ParkId) ? (int)$ParkId : 0 ?>,
 			kingdomId: <?=valid_id($KingdomId) ? (int)$KingdomId : 0 ?>,
@@ -77,6 +78,7 @@
 			}
 		});
 		OrkPlayerSearch.attach(document.getElementById('ToPlayerName'), {
+			filter: false,
 			uir: '<?=UIR ?>',
 			parkId: <?=valid_id($ParkId) ? (int)$ParkId : 0 ?>,
 			kingdomId: <?=valid_id($KingdomId) ? (int)$KingdomId : 0 ?>,

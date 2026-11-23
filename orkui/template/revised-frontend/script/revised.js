@@ -8854,6 +8854,7 @@ $(document).ready(function() {
 
         if (evPnInput && evPnHidden) {
             OrkPlayerSearch.attach(evPnInput, {
+                filter: false,
                 parkId:           parseInt(EvConfig.parkId, 10)    || 0,
                 kingdomId:        parseInt(EvConfig.kingdomId, 10)  || 0,
                 includeInactive:  true,
@@ -11100,6 +11101,7 @@ $(document).ready(function() {
     var pkAttSelectedInactive = false;
 
     OrkPlayerSearch.attach(gid('pk-att-player-name'), Object.assign({
+        filter: false,
         uir: PkConfig.uir,
         excludeIds: function() { return Object.keys(pkAttEntered).map(Number); },
         onSelect: function(player) {
@@ -14756,6 +14758,7 @@ window.pnCloseUnitCreateModal = function() {
 
         // Player search via OrkPlayerSearch (scoped by mode + cascade filter).
         OrkPlayerSearch.attach(gid('kn-moveplayer-player-name'), Object.assign({
+            filter: false,
             uir: KnConfig.uir,
             onSelect: function(player) {
                 gid('kn-moveplayer-player-id').value = player.MundaneId;
@@ -15255,6 +15258,7 @@ window.pnCloseUnitCreateModal = function() {
         var playerInput = gid('pk-moveplayer-player-name');
         if (playerInput) {
             OrkPlayerSearch.attach(playerInput, Object.assign({
+                filter: false,
                 uir: PkConfig.uir,
                 onSelect: function(player) {
                     mpPlayerId = player.MundaneId;
@@ -15453,6 +15457,7 @@ window.pnCloseUnitCreateModal = function() {
         var removeIdEl  = gid('pk-merge-remove-id');
 
         OrkPlayerSearch.attach(keepInput, {
+            filter: false,
             parkId:     PkConfig.parkId,
             kingdomId:  PkConfig.kingdomId,
             restrictTo: 'park',
@@ -15472,6 +15477,7 @@ window.pnCloseUnitCreateModal = function() {
         });
 
         OrkPlayerSearch.attach(removeInput, {
+            filter: false,
             parkId:     PkConfig.parkId,
             kingdomId:  PkConfig.kingdomId,
             restrictTo: 'park',

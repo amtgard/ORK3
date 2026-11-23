@@ -61,6 +61,7 @@
 			}
 		});
 		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			filter: false,
 			uir: '<?=UIR ?>',
 			parkId: <?=valid_id($Admin_moveplayer['SrcParkId'] ?? 0) ? (int)$Admin_moveplayer['SrcParkId'] : (valid_id($ParkId) ? (int)$ParkId : 0) ?>,
 			onSelect: function(p) {

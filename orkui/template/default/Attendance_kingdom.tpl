@@ -531,6 +531,7 @@ $(function() {
 
 	/* ── Player autocomplete ─────────────────────────── */
 	OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+		filter: false,
 		uir: '<?=UIR ?>',
 		kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?>,
 		parkId:    parseInt($('#ParkId').val())    || 0,

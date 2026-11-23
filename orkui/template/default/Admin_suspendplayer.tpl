@@ -31,6 +31,7 @@
 		});
 
 		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			filter: false,
 			uir: '<?=UIR ?>',
 			parkId: <?=(int)($Admin_suspendplayer['SrcParkId'] ?? 0) ?>,
 			onSelect: function(p) {
