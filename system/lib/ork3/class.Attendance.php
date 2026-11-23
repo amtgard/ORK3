@@ -20,22 +20,38 @@ class Attendance extends Ork3
     }
 
     /**
-     * SQL fragment filtering ork_attendance by the online flag. $alias must be
-     * a plain identifier, else 'a' is used.
+     * Boolean SQL predicate on ork_attendance's online flag: "{alias}.online = 0"
+     * (in_person), "{alias}.online = 1" (online) or '1=1' (all). The single source
+     * of the online predicate; use it for split expressions such as
+     * COUNT(DISTINCT CASE WHEN <predicate> THEN ... END). $alias must be a plain
+     * identifier, else 'a' is used.
      */
-    public static function TypeClause($mode, string $alias = 'a'): string
+    public static function TypePredicate($mode, string $alias = 'a'): string
     {
         if (!preg_match('/^[a-z_][a-z0-9_]*$/i', $alias)) {
             $alias = 'a';
         }
         switch (self::NormalizeType($mode)) {
             case 'in_person':
-                return " AND {$alias}.online = 0";
+                return "{$alias}.online = 0";
             case 'online':
-                return " AND {$alias}.online = 1";
+                return "{$alias}.online = 1";
             default:
-                return '';
+                return '1=1';
         }
+    }
+
+    /**
+     * SQL fragment filtering ork_attendance by the online flag: '' for all,
+     * else ' AND ' . TypePredicate(). $alias must be a plain identifier, else
+     * 'a' is used.
+     */
+    public static function TypeClause($mode, string $alias = 'a'): string
+    {
+        if (self::NormalizeType($mode) === 'all') {
+            return '';
+        }
+        return ' AND ' . self::TypePredicate($mode, $alias);
     }
 
     public function GetClasses($request)

@@ -12,9 +12,9 @@ class Model_ParkProfile extends Model
         return $this->_profile()->GetParkPlayersRoster($parkId);
     }
 
-    public function attendance_averages(int $parkId): array
+    public function attendance_averages(int $parkId, string $type = 'all'): array
     {
-        return $this->_profile()->GetParkAttendanceAverages($parkId);
+        return $this->_profile()->GetParkAttendanceAverages($parkId, $type);
     }
 
     public function abbreviation_taken(int $kingdomId, string $abbr, int $excludeParkId = 0): bool

@@ -8,11 +8,12 @@ class Model_KingdomProfile extends Model
         $this->Report = new APIModel('Report');
     }
 
-    public function extended_park_averages(int $kingdomId, bool $isAdmin): array
+    public function extended_park_averages(int $kingdomId, bool $isAdmin, string $type = 'all'): array
     {
         return $this->Report->GetKingdomExtendedParkAverages([
             'KingdomId' => $kingdomId,
             'IsAdmin' => $isAdmin,
+            'AttendanceType' => $type,
         ]);
     }
 

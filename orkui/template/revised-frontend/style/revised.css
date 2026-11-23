@@ -2129,6 +2129,18 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
     margin-bottom: 14px;
     flex-wrap: wrap;
 }
+/* Park averages In-Person / Online / All (kingdom Parks tab toolbar, park hero).
+   Control look + dark mode come from orkui.css .orn-type-control. */
+.kn-avg-type, .pk-avg-type { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.kn-avg-type { margin-right: auto; }
+.pk-avg-type { justify-content: flex-end; margin: -8px 0 18px; }
+.kn-avg-type-label, .pk-avg-type-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ork-text-muted); }
+.kn-avg-type-note, .pk-avg-type-note { font-size: 13px; color: var(--ork-text-secondary); }
+.kn-avg-type-note:empty, .pk-avg-type-note:empty { display: none; }
+.kn-avg-loading .kn-park-tile-stats, .kn-avg-loading td.kn-col-numeric, .pk-avg-loading { opacity: .45; transition: opacity .15s; }
+@media (max-width: 600px) {
+    .pk-avg-type { justify-content: flex-start; margin-top: -4px; }
+}
 .kn-view-btn {
     width: 30px;
     height: 30px;
@@ -6625,7 +6637,8 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Card */
 .adm-card { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; box-shadow: var(--ork-shadow-card); overflow: hidden; margin-bottom: 24px; }
 .adm-card-header,
-.cp-overview-header { padding: 14px 20px; border-bottom: 1px solid var(--ork-divider); background: var(--ork-bg-secondary); display: flex; align-items: center; justify-content: space-between; }
+.cp-overview-header { padding: 14px 20px; border-bottom: 1px solid var(--ork-divider); background: var(--ork-bg-secondary); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.cp-overview-note { padding: 8px 20px; border-bottom: 1px solid var(--ork-divider); font-size: 13px; color: var(--ork-text-secondary); }
 .adm-card-title,
 .cp-overview-title { font-size: 14px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 8px; }
 .adm-count { background: #e2e8f0; color: #4a5568; border-radius: 10px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
@@ -6792,6 +6805,9 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Kingdom overview table */
 .cp-overview-wrap { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
 .cp-overview-search input { padding: 5px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; width: 180px; background: var(--ork-card-bg); }
+/* Phone: type control takes its own full-width line under the heading. The Admin layout is wider than the
+   viewport at this width (pre-existing), so cap at the viewport rather than the header's width. */
+@media (max-width: 600px) { .cp-overview-header .orn-type-control { flex: 0 0 auto; width: min(100%, calc(100vw - 56px)); } }
 .cp-kd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .cp-kd-table thead th { padding: 9px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ork-text-muted); background: var(--ork-bg-secondary); border-bottom: 1px solid var(--ork-divider); white-space: nowrap; cursor: pointer; user-select: none; }
 .cp-kd-table thead th:hover { color: #4a5568; }
@@ -9139,6 +9155,7 @@ html[data-theme="dark"] .cp-report-list-desc { color: var(--ork-text-muted); }
 html[data-theme="dark"] .cp-overview-wrap { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .cp-overview-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .cp-overview-title { color: var(--ork-text); }
+html[data-theme="dark"] .cp-overview-note { border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .cp-overview-search input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .cp-kd-table thead th { background: var(--ork-bg-secondary); color: var(--ork-text-muted); border-bottom-color: var(--ork-border); text-shadow: none; }
 html[data-theme="dark"] .cp-kd-table thead th:hover { color: var(--ork-text); }

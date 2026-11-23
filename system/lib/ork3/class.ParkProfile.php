@@ -209,11 +209,16 @@ class ParkProfile extends Ork3
     }
 
     /**
+     * Park hero averages. $type (in_person | online | all, default all) filters the
+     * sign-ins counted. Informational only: the kingdom CountOnlineAttendance setting
+     * never applies here, and no park status/size is derived from these figures.
+     *
      * @return array{MonthlyAvg: float, WeeklyAvg: float}
      */
-    public function GetParkAttendanceAverages(int $parkId): array
+    public function GetParkAttendanceAverages(int $parkId, string $type = 'all'): array
     {
         $pid = (int) $parkId;
+        $typeClause = Attendance::TypeClause($type, 'a');
         $monthlyAvg = 0.0;
         $this->db->Clear();
         $maResult = $this->db->DataSet(
@@ -222,7 +227,7 @@ class ParkProfile extends Ork3
                 FROM ' . DB_PREFIX . 'attendance a
                 WHERE a.park_id = ' . $pid . '
                   AND a.date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
-                  AND a.mundane_id > 0
+                  AND a.mundane_id > 0' . $typeClause . '
                 GROUP BY a.date_year, a.date_month
             ) sub'
         );
@@ -247,7 +252,7 @@ class ParkProfile extends Ork3
                 WHERE a.park_id = ' . $pid . "
                   AND a.date >= '{$escapedWkStart}'
                   AND a.date <= '{$escapedWkEnd}'
-                  AND a.mundane_id > 0
+                  AND a.mundane_id > 0{$typeClause}
                 GROUP BY a.date_year, a.date_week3, a.mundane_id
             ) sub"
         );

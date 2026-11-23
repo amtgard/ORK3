@@ -63,7 +63,7 @@ details > summary::-webkit-details-marker { display: none; }
 	<!-- Context strip -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Track new player acquisition and retention across all active kingdoms for a given date range.</span>
+		<span>Track new player acquisition and retention across all active kingdoms for a given date range.<?php $_type_note = ork_attendance_type_note($form['AttendanceType'] ?? 'all'); if ($_type_note !== '') : ?> <strong><?=htmlspecialchars($_type_note)?></strong><?php endif; ?></span>
 	</div>
 
 	<!-- Stats row -->
@@ -120,6 +120,11 @@ details > summary::-webkit-details-marker { display: none; }
 							<label for="EndDate">End Date</label>
 							<input type="text" id="EndDate" name="EndDate" class="datepicker rp-form-input" value="<?=htmlspecialchars($form['EndDate'] ?? '')?>">
 						</div>
+						<div class="rp-form-group">
+							<label>Attendance Type</label>
+							<?=ork_attendance_type_control((string)($form['AttendanceType'] ?? 'all'))?>
+							<input type="hidden" name="AttendanceType" value="<?=htmlspecialchars((string)($form['AttendanceType'] ?? 'all'))?>">
+						</div>
 						<button type="submit" name="RunReport" value="1" class="rp-btn-run">Run Report</button>
 					</form>
 				</div>
@@ -143,6 +148,9 @@ details > summary::-webkit-details-marker { display: none; }
 
 							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Avg Visits / New Player</dt>
 							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Total new player sign-in events ÷ new players. Indicates average engagement during the period.</dd>
+
+							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Attendance Type</dt>
+							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Who is a new player, and their first kingdom, always come from all sign-ins: an online sign-in counts as playing. In-Person or Online limits the visits and returning players to that kind of sign-in, and New Players to those with at least one sign-in of that kind in the range in their first kingdom.</dd>
 						</dl>
 					</div>
 				</details>
@@ -281,4 +289,8 @@ details > summary::-webkit-details-marker { display: none; }
 	}).observe(document.documentElement, { attributeFilter: ['data-theme'] });
 <?php endif; ?>
 }());
+</script>
+<script>
+/* In-Person / Online / All: keep the hidden field in step; re-run the report when it has already run. */
+if (window.ornBindAttendanceTypeForm) window.ornBindAttendanceTypeForm(document.querySelector('form[action$="Admin/new_player_attendance"]'), <?=isset($summary) ? 'true' : 'false'?>);
 </script>

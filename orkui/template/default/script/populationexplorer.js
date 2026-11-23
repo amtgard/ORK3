@@ -1,6 +1,9 @@
 /* Population Explorer — filter builder, columns, run, share link, export.
  * Reads only window.PE (set by Reports_populationexplorer.tpl):
  *   { registry:{criteria, columns, options, officer}, scope:{type,id,name}, initial, urls:{run, export, share, player} }
+ * State is {tree, columns[, attendanceType]}: attendanceType ('in_person' | 'online') is
+ * the page-level Sign-ins counted switch, present only when not All, so All links and
+ * requests are exactly what they were before the switch existed.
  * Vanilla JS. Never inject server/user text with innerHTML unless it went through esc().
  */
 (function () {
@@ -182,13 +185,19 @@
     var selectedCols = defaultColumns();
     var errorRuleId = null;
     var errorText = '';
-    var lastRun = null;          // {tree, columns} of the last successful run
+    var lastRun = null;          // {tree, columns[, attendanceType]} of the last successful run
     var fpInstances = [];
     var dt = null;
     var running = false;
     var msgIsRuleError = false;  // #pe-results-msg currently holds "Fix the highlighted rule"
     var preRun = null;           // the results area as it was when the current Run started
     var idleHtml = '';           // the idle placeholder's original text
+    var TYPE_WORD = { in_person: 'in-person', online: 'online' };
+    function normType(v) {
+        var ctl = window.ornAttendanceTypeControl;
+        return (ctl && typeof ctl.normalize === 'function') ? ctl.normalize(v) : (TYPE_WORD[v] ? v : 'all');
+    }
+    var attType = normType(PE.initial && PE.initial.attendanceType); // Sign-ins counted: in_person | online | all
 
     /* ── edit generation ─────────────────────────────────── */
     // editGen goes up on every edit to the rules or columns: a change of the state
@@ -264,6 +273,7 @@
                 ? 'No rules — everyone in scope'
                 : n.rules + (n.rules === 1 ? ' rule' : ' rules') + ' (' + root.op + ')'
                     + (n.groups ? ' · ' + n.groups + (n.groups === 1 ? ' group' : ' groups') : '');
+            if (attType !== 'all') { txt += ' · ' + TYPE_WORD[attType] + ' sign-ins only'; }
             if (isDirty) { txt += ' · changed since last run'; }
             fs.textContent = '· ' + txt;
         }
@@ -308,7 +318,16 @@
         }
         return out;
     }
-    function currentState() { return { tree: toWire(root), columns: orderedColumns() }; }
+    function currentState() {
+        var s = { tree: toWire(root), columns: orderedColumns() };
+        if (attType !== 'all') { s.attendanceType = attType; }
+        return s;
+    }
+    // "Sign-in rules and columns use online sign-ins only." beside the switch; empty for All.
+    function paintTypeNote() {
+        var n = $('pe-type-note');
+        if (n) { n.textContent = attType === 'all' ? '' : 'Sign-in rules and columns use ' + TYPE_WORD[attType] + ' sign-ins only.'; }
+    }
 
     function findPath(node, path) {
         var n = node;
@@ -1014,7 +1033,9 @@
     }
 
     function requestFor(state) {
-        return { ScopeType: PE.scope.type, ScopeId: PE.scope.id, Tree: state.tree, Columns: state.columns };
+        var req = { ScopeType: PE.scope.type, ScopeId: PE.scope.id, Tree: state.tree, Columns: state.columns };
+        if (state.attendanceType) { req.AttendanceType = state.attendanceType; } // absent = All
+        return req;
     }
 
 
@@ -1303,7 +1324,7 @@
             autoWidth: false,
             dom: '<"pe-dt-top"lBf>rt<"pe-dt-bottom"ip>',
             // Buttons print writes the title into the print window's <title>/<h1> unescaped.
-            buttons: [{ extend: 'print', text: '<i class="fas fa-print"></i> Print', className: 'pe-dt-btn', title: 'Population Explorer — ' + esc(PE.scope.name || '') }],
+            buttons: [{ extend: 'print', text: '<i class="fas fa-print"></i> Print', className: 'pe-dt-btn', title: 'Population Explorer — ' + esc(PE.scope.name || '') + (lastRun && lastRun.attendanceType ? ' (' + TYPE_WORD[lastRun.attendanceType] + ' sign-ins only)' : '') }],
             language: { search: 'Search results:', emptyTable: 'No players match these filters.' }
         });
     }
@@ -1446,6 +1467,20 @@
                 if (selectedCols.indexOf('persona') < 0) { selectedCols.unshift('persona'); }
             }
         }
+        // Sign-ins counted (In-Person / Online / All): a page-level part of the state, so a
+        // change marks the results out of date like any rule edit; Run applies it.
+        if (typeof window.ornAttendanceTypeControl === 'function') {
+            window.ornAttendanceTypeControl($('pe-type-bar'), {
+                value: attType,
+                onChange: function (v) {
+                    attType = normType(v);
+                    paintTypeNote();
+                    bumpEdit();
+                    scheduleDirtyCheck();
+                }
+            });
+        }
+        paintTypeNote();
         // A fresh page starts with zero rules: the empty-root hint explains Run lists everyone.
         render();
         renderColumns();
