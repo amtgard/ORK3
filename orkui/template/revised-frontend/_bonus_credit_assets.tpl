@@ -376,14 +376,38 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
     }
 
     // ================= Grant tab =================
+    // Categories grouped by where they come from: the ones officers defined by
+    // hand first, then automated sources (a survey's credit) together, so a
+    // hand grant of a survey credit is found under its own heading.
+    var SOURCE_LABEL = { manual: 'Credits', survey: 'Survey credits' };
+    function sourceLabel(type) { return SOURCE_LABEL[type] || (String(type || 'other').charAt(0).toUpperCase() + String(type || 'other').slice(1) + ' credits'); }
+    function sourceRank(type) { return type === 'manual' || !type ? 0 : (type === 'survey' ? 1 : 2); }
+    function bySource(list) {
+        var groups = [];
+        list.forEach(function (rs) {
+            var t = rs.SourceType || 'manual', g = null;
+            groups.forEach(function (x) { if (x.type === t) g = x; });
+            if (!g) { g = { type: t, rows: [] }; groups.push(g); }
+            g.rows.push(rs);
+        });
+        groups.sort(function (a, b) { return sourceRank(a.type) - sourceRank(b.type) || a.type.localeCompare(b.type); });
+        return groups;
+    }
+    function isSourced(rs) { return !!rs.SourceType && rs.SourceType !== 'manual'; }
+
     function fillGrantPicker(selectValue) {
         var sel = gid('bc-category'), live = liveCategories(), html = '';
         if (!live.length) html += '<option value="">' + (canDefine ? 'No credit categories yet — see the Categories tab' : 'No credit categories set up by your Kingdom yet') + '</option>';
-        live.forEach(function (rs) {
-            // Name the defining org when it is not this page's own: a park sees its
-            // kingdom's credits, and any host sees adopted Amtgard-wide ones.
-            var from = (rs.ScopeType === 'ork' && !isOrk) || (Cfg.scopeType === 'park' && rs.ScopeType === 'kingdom') ? ', ' + esc(rs.ScopeName || 'Amtgard') : '';
-            html += '<option value="' + rs.CategoryId + '">' + esc(rs.Name) + ' (' + plural(fmtCredits(rs.DefaultCredits) * 1, 'credit', 'credits') + from + ')</option>';
+        var groups = bySource(live);
+        groups.forEach(function (g) {
+            if (groups.length > 1) html += '<optgroup label="' + esc(sourceLabel(g.type)) + '">';
+            g.rows.forEach(function (rs) {
+                // Name the defining org when it is not this page's own: a park sees its
+                // kingdom's credits, and any host sees adopted Amtgard-wide ones.
+                var from = (rs.ScopeType === 'ork' && !isOrk) || (Cfg.scopeType === 'park' && rs.ScopeType === 'kingdom') ? ', ' + esc(rs.ScopeName || 'Amtgard') : '';
+                html += '<option value="' + rs.CategoryId + '">' + esc(rs.Name) + ' (' + plural(fmtCredits(rs.DefaultCredits) * 1, 'credit', 'credits') + from + ')</option>';
+            });
+            if (groups.length > 1) html += '</optgroup>';
         });
         sel.innerHTML = html;
         var want = selectValue && categoryById(selectValue) && !categoryById(selectValue).ArchivedAt ? String(selectValue) : (live.length ? String(live[0].CategoryId) : '');
@@ -638,10 +662,26 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         var list = categories.filter(function (r) { return (showArchived || !r.ArchivedAt) && r.ScopeType === (isOrk ? 'ork' : 'kingdom'); });
         var tb = gid('bc-categories-tbody'), html = '';
         Array.prototype.forEach.call(document.querySelectorAll('#bc-categories-table .bc-ork-only'), function (el) { el.style.display = isOrk ? '' : 'none'; });
-        list.forEach(function (rs) {
-            var archived = !!rs.ArchivedAt;
+        // Hand-made categories first, then each automated source under its own heading row.
+        var groups = bySource(list);
+        groups.forEach(function (g) {
+            if (groups.length > 1) {
+                html += '<tr class="bc-group-row"><th colspan="' + (isOrk ? 6 : 5) + '" style="text-align:left;padding-top:10px">' + esc(sourceLabel(g.type)) + '</th></tr>';
+            }
+            g.rows.forEach(function (rs) { html += categoryRow(rs); });
+        });
+        tb.innerHTML = html;
+        gid('bc-categories-table').style.display = list.length ? '' : 'none';
+        gid('bc-categories-empty').style.display = list.length ? 'none' : '';
+        gid('bc-categories-empty').textContent = categories.length && !showArchived && !list.length ? 'Every category is archived. Tick “Show archived” to restore one.' : 'No credit categories defined yet.';
+        fillGranterScope();
+    }
+    function categoryRow(rs) {
+        var archived = !!rs.ArchivedAt, html = '';
+        {
             html += '<tr data-id="' + rs.CategoryId + '"' + (archived ? ' class="bc-archived"' : '') + '>' +
                 '<td>' + esc(rs.Name) + (archived ? '<span class="bc-archived-tag">archived</span>' : '') +
+                    (isSourced(rs) ? '<span class="bc-archived-tag" title="Created automatically; its grants are made by the ' + esc(rs.SourceType) + ' itself">' + esc(rs.SourceType) + '</span>' : '') +
                     (rs.Description ? '<div class="bc-muted">' + esc(rs.Description) + '</div>' : '') + '</td>' +
                 '<td class="bc-num">' + fmtCredits(rs.DefaultCredits) + '</td>' +
                 '<td class="bc-muted">' + (rs.Repeatable ? 'Repeatable' : 'Once') + '</td>' +
@@ -652,12 +692,8 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                     : '<button type="button" class="bc-link bc-category-grant" data-id="' + rs.CategoryId + '">Grant</button> &nbsp; ' +
                       '<button type="button" class="bc-link bc-link-danger bc-category-archive" data-id="' + rs.CategoryId + '">Archive</button>') + '</td>' +
                 '</tr>';
-        });
-        tb.innerHTML = html;
-        gid('bc-categories-table').style.display = list.length ? '' : 'none';
-        gid('bc-categories-empty').style.display = list.length ? 'none' : '';
-        gid('bc-categories-empty').textContent = categories.length && !showArchived && !list.length ? 'Every category is archived. Tick “Show archived” to restore one.' : 'No credit categories defined yet.';
-        fillGranterScope();
+        }
+        return html;
     }
 
     // Kingdom hosts: the Amtgard-wide credits, with Adopt / Withdraw.
@@ -765,7 +801,12 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
     // ================= Granters tab (kingdom CREATE) =================
     function fillGranterScope() {
         var sel = gid('bc-granter-scope'), keep = sel.value, opts = '<option value="0">All categories</option>';
-        liveCategories().forEach(function (rs) { opts += '<option value="' + rs.CategoryId + '">' + esc(rs.Name) + ' only</option>'; });
+        var groups = bySource(liveCategories());
+        groups.forEach(function (g) {
+            if (groups.length > 1) opts += '<optgroup label="' + esc(sourceLabel(g.type)) + '">';
+            g.rows.forEach(function (rs) { opts += '<option value="' + rs.CategoryId + '">' + esc(rs.Name) + ' only</option>'; });
+            if (groups.length > 1) opts += '</optgroup>';
+        });
         sel.innerHTML = opts;
         sel.value = keep;
         if (sel.value !== keep) sel.value = '0';

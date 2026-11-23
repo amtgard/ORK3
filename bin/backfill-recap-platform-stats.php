@@ -1,5 +1,6 @@
 #!/usr/bin/env php
 <?php
+
 /**
  * Refresh the Cloudflare block (PlatformStats) of ALREADY-STORED weekly recaps
  * so they carry the v2 fields the digest now reads (OriginRequests,
