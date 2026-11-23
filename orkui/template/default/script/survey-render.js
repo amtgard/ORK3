@@ -298,12 +298,18 @@
     /* Pairwise (pairwise spec §2): mirrors SurveyTypes::PAIRWISE_SMALL_MAX and
        PAIRWISE_BANDS the way OTHER_MAX mirrors OTHER_MAX_LENGTH.
        SurveyPairwisePlanScriptTest pins this copy to the PHP. */
+    // Band values are HUNDREDTHS of a percent; band_pcts in the plan are percent (t / 100).
     var PW_SMALL_MAX = 30;
     var PW_BANDS = [
-        [105,  [30, 40, 50, 60]],
-        [200,  [20, 30, 40, 50]],
-        [300,  [10, 20, 30, 40]],
-        [null, [10, 15, 20, 25]]
+        [105,   [3000, 4000, 5000, 6000]],
+        [200,   [2000, 3000, 4000, 5000]],
+        [300,   [1000, 2000, 3000, 4000]],
+        [500,   [1000, 1500, 2000, 2500]],
+        [1000,  [500, 1000, 1500, 2000]],
+        [2000,  [200, 400, 600, 800]],
+        [5000,  [100, 200, 300, 400]],
+        [10000, [50, 100, 150, 200]],
+        [null,  [25, 50, 75, 100]]
     ];
     var PW_TIER_MESSAGES = [
         'This is a great start. You can move on, but you can make our survey better by doing a few more matchups!',
@@ -479,18 +485,21 @@
 
     // ---------------------------------------------------------- pairwise core
 
-    /** SurveyTypes::pairwisePlan(), key for key (integer ceilings, never floats). */
+    /** SurveyTypes::pairwisePlan(), key for key (tiers are integer ceilings; band_pcts may be fractional). */
     function pairwisePlan(optionCount) {
         var n = Math.max(0, parseInt(optionCount, 10) || 0);
         var possible = n < 2 ? 0 : n * (n - 1) / 2;
-        var pcts = [], tiers = [], i;
+        var pcts = [], tiers = [], hundredths = [], i;
         if (possible <= PW_SMALL_MAX) {
             return { possible: possible, small: true, band_pcts: [], tiers: [], gate: possible };
         }
         for (i = 0; i < PW_BANDS.length; i++) {
-            if (PW_BANDS[i][0] === null || possible <= PW_BANDS[i][0]) { pcts = PW_BANDS[i][1].slice(); break; }
+            if (PW_BANDS[i][0] === null || possible <= PW_BANDS[i][0]) { hundredths = PW_BANDS[i][1]; break; }
         }
-        for (i = 0; i < pcts.length; i++) { tiers.push(Math.floor((pcts[i] * possible + 99) / 100)); }
+        for (i = 0; i < hundredths.length; i++) {
+            pcts.push(hundredths[i] / 100);
+            tiers.push(Math.floor((hundredths[i] * possible + 9999) / 10000));
+        }
         return { possible: possible, small: false, band_pcts: pcts, tiers: tiers, gate: tiers[0] };
     }
 

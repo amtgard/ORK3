@@ -47,7 +47,9 @@ static $_svcCssDone = false;
 		$_svScope   = htmlspecialchars((string) ($_sv['scope_label'] ?? ''));
 		$_svCloseTs = !empty($_sv['close_at']) ? strtotime((string) $_sv['close_at']) : false;
 		$_svClose   = $_svCloseTs ? 'closes ' . date('M j', $_svCloseTs) : '';
-		$_svCta     = !empty($_sv['in_progress']) ? 'Continue' : 'Take survey';
+		// An answered survey that still takes changes (allow_edit) reopens the
+		// player's own response; that wins over a draft of the edit itself.
+		$_svCta     = !empty($_sv['editable']) ? 'Update my answers' : (!empty($_sv['in_progress']) ? 'Continue' : 'Take survey');
 	?>
 		<div class="pna-feed-row pna-survey-row">
 			<span class="pna-feed-label"><?= htmlspecialchars((string) $_sv['title']) ?></span>

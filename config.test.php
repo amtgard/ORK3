@@ -131,3 +131,6 @@ define('IDP_BASE_URL', 'http://localhost:37080');
 define('IDP_API_URL', 'http://host.docker.internal:37080');
 define('IDP_CLIENT_ID', 'ork3_dev');
 define('IDP_CLIENT_SECRET', 'test-secret');
+
+// Survey edit links (see config.dist.php). Test-only value.
+define('SURVEY_EDIT_SECRET', 'test-only-survey-edit-secret-0123456789abcdef');

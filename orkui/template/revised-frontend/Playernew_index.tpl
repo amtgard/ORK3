@@ -195,11 +195,10 @@
 		if ($isOwnProfile && !empty($SurveyAvailable)) {
 			// Open surveys the player can answer; the card itself sits at the foot
 			// of the sidebar so it does not outrank their own data.
-			$_svN = count($SurveyAvailable);
-			$_svC = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); }));
-			$_svMsg = $_svN === 1 ? 'A survey is waiting for you' : "{$_svN} surveys are waiting for you";
-			if ($_svC > 0) { $_svMsg .= $_svC === $_svN ? ($_svN === 1 ? ', and it earns bonus credit' : ', and they earn bonus credit') : ", {$_svC} of them earn" . ($_svC === 1 ? 's' : '') . " bonus credit"; }
-			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>$_svMsg . '.','actionLabel'=>$_svN === 1 ? 'Take it.' : 'View surveys.','actionOnclick'=>"document.getElementById('pna-surveys-body').scrollIntoView({behavior:'smooth',block:'start'});return false;"];
+			// The link scrolls to that card and pulses it (pnaJumpToSurveys).
+			$_svCredit = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); })) > 0;
+			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>'Make your feedback known,','actionLabel'=>'take an Amtgard survey today','actionOnclick'=>'pnaJumpToSurveys();return false;',
+				'actionAfter'=>$_svCredit ? ' and you can even earn a bonus credit when you share your profile details!' : '.'];
 		}
 		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
@@ -299,6 +298,11 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:var(--ork-bg-dark);color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
+/* Survey alert link → the Available Surveys card pulses twice to say "here". */
+@keyframes pna-survey-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ork-link) 75%,transparent)}45%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ork-link) 40%,transparent)}100%{box-shadow:0 0 0 14px color-mix(in srgb,var(--ork-link) 0%,transparent)}}
+/* ID-scoped so it beats the themed .pna-card border in light and dark. */
+#pna-surveys-body .pna-survey-pulse{animation:pna-survey-pulse 1s ease-out 2;border-color:var(--ork-link);transition:border-color .2s}
+@media (prefers-reduced-motion:reduce){#pna-surveys-body .pna-survey-pulse{animation:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ork-link) 45%,transparent)}}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
 .pna-class-row{margin-bottom:10px}
 .pna-class-row:last-child{margin-bottom:0}
@@ -367,7 +371,13 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-ev-park{color:var(--ork-text-muted);font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
 .pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
-@media(max-width:700px){
+/* Profile tab layouts switch on the TAB PANEL's width, not the viewport: a
+   4:3 foldable or small tablet keeps the profile's 300px sidebar beside the
+   tabs, leaving a ~480px panel that a viewport query still split in two
+   (2026-11-22, Galaxy Z Fold inner screen). The panel is the container
+   (the rule right below). */
+.pn-tab-panel{container:pn-tab / inline-size}
+@container pn-tab (max-width:560px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
@@ -422,7 +432,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
+html[data-theme="dark"] .pn-badge-gray { background: var(--ork-bg-tertiary); color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
@@ -444,14 +454,22 @@ html[data-theme="dark"] .pn-acct-field input[type="url"],
 html[data-theme="dark"] .pn-acct-field input[type="password"],
 html[data-theme="dark"] .pn-acct-field select,
 html[data-theme="dark"] .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-html[data-theme="dark"] .pna-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+/* Profile cards (My Amtgard dashboard, About tab sidebar + My Story quote):
+   light mode sets them off the white panel with --ork-bg-inset, which is the
+   panel colour in dark mode; --ork-bg-tertiary is dark mode's one-step-up
+   layer (the same token every other nested dark surface uses). */
+html[data-theme="dark"] .pna-card,
+html[data-theme="dark"] .pn-belt-card,
+html[data-theme="dark"] .pn-cms-card { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-tertiary); } /* keeps its accent left border */
 html[data-theme="dark"] .pna-card-title { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-tenure-years { color: var(--ork-link); }
 html[data-theme="dark"] .pna-tenure-label,
 html[data-theme="dark"] .pna-tenure-since { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-class-name { color: var(--ork-text); }
 html[data-theme="dark"] .pna-class-level { color: #68d391; }
-html[data-theme="dark"] .pna-bar-wrap { background: var(--ork-bg-tertiary); }
+/* On the raised (bg-tertiary) cards, tracks and empty cells recess to the panel colour. */
+html[data-theme="dark"] .pna-bar-wrap { background: var(--ork-card-bg); }
 html[data-theme="dark"] .pna-bar { background: linear-gradient(90deg,#48bb78,#38a169) !important; }
 html[data-theme="dark"] .pna-bar-max { background: linear-gradient(90deg,#f6ad55,#c05621) !important; }
 html[data-theme="dark"] .pna-class-credits { color: var(--ork-text-muted); }
@@ -469,7 +487,8 @@ html[data-theme="dark"] .pna-alert-warning { background: var(--ork-alert-warning
 html[data-theme="dark"] .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
 html[data-theme="dark"] .pna-alert-info { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); color: var(--ork-alert-info-text, #90cdf4); }
 html[data-theme="dark"] .pna-spark-off,
-html[data-theme="dark"] .pna-spark-swatch-off { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-spark-swatch-off { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-card .pna-survey-credit { background: var(--ork-card-bg); }
 html[data-theme="dark"] .pna-spark-legend { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-congrats-banner { background: linear-gradient(90deg,#3d3300,#4a3c00); border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .pna-anni-banner { color: #fbd38d; }
@@ -565,7 +584,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-icons-option-body{flex:1;min-width:0}
 .pn-icons-option-title{font-size:13px;font-weight:600;color:#2d3748;margin-bottom:2px}
 .pn-icons-option-desc{font-size:11px;color:#718096;line-height:1.35}
-@media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
+@container pn-tab (max-width:560px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
 /* ===== Milestones Timeline ===== */
 .pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid var(--ork-divider)}
 .pn-timeline-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 20px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;display:flex;align-items:center;gap:8px}
@@ -586,7 +605,30 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-tl-item:nth-child(even) .pn-tl-right{order:1;text-align:right;padding-right:16px;padding-left:0}
 .pn-tl-item:nth-child(even) .pn-tl-node{order:2}
 .pn-tl-empty{text-align:center;padding:24px 16px;color:#a0aec0;font-size:13px}
+@container pn-tab (max-width:560px){
+.pn-timeline::before{left:18px}
+.pn-tl-item{flex-wrap:nowrap}
+.pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
+.pn-tl-left{display:none}
+.pn-tl-right{order:2!important;width:auto;flex:1;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-item:nth-child(even) .pn-tl-left{display:none}
+.pn-tl-item:nth-child(even) .pn-tl-right{order:2!important;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
+}
+@container pn-tab (min-width:561px){.pn-tl-date-mobile{display:none}}
+/* Browsers without container queries (Safari/iOS before 16, 2022) ignore every
+   @container block above and would keep the desktop layout on a phone. They do
+   understand @supports, so repeat the four rules on the old viewport
+   breakpoint (700px, what this page used before the container switch). */
+@supports not (container-type:inline-size){
 @media(max-width:700px){
+.pna-layout{flex-direction:column;align-items:stretch}
+.pna-sidebar{flex:none;width:100%}
+.pna-ev-cols{flex-direction:column}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-divider)}
+.pna-card{padding:12px 13px}
+.pna-tenure-years{font-size:36px}
+.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}
 .pn-timeline::before{left:18px}
 .pn-tl-item{flex-wrap:nowrap}
 .pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
@@ -597,6 +639,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
 }
 @media(min-width:701px){.pn-tl-date-mobile{display:none}}
+}
 /* ===== Milestones Config (Design Modal) ===== */
 .pn-ms-toggle-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .pn-ms-toggle{display:flex;align-items:center;gap:10px;font-size:13px;color:#4a5568}
@@ -866,11 +909,10 @@ html[data-theme="dark"] .pn-about-content h3,
 html[data-theme="dark"] .pn-about-content h4,
 html[data-theme="dark"] .pn-about-content h5,
 html[data-theme="dark"] .pn-about-content h6 { color: var(--ork-text); }
-html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-secondary); color: var(--ork-text-muted); /* --pn-accent flows through from light rule */ }
+html[data-theme="dark"] .pn-about-content blockquote { color: var(--ork-text-muted); /* background: the profile-cards rule; --pn-accent flows through from the light rule */ }
 html[data-theme="dark"] .pn-about-content code { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-about-content pre { background: #1a202c; color: #e2e8f0; }
 html[data-theme="dark"] .pn-about-empty { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pn-belt-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-belt-card-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-belt-group { color: var(--ork-text-muted); border-top-color: var(--ork-border); }
 html[data-theme="dark"] .pn-belt-title { color: var(--ork-text-muted); }
@@ -1008,7 +1050,6 @@ html[data-theme="dark"] .pn-dm-hint i { color: var(--ork-link-bright); }
 html[data-theme="dark"] .pn-dm-hint strong { color: var(--ork-text); }
 
 /* Currently-active milestones summary card */
-html[data-theme="dark"] .pn-cms-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
@@ -1077,8 +1118,8 @@ html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
 .dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
 #dp-prefs-body{transition:opacity .15s}
 #dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
-html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
-html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
+html[data-theme="dark"] .dp-no-restrict-row{background:var(--ork-bg-tertiary);border-color:var(--ork-border)}
+html[data-theme="dark"] .dp-no-restrict-row:hover{background:var(--ork-border)}
 .pna-notif-card { padding: 0; overflow: hidden; }
 .pna-notif-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; }
 .pna-notif-title { font-weight: 700; font-size: 14px; color: #2d3748; }
@@ -1638,7 +1679,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div class="pna-alerts">
 					<?php foreach ($_maAlerts as $_al): ?>
 					<div class="pna-alert pna-alert-<?= $_al['type'] ?>">
-						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?php endif; ?></span>
+						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?= htmlspecialchars($_al['actionAfter'] ?? '') ?><?php endif; ?></span>
 					</div>
 					<?php endforeach; ?>
 				</div>
@@ -1699,6 +1740,37 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
 							include __DIR__ . '/_survey_available_card.tpl';
 						endif; ?></div>
+						<?php if ($isOwnProfile && !empty($SurveyAvailable)): ?>
+						<script>
+						/* The alerts strip's survey link: bring the Available Surveys card
+						   into view, then pulse it once the scroll has settled. */
+						function pnaJumpToSurveys() {
+							var body = document.getElementById('pna-surveys-body');
+							var card = body && (body.querySelector('.pna-card') || body);
+							if (!card) { return; }
+							var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+							var done = false;
+							function pulse() {
+								if (done) { return; }
+								done = true;
+								window.removeEventListener('scrollend', pulse);
+								card.classList.remove('pna-survey-pulse');
+								void card.offsetWidth; /* restart the animation on a repeat click */
+								card.classList.add('pna-survey-pulse');
+								window.setTimeout(function () { card.classList.remove('pna-survey-pulse'); }, 2400);
+							}
+							var r = card.getBoundingClientRect();
+							var vh = window.innerHeight || document.documentElement.clientHeight;
+							if (r.top >= 0 && r.bottom <= vh) { pulse(); return; }  /* already on screen */
+							if (!still && 'onscrollend' in window) { window.addEventListener('scrollend', pulse); }
+							/* A card taller than the screen (many surveys) shows its top, clear of the sticky header. */
+							card.style.scrollMarginTop = '72px';
+							card.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: r.height > vh - 96 ? 'start' : 'center' });
+							/* Fallback: no scrollend support, or the scroll ended early. */
+							window.setTimeout(pulse, still ? 0 : 1200);
+						}
+						</script>
+						<?php endif; ?>
 
 					</div><!-- /.pna-sidebar -->
 

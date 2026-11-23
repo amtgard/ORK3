@@ -141,6 +141,16 @@ final class SurveyTest extends TestCase
         $this->assertCount(7, $built['Questions']);
         $this->assertFalse($built['Locked']);
 
+        // The creator rides on the row for the builder/results headers and the list.
+        $this->assertSame($this->officerId, $built['Survey']['CreatorId']);
+        $persona = (string) $this->pdo->query('SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $this->officerId)->fetchColumn();
+        $this->assertNotSame('', $persona);
+        $this->assertSame($persona, $built['Survey']['CreatorPersona']);
+        $listed = array_values(array_filter($this->survey->listManageable($this->officerId), static fn (array $r) => (int) $r['survey_id'] === $surveyId));
+        $this->assertCount(1, $listed);
+        $this->assertSame($this->officerId, $listed[0]['CreatorId']);
+        $this->assertSame($persona, $listed[0]['CreatorPersona']);
+
         $open = $this->survey->setStatus($surveyId, 'open');
         $this->assertSame(0, $open['Status'], (string) ($open['Error'] ?? ''));
         $this->assertSame('open', (string) $open['Survey']['status']);

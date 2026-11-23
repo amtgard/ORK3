@@ -10,6 +10,8 @@
  * that failed in between, posts the ones a web request left over (bounded
  * backfills), and posts credits held while a player was suspended once the
  * suspension lifts. Reconcile is idempotent, so running it often is harmless.
+ * It also wipes the Update My Answers edit links of surveys that have closed
+ * (SurveyResponse::sweepEditKeys()), which a date-based close never triggers.
  * Optional cron:
  *
  *     # /etc/cron.d/ork-survey-credit-sweep
@@ -31,6 +33,10 @@ if (empty($_SERVER['HTTP_HOST'])) {
 }
 
 require_once dirname(__DIR__) . '/startup.php';
+
+// Update My Answers: wipe the edit links of every survey that has closed,
+// including one that closed by date alone with nobody opening it since.
+(new SurveyResponse())->sweepEditKeys();
 
 $credit = new SurveyCredit();
 foreach ($credit->surveysWithConfigs() as $surveyId) {

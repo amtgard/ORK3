@@ -410,7 +410,11 @@ class SurveyReport
      * the first floor(N / MIN_CELL) * MIN_CELL responses the view matches (0
      * below MIN_CELL). Deterministic, so nothing is stored, and it moves only
      * once MIN_CELL more matching responses have arrived: two reloads either
-     * match or differ by at least MIN_CELL people.
+     * match or differ by at least MIN_CELL people. The exception is Update My
+     * Answers (`allow_edit`): an edit changes an already-counted response in
+     * place without moving the watermark, so two reloads can differ by one
+     * person's changed answers. That trade-off is accepted and documented in
+     * the builder hint and docs/survey-guide.md.
      */
     private function sharedWatermark(int $surveyId, array $f, ?int &$matched = null): int
     {
@@ -537,6 +541,9 @@ class SurveyReport
      */
     public function resultsFor(int $surveyId, $filters, array $access): array
     {
+        // A date-based close has no status change to hang the edit-link wipe
+        // on, so the results read does it (update-answers design: lazy sweep).
+        (new SurveyResponse())->sweepEditKeys((int)$surveyId);
         if (($access['level'] ?? null) !== 'manage') {
             // Fail closed: an empty lens would read like a manager's (no
             // kingdom/park restriction, test rows and dates allowed, nothing
@@ -2226,6 +2233,7 @@ class SurveyReport
     public function csvStream(int $surveyId, array $filters, callable $emit, int $actorId = 0): void
     {
         $surveyId = (int)$surveyId;
+        (new SurveyResponse())->sweepEditKeys($surveyId);   // lazy date-close sweep, as resultsFor()
         $f = self::clientFilters($filters);   // manager path: lens-only keys dropped
         // Audit every export that can carry identity or demographics (#6); an
         // anonymous-only export carries neither.

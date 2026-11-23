@@ -65,11 +65,15 @@ class Controller_Survey extends Controller
         if ((int) ($r['Status'] ?? 1) !== 0) {
             return null;
         }
+        $edit = is_array($r['Edit'] ?? null) ? $r['Edit'] : null;
         return [
             'status'   => 0,
             'survey'   => $r['Survey'],
             'pages'    => $r['Pages'],
             'draft'    => $r['Draft'],
+            // The viewer's own answered response (allow_edit), found by its
+            // server key alone; null when there is nothing to change.
+            'edit'     => $edit,
             'eligible' => (bool) $r['Eligible'],
             'reason'   => $r['Reason'],
         ];
@@ -285,7 +289,7 @@ class Controller_Survey extends Controller
                     $this->setPageTitle('Survey Results: ' . $row['title']);
                 }
                 $this->data['SurveyId']           = $surveyId;
-                $this->data['Survey']             = ['Survey' => $row];
+                $this->data['Survey']             = ['Survey' => $this->Survey->with_creator($row)];
                 $this->data['ResultsPendingText'] = $this->Survey->sharing_pending_text($pending['opens_at']);
                 return;
             }

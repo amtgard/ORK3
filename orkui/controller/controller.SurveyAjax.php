@@ -53,7 +53,7 @@ class Controller_SurveyAjax extends Controller
         'Title', 'Description', 'WelcomeMd', 'WelcomeImageId', 'ThanksMd', 'ThanksImageId',
         'OpenAt', 'CloseAt', 'AudienceActiveOnly', 'AudienceMinTenureMonths',
         'AudienceRecentMonths', 'AudienceEventCalendardetailId',
-        'DataGateEnabled', 'ResultsShare', 'ResultsShareTiming', 'ShowBanner', 'ShowProgress', 'AllowResume', 'AccentColor',
+        'DataGateEnabled', 'ResultsShare', 'ResultsShareTiming', 'ShowBanner', 'ShowProgress', 'AllowResume', 'AllowEdit', 'AccentColor',
     ];
 
     public function __construct($call = null, $id = null)
@@ -286,6 +286,7 @@ class Controller_SurveyAjax extends Controller
             'questions' => array_map([$this, 'renderQuestion'], $r['Questions']),
             'images'    => array_map([$this, 'renderImage'], $r['Images']),
             'locked'    => (bool) $r['Locked'],
+            'edit_available' => (bool) ($r['EditAvailable'] ?? false),
         ]);
     }
 
@@ -672,6 +673,7 @@ class Controller_SurveyAjax extends Controller
             'survey'   => $r['Survey'],
             'pages'    => $r['Pages'],
             'draft'    => $r['Draft'],
+            'edit'     => $r['Edit'] ?? null,
             'eligible' => (bool) $r['Eligible'],
             'reason'   => $r['Reason'],
         ]);
@@ -683,8 +685,10 @@ class Controller_SurveyAjax extends Controller
         $surveyId = (int) ($_POST['SurveyId'] ?? 0);
         $answers  = $this->jsonField('Answers', [], $this->Survey->max_answer_bytes());
         $pageIndex = (int) ($_POST['PageIndex'] ?? 0);
+        // The runner is changing a sent response (Update My Answers).
+        $editing  = $this->truthy($_POST['Editing'] ?? 0);
 
-        $r = $this->Survey->draft_save($surveyId, $uid, $answers, $pageIndex);
+        $r = $this->Survey->draft_save($surveyId, $uid, $answers, $pageIndex, $editing);
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
@@ -711,7 +715,26 @@ class Controller_SurveyAjax extends Controller
         // The banner is memoised per viewer in the session; a finished survey
         // must stop being promoted on the very next page load.
         $this->bust_survey_banner_cache();
-        $this->jsonOut(['status' => 0, 'thanks_html' => $r['ThanksHtml'], 'credit' => $r['Credit'] ?? 'none']);
+        $this->jsonOut([
+            'status'      => 0,
+            'thanks_html' => $r['ThanksHtml'],
+            'credit'      => $r['Credit'] ?? 'none',
+            'edited'      => !empty($r['Edited']),
+            'edit_url'    => !empty($r['Editable']) ? $this->editUrl($surveyId) : null,
+        ]);
+    }
+
+    /**
+     * The "change your answers" link for an allow_edit response: the share
+     * slug route (the runner's own Survey/take/{id} when a survey has no slug).
+     * The runner finds the signed-in player's own response by its server key,
+     * so the link carries nothing about the response.
+     */
+    private function editUrl(int $surveyId): string
+    {
+        $row  = $this->Survey->get_row($surveyId);
+        $slug = (string) ($row['slug'] ?? '');
+        return UIR . ($slug !== '' ? 'Survey/s/' . rawurlencode($slug) : 'Survey/take/' . $surveyId);
     }
 
     public function available($p = null)

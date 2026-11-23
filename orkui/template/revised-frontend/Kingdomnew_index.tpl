@@ -5,6 +5,8 @@
 	   ----------------------------------------------- */
 	$parkList         = is_array($park_summary['KingdomParkAveragesSummary']) ? $park_summary['KingdomParkAveragesSummary'] : array();
 	$parkCounts       = []; // loaded via AJAX (park_averages_json)
+	// Avg / Week + Avg / Month attendance-type filter: kingdom officers + ORK admins (kingdom EDIT).
+	$knAvgFilter      = !empty($CanEditKingdom);
 	$eventList        = is_array($event_summary) ? $event_summary : array();
 	// [TOURNAMENTS HIDDEN] $tournamentList = [];
 	$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
@@ -222,15 +224,19 @@
 		<div class="kn-stat-number"><?= count($eventList) ?></div>
 		<div class="kn-stat-label">Events</div>
 	</div>
-	<div class="kn-stat-card">
+	<div class="kn-stat-card<?= $knAvgFilter ? ' orn-avgf-host' : '' ?>">
+		<?php if ($knAvgFilter): ?><span class="orn-avgf-corner"><button type="button" class="orn-avgf-btn" aria-label="Filter averages by attendance type" data-tip="In-Person / Online / All"><i class="fas fa-filter"></i></button></span><?php endif; ?>
 		<div class="kn-stat-icon"><i class="fas fa-users"></i></div>
 		<div class="kn-stat-number" id="kn-stat-avgwk">—</div>
 		<div class="kn-stat-label">Avg / Week <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per week across all parks in this Kingdom, averaged over the past 6 months. A player attending multiple parks in one week counts once.</span></span></div>
+		<?php if ($knAvgFilter): ?><div class="orn-avgf-status" hidden></div><?php endif; ?>
 	</div>
-	<div class="kn-stat-card">
+	<div class="kn-stat-card<?= $knAvgFilter ? ' orn-avgf-host' : '' ?>">
+		<?php if ($knAvgFilter): ?><span class="orn-avgf-corner"><button type="button" class="orn-avgf-btn" aria-label="Filter averages by attendance type" data-tip="In-Person / Online / All"><i class="fas fa-filter"></i></button></span><?php endif; ?>
 		<div class="kn-stat-icon"><i class="fas fa-chart-line"></i></div>
 		<div class="kn-stat-number" id="kn-stat-avgmo">—</div>
 		<div class="kn-stat-label">Avg / Month <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per month across all parks in this Kingdom, averaged over the past 12 months. A player attending multiple parks in one month counts once.</span></span></div>
+		<?php if ($knAvgFilter): ?><div class="orn-avgf-status" hidden></div><?php endif; ?>
 	</div>
 	<?php if (!empty($IsLoggedIn) && is_array($week_recap ?? null)): ?>
 	<a class="kn-stat-card kn-stat-card-link" href="<?= UIR ?>Recap/kingdom/<?= (int)$kingdom_id ?>" style="text-decoration:none;color:inherit;" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
@@ -393,11 +399,7 @@
 
 					<!-- Toolbar -->
 					<div class="kn-parks-toolbar">
-						<div class="kn-avg-type" id="kn-avg-type">
-							<span class="kn-avg-type-label">Averages</span>
-							<?= ork_attendance_type_control('all') ?>
-							<span class="kn-avg-type-note" id="kn-avg-type-note" aria-live="polite"></span>
-						</div>
+						<div class="kn-avg-type"><span class="kn-avg-type-note" id="kn-avg-type-note" aria-live="polite"></span></div>
 						<button class="kn-view-btn" id="kn-view-tiles" title="Tile view">
 							<i class="fas fa-th-large"></i>
 						</button>
@@ -2953,19 +2955,24 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 
 	// Kingdom's own parks + principality parks. One fetch per kingdom/principality id;
 	// park ids are globally unique so document-scoped fills land on the right tiles/rows,
-	// and per-section footer ids keep totals separate. The hero stat cards always show
-	// All; the Parks tab In-Person / Online / All control (informational only, never the
-	// kingdom's Count Online Attendance setting) refetches the tab's figures.
+	// and per-section footer ids keep totals separate. The hero Avg / Week + Avg / Month
+	// corner filter (kingdom officers + ORK admins; informational only, default All, never
+	// the kingdom's Count Online Attendance setting) refetches the hero cards and the Parks
+	// tab's figures together.
 	var knPrinzIds = (KnConfig.principalityIds || []);
 	var knAvgSeq = 0;
 	function knLoadAverages(type) {
 		var seq = ++knAvgSeq;
 		var qs = type && type !== 'all' ? '&AttendanceType=' + encodeURIComponent(type) : '';
 		var panel = document.getElementById('kn-tab-parks');
+		var heroNums = [document.getElementById('kn-stat-avgwk'), document.getElementById('kn-stat-avgmo')];
 		var pending = 1 + knPrinzIds.length;
 		if (panel) panel.classList.add('kn-avg-loading');
+		heroNums.forEach(function(n) { if (n) n.classList.add('pk-avg-loading'); });
 		function done() {
-			if (seq === knAvgSeq && --pending === 0 && panel) panel.classList.remove('kn-avg-loading');
+			if (seq !== knAvgSeq || --pending !== 0) return;
+			if (panel) panel.classList.remove('kn-avg-loading');
+			heroNums.forEach(function(n) { if (n) n.classList.remove('pk-avg-loading'); });
 		}
 		function load(id, opts, label) {
 			fetch('<?= UIR ?>Kingdom/park_averages_json/' + id + qs)
@@ -2977,7 +2984,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 		load(kingdomId, {
 			scope: document,
 			footer: { avgwk: 'kn-total-avgwk', avgmo: 'kn-total-avgmo', tp: 'kn-total-tp', tm: 'kn-total-tm' },
-			statCards: !qs
+			statCards: true
 		}, 'Kingdom');
 		knPrinzIds.forEach(function(prId) {
 			load(prId, {
@@ -2989,9 +2996,10 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 	}
 	knLoadAverages('all');
 
-	var knAvgTypeEl = document.querySelector('#kn-avg-type .orn-type-control');
-	if (knAvgTypeEl && typeof window.ornAttendanceTypeControl === 'function') {
-		window.ornAttendanceTypeControl(knAvgTypeEl, {
+	var knAvgBtns = document.querySelectorAll('.kn-stats-row .orn-avgf-btn');
+	if (knAvgBtns.length && typeof window.ornAvgFilter === 'function') {
+		window.ornAvgFilter({
+			buttons: knAvgBtns,
 			value: 'all',
 			onChange: function(type) {
 				var note = document.getElementById('kn-avg-type-note');

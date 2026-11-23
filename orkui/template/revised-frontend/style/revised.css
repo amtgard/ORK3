@@ -2129,18 +2129,12 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
     margin-bottom: 14px;
     flex-wrap: wrap;
 }
-/* Park averages In-Person / Online / All (kingdom Parks tab toolbar, park hero).
-   Control look + dark mode come from orkui.css .orn-type-control. */
-.kn-avg-type, .pk-avg-type { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
-.kn-avg-type { margin-right: auto; }
-.pk-avg-type { justify-content: flex-end; margin: -8px 0 18px; }
-.kn-avg-type-label, .pk-avg-type-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ork-text-muted); }
-.kn-avg-type-note, .pk-avg-type-note { font-size: 13px; color: var(--ork-text-secondary); }
-.kn-avg-type-note:empty, .pk-avg-type-note:empty { display: none; }
+/* Kingdom Parks tab toolbar: note shown while the hero Avg / Week + Avg / Month filter
+   (orkui.css .orn-avgf-*) is on In-Person or Online; it also pushes the view buttons right. */
+.kn-avg-type { display: flex; align-items: center; min-width: 0; margin-right: auto; }
+.kn-avg-type-note { font-size: 13px; color: var(--ork-text-secondary); }
+.kn-avg-type-note:empty { display: none; }
 .kn-avg-loading .kn-park-tile-stats, .kn-avg-loading td.kn-col-numeric, .pk-avg-loading { opacity: .45; transition: opacity .15s; }
-@media (max-width: 600px) {
-    .pk-avg-type { justify-content: flex-start; margin-top: -4px; }
-}
 .kn-view-btn {
     width: 30px;
     height: 30px;

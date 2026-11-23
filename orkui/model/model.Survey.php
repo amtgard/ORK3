@@ -83,6 +83,11 @@ class Model_Survey extends Model
         return $this->_survey()->get($surveyId);
     }
 
+    public function with_creator(array $surveyRow): array
+    {
+        return $this->_survey()->withCreator($surveyRow);
+    }
+
     public function list_manageable(int $uid, ?string $scopeType = null, ?int $scopeId = null): array
     {
         return $this->_survey()->listManageable($uid, $scopeType, $scopeId);
@@ -248,9 +253,9 @@ class Model_Survey extends Model
         return $this->_response()->definitionForRespondent($surveyId, $uid, $preview);
     }
 
-    public function draft_save(int $surveyId, int $uid, array $answers, int $pageIndex): array
+    public function draft_save(int $surveyId, int $uid, array $answers, int $pageIndex, bool $editing = false): array
     {
-        return $this->_response()->draftSave($surveyId, $uid, $answers, $pageIndex);
+        return $this->_response()->draftSave($surveyId, $uid, $answers, $pageIndex, $editing);
     }
 
     public function draft_load(int $surveyId, int $uid): ?array

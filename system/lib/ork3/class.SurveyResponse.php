@@ -24,6 +24,15 @@
  *    the exact month count, and no duration — in a park-scoped survey an exact
  *    tenure beside a constant kingdom column points at one specific veteran.
  *
+ * One deliberate, bounded exception (design 2026-11-22-survey-update-answers):
+ * when a survey has `allow_edit` on, a response row carries `edit_key` — an
+ * HMAC of (survey, player) under a server secret — plus `edit_answers_json`,
+ * so the respondent can reopen and change their answers.
+ * Only this class reads or writes those two columns; results, export, rows
+ * and every other manager-facing read must never select them. They are wiped
+ * (sweepEditKeys()) when the survey closes, by status or by date, and when
+ * `allow_edit` is switched off.
+ *
  * Layering: all SQL for the survey module lives in system/lib/ork3. Callers
  * reach this class through orkui/model/model.Survey.php only.
  */
@@ -261,9 +270,11 @@ class SurveyResponse
      *
      * @param  array<string, mixed> $surveyRow    raw ork_survey row
      * @param  ?bool                $participated pre-fetched "already answered" (availableFor batches it), or null to look it up
-     * @return array{eligible: bool, reason: string}
+     * @return array{eligible: bool, reason: string, editing?: true}
      *         reason ∈ ok · closed · not_open_yet · scope · inactive · event_attendance ·
      *                  recent_attendance · tenure · completed · banned
+     *         `editing` is present (true) when the player already answered and
+     *         may change that response (editableResponse()).
      */
     public function eligibility(array $surveyRow, int $uid, ?bool $participated = null): array
     {
@@ -303,8 +314,13 @@ class SurveyResponse
         }
 
         // Checked before scope so a player who answered and then transferred
-        // still gets the accurate "you already completed this" message.
+        // still gets the accurate "you already completed this" message. A
+        // player whose response can still be edited is let back in to change
+        // it: they met the audience rules when they first answered.
         if ($participated ?? $this->hasParticipated($surveyId, $uid)) {
+            if (null !== $this->editableResponse($surveyRow, $uid)) {
+                return ['eligible' => true, 'reason' => self::REASON_OK, 'editing' => true];
+            }
             return self::ineligible('completed');
         }
 
@@ -444,7 +460,9 @@ class SurveyResponse
     /**
      * How many players the survey's audience rules currently admit: the
      * set-based mirror of eligibility() without the schedule/status and "already
-     * completed" checks. Used for the results page's response rate.
+     * completed" checks. Used for the results page's response rate. A survey
+     * with no audience rule at all is counted as if it had a 12-month recent
+     * sign-in rule, so the rate is measured against players still playing.
      *
      * @param array<string, mixed> $surveyRow raw ork_survey row
      */
@@ -499,6 +517,19 @@ class SurveyResponse
         }
 
         $recentMonths = (int) ($surveyRow['audience_recent_months'] ?? 0);
+        // No audience rule narrows the survey, so every player ever homed in
+        // the scope "qualifies" — decades of lapsed accounts that sink the
+        // response rate to <0.1%. (Active-only is on by default and barely
+        // narrows anything, so it does not count as a rule here.) With no
+        // event, recent-attendance or tenure rule, count the players with a
+        // sign-in inside the scope (park / kingdom + principalities /
+        // anywhere for Amtgard-wide) in the past year: the same rule as a
+        // 12-month recent-attendance audience. The count only — eligibility()
+        // is unchanged, so anyone in scope can still answer.
+        if ($recentMonths <= 0 && $eventId <= 0
+                && (int) ($surveyRow['audience_min_tenure_months'] ?? 0) <= 0) {
+            $recentMonths = 12;
+        }
         if ($recentMonths > 0) {
             $where[] = 'EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'attendance ar
                                 WHERE ar.mundane_id = m.mundane_id
@@ -641,6 +672,165 @@ class SurveyResponse
     }
 
     // -----------------------------------------------------------------------
+    // Update My Answers — the edit link (see the class docblock)
+    // -----------------------------------------------------------------------
+
+    /**
+     * The edit_key for this (survey, player): HMAC-SHA256 under a server
+     * secret, so the column alone cannot be joined back to a player. 64 hex
+     * characters. PURE apart from the configured secret.
+     */
+    public static function editKey(int $surveyId, int $uid): string
+    {
+        $secret = self::editSecret();
+        if (null === $secret) {
+            // Every caller checks editingConfigured() first; never key with ''.
+            throw new \LogicException('SURVEY_EDIT_SECRET is not configured.');
+        }
+        return hash_hmac('sha256', 'survey-edit:' . (int) $surveyId . ':' . (int) $uid, $secret);
+    }
+
+    /** Shortest SURVEY_EDIT_SECRET accepted: 32 characters (e.g. 16 random bytes in hex). */
+    public const EDIT_SECRET_MIN = 32;
+
+    /**
+     * The dedicated edit-link secret: the SURVEY_EDIT_SECRET constant
+     * (config.php), else the SURVEY_EDIT_SECRET environment variable. It is
+     * used for nothing else, so rotating the database password (or any other
+     * credential) never cuts respondents off from their answers. Null when
+     * neither is set or it is shorter than EDIT_SECRET_MIN: Update My Answers
+     * is then unavailable rather than keyed by something guessable.
+     */
+    private static function editSecret(): ?string
+    {
+        $secret = defined('SURVEY_EDIT_SECRET') ? (string) constant('SURVEY_EDIT_SECRET') : '';
+        if ('' === $secret) {
+            $secret = (string) (getenv('SURVEY_EDIT_SECRET') ?: '');
+        }
+        return strlen($secret) >= self::EDIT_SECRET_MIN ? $secret : null;
+    }
+
+    /** Can this server issue edit links (is SURVEY_EDIT_SECRET set)? */
+    public static function editingConfigured(): bool
+    {
+        return null !== self::editSecret();
+    }
+
+    /**
+     * Is $surveyRow open for answers right now by status and schedule? The same
+     * test eligibility() applies before it looks at the player.
+     *
+     * @param array<string, mixed> $surveyRow
+     */
+    private static function isOpenNow(array $surveyRow): bool
+    {
+        if ('open' !== (string) ($surveyRow['status'] ?? '')) {
+            return false;
+        }
+        $now = time();
+        $openAt  = self::stamp($surveyRow['open_at'] ?? null);
+        $closeAt = self::stamp($surveyRow['close_at'] ?? null);
+        return (null === $openAt || $openAt <= $now) && (null === $closeAt || $closeAt > $now);
+    }
+
+    /**
+     * This player's response that they may still change, or null.
+     *
+     * Null unless the survey has `allow_edit` on and is open by status and
+     * schedule, and a response carrying this player's edit_key exists (one
+     * submitted before the toggle was on has none and stays "completed"). A
+     * survey found closed or with editing off is swept on the way out, so the
+     * link does not outlive the reason for it.
+     *
+     * @param  array<string, mixed> $surveyRow raw ork_survey row
+     * @return ?array{response_id: int, answers: array<int|string, mixed>, consent: string}
+     */
+    public function editableResponse(array $surveyRow, int $uid): ?array
+    {
+        $uid = (int) $uid;
+        $surveyId = (int) ($surveyRow['survey_id'] ?? 0);
+        if ($uid <= 0 || $surveyId <= 0) {
+            return null;
+        }
+        if (!self::isOpenNow($surveyRow)) {
+            // Not yet open (a scheduled reopen) keeps its links; closed does not.
+            $status = (string) ($surveyRow['status'] ?? '');
+            $closeAt = self::stamp($surveyRow['close_at'] ?? null);
+            if ('open' !== $status || (null !== $closeAt && $closeAt <= time())) {
+                $this->sweepEditKeys($surveyId);
+            }
+            return null;
+        }
+        if (empty($surveyRow['allow_edit']) || !self::editingConfigured()) {
+            return null;
+        }
+
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT response_id, consent, edit_answers_json FROM ' . DB_PREFIX . 'survey_response
+             WHERE survey_id = ' . $surveyId . '
+               AND edit_key = \'' . self::editKey($surveyId, $uid) . '\'
+               AND is_test = 0
+             LIMIT 1'
+        );
+        if (!$r || !$r->Next()) {
+            return null;
+        }
+        $answers = json_decode((string) $r->edit_answers_json, true);
+        return [
+            'response_id' => (int) $r->response_id,
+            'answers'     => is_array($answers) ? $answers : [],
+            'consent'     => (string) $r->consent,
+        ];
+    }
+
+    /**
+     * Wipe the edit link (edit_key, edit_answers_json) from the
+     * responses of every survey that is not open, has passed its close_at (PHP
+     * clock: close_at is the builder's PHP-local wall time, see nowStamp()), or
+     * has `allow_edit` off. With $surveyId, only that survey's responses.
+     *
+     * The global form (no id) runs from the hourly cron
+     * (bin/survey-credit-sweep.php) and from the Available Surveys read
+     * (availableAndBannerFor()), so a survey that closes by date alone loses
+     * its links even if nobody opens it again. It filters on `edit_key IS NOT
+     * NULL` only — the two columns are always written and wiped together —
+     * so the scan stays on uq_edit_key: just the live links, never every
+     * response ever sent.
+     */
+    public function sweepEditKeys(?int $surveyId = null): void
+    {
+        $closed = '(s.status <> \'open\'
+                       OR s.allow_edit = 0
+                       OR (s.close_at IS NOT NULL AND s.close_at > \'1000-01-01\' AND s.close_at <= \'' . self::nowStamp() . '\'))';
+        if (null !== $surveyId) {
+            $where = '(r.edit_key IS NOT NULL OR r.edit_answers_json IS NOT NULL)
+                  AND ' . $closed . ' AND r.survey_id = ' . (int) $surveyId . ' AND s.survey_id = ' . (int) $surveyId;
+        } else {
+            $where = 'r.edit_key IS NOT NULL AND ' . $closed;
+            // The global sweep runs from the read path (availableAndBannerFor,
+            // every page shell) and the cron: look before writing, so the usual
+            // case is one indexed SELECT and no UPDATE on the response table.
+            $this->db->Clear();
+            $due = $this->db->DataSet(
+                'SELECT 1 FROM ' . DB_PREFIX . 'survey_response r
+                 JOIN ' . DB_PREFIX . 'survey s ON s.survey_id = r.survey_id
+                 WHERE ' . $where . ' LIMIT 1'
+            );
+            if (!$due || !$due->Next()) {
+                return;
+            }
+        }
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'survey_response r
+             JOIN ' . DB_PREFIX . 'survey s ON s.survey_id = r.survey_id
+             SET r.edit_key = NULL, r.edit_answers_json = NULL
+             WHERE ' . $where
+        );
+    }
+
+    // -----------------------------------------------------------------------
     // Respondent view of a definition
     // -----------------------------------------------------------------------
 
@@ -652,7 +842,14 @@ class SurveyResponse
      * `$preview` bypasses the audience check for a manager previewing their own
      * survey; a caller who may not manage it gets Status 3.
      *
-     * @return array<string, mixed> QualTest-style envelope + Survey, Pages, Draft, Eligible, Reason
+     * When the player already answered and may change it (allow_edit, survey
+     * still open), `Edit` carries the answers they submitted, for the runner
+     * to prefill; `Draft` is then an edit in
+     * progress, if one was autosaved. `Edit` is null otherwise, and only ever
+     * describes the CALLER's own response: it is looked up by the caller's
+     * edit_key, never by anything a client presents.
+     *
+     * @return array<string, mixed> QualTest-style envelope + Survey, Pages, Draft, Edit, Eligible, Reason
      */
     public function definitionForRespondent(int $surveyId, int $uid, bool $preview): array
     {
@@ -668,6 +865,7 @@ class SurveyResponse
             return ['Status' => 3, 'Error' => 'You do not have permission to preview this survey.'];
         }
 
+        $editing = false;
         if ($preview) {
             $eligible = true;
             $reason   = 'preview';
@@ -675,6 +873,12 @@ class SurveyResponse
             $e = $this->eligibility($survey, $uid);
             $eligible = $e['eligible'];
             $reason   = $e['reason'];
+            $editing  = !empty($e['editing']);
+            if ('closed' === $reason && !empty($survey['allow_edit'])) {
+                // A date-based close has no status change to hang the sweep
+                // on, so the respondent read path does it (design: lazy sweep).
+                $this->sweepEditKeys($surveyId);
+            }
         }
 
         if (!$eligible) {
@@ -694,6 +898,7 @@ class SurveyResponse
                 ],
                 'Pages'    => [],
                 'Draft'    => null,
+                'Edit'     => null,
                 'Eligible' => false,
                 'Reason'   => $reason,
             ];
@@ -723,11 +928,17 @@ class SurveyResponse
 
         $public = $this->publicSurveyFields($survey, $imageUrls);
 
-        // The data gate's credit line (§3.7). In preview the builder sees it whenever any config exists.
+        // The data gate's credit line (§3.7). In preview the builder sees it
+        // whenever any config exists. An edit never earns a credit (the edit
+        // path grants none; widgetRow() suppresses it on the card too).
         $credit = new SurveyCredit();
-        $public['credit_available'] = $preview
-            ? $credit->hasConfigs($surveyId)
-            : $credit->creditAvailableFor($survey, $uid);
+        if ($editing) {
+            $public['credit_available'] = false;
+        } else {
+            $public['credit_available'] = $preview
+                ? $credit->hasConfigs($surveyId)
+                : $credit->creditAvailableFor($survey, $uid);
+        }
 
         $seed  = (int) crc32($surveyId . '-' . $uid);
         $pages = $this->renderPagesForRespondent($pages, $seed, $imageUrls);
@@ -737,12 +948,21 @@ class SurveyResponse
             $draft = null;
         }
 
+        $edit = null;
+        if ($editing) {
+            $editable = $this->editableResponse($survey, $uid);
+            if (null !== $editable) {
+                $edit = ['answers' => $editable['answers']];
+            }
+        }
+
         return [
             'Status'   => 0,
             'Error'    => '',
             'Survey'   => $public,
             'Pages'    => $pages,
             'Draft'    => $draft,
+            'Edit'     => $edit,
             'Eligible' => true,
             'Reason'   => $reason,
         ];
@@ -779,6 +999,7 @@ class SurveyResponse
             'thanks_image'      => $imageUrls[$thanksImage] ?? null,
             'show_progress'     => (int) $survey['show_progress'],
             'allow_resume'      => (int) $survey['allow_resume'],
+            'allow_edit'        => (int) ($survey['allow_edit'] ?? 0),
             'data_gate_enabled' => (int) $survey['data_gate_enabled'],
             'accent_color'      => $survey['accent_color'] ?: null,
             'close_at'          => $survey['close_at'] ?: null,
@@ -1011,10 +1232,17 @@ class SurveyResponse
      * Save (or replace) this player's in-progress answers. A no-op success when
      * the survey has resume turned off, so the runner can autosave blindly.
      *
+     * `$editing` is the runner saying it is changing a sent response (Update
+     * My Answers). Once a player has submitted an allow_edit survey,
+     * eligibility() says `editing`; a save WITHOUT the flag is then a first
+     * attempt's autosave landing after its own submit, and is dropped (no-op
+     * success, Saved=false). Stored, it would come back as a partial "edit in
+     * progress" on reopen.
+     *
      * @param  array<int|string, mixed> $answers
      * @return array<string, mixed>
      */
-    public function draftSave(int $surveyId, int $uid, array $answers, int $pageIndex): array
+    public function draftSave(int $surveyId, int $uid, array $answers, int $pageIndex, bool $editing = false): array
     {
         $surveyId = (int) $surveyId;
         $uid = (int) $uid;
@@ -1033,6 +1261,9 @@ class SurveyResponse
         $e = $this->eligibility($survey, $uid);
         if (!$e['eligible']) {
             return ['Status' => 1, 'Error' => 'This survey is not available to you.', 'Reason' => $e['reason']];
+        }
+        if (!empty($e['editing']) && !$editing) {
+            return ['Status' => 0, 'Error' => '', 'Saved' => false];
         }
 
         $json = json_encode($answers);
@@ -1203,8 +1434,15 @@ class SurveyResponse
      * respondent who was never told a dated credit goes on their record is
      * never given one, live or by a later backfill.
      *
+     * Update My Answers: when eligibility() says the player is `editing`, the
+     * submission replaces their existing response instead (submitEdit()). On a
+     * first submit to a survey with `allow_edit` on, the response row also
+     * gets its edit link (edit_key, edit_answers_json); a test row
+     * never does.
+     *
      * @param  array<int|string, mixed> $answers
-     * @return array<string, mixed> QualTest-style envelope; +ResponseId, Consent, ThanksHtml
+     * @return array<string, mixed> QualTest-style envelope; +ResponseId, Consent, ThanksHtml,
+     *                              Credit, Edited (bool), Editable (bool: the player can change this response until the survey closes)
      */
     public function submit(int $surveyId, int $uid, array $answers, string $consent, int $durationSeconds, bool $isTest, bool $creditNotice = false): array
     {
@@ -1219,6 +1457,7 @@ class SurveyResponse
             return ['Status' => 1, 'Error' => 'Survey not found.'];
         }
 
+        $editing = false;
         if ($isTest) {
             // Only someone who may manage the survey may write a test row into it.
             if (!$this->canManageSurvey($uid, $survey)) {
@@ -1233,6 +1472,7 @@ class SurveyResponse
                     'Reason' => $e['reason'],
                 ];
             }
+            $editing = !empty($e['editing']);
         }
 
         $pages = $this->loadStructure($surveyId);
@@ -1243,6 +1483,21 @@ class SurveyResponse
                 'Error'  => 'Some answers need attention.',
                 'Errors' => $check['errors'],
             ];
+        }
+
+        if ($editing) {
+            return $this->submitEdit($survey, $uid, $answers, $check['rows']);
+        }
+
+        // The edit link, for a real response to a survey that allows editing.
+        $editKey = null;
+        $editJson = null;
+        if (!$isTest && !empty($survey['allow_edit']) && self::editingConfigured()) {
+            $editJson = self::editAnswersJson($answers, $check['rows']);
+            if (null === $editJson) {
+                return ['Status' => 1, 'Error' => 'Your answers could not be saved.'];
+            }
+            $editKey  = self::editKey($surveyId, $uid);
         }
 
         $storedConsent = self::effectiveConsent(!empty($survey['data_gate_enabled']), $consent, $isTest);
@@ -1295,7 +1550,8 @@ class SurveyResponse
         error_clear_last(); // so rollback() reports THIS statement's PDO warning, not an older one
         $ok = $this->exec(
             'INSERT INTO ' . DB_PREFIX . 'survey_response
-             (survey_id, consent, mundane_id, kingdom_id, park_id, credit_notice, tenure_months, is_test, started_at, submitted_at, duration_seconds)
+             (survey_id, consent, mundane_id, kingdom_id, park_id, credit_notice, tenure_months, is_test, started_at, submitted_at, duration_seconds,
+              edit_key, edit_answers_json)
              VALUES (' . $surveyId . ',
                      \'' . $storedConsent . '\',
                      ' . self::sqlInt($row['mundane_id']) . ',
@@ -1306,7 +1562,9 @@ class SurveyResponse
                      ' . ($isTest ? 1 : 0) . ',
                      ' . $this->sqlStr($row['started_at']) . ',
                      ' . $this->sqlStr($row['submitted_at']) . ',
-                     ' . self::sqlInt($row['duration_seconds']) . ')'
+                     ' . self::sqlInt($row['duration_seconds']) . ',
+                     ' . $this->sqlStr($editKey) . ',
+                     ' . $this->sqlStr($editJson) . ')'
         );
         if (!$ok) {
             return $this->rollback('Your response could not be saved.', 'insert_response', $surveyId, $uid);
@@ -1319,33 +1577,9 @@ class SurveyResponse
             return $this->rollback('Your response could not be saved.', 'response_id', $surveyId, $uid);
         }
 
-        if ($check['rows']) {
-            // One multi-row INSERT per chunk: statement-level all-or-nothing, and
-            // the surrounding transaction covers the chunk boundaries.
-            foreach (array_chunk($check['rows'], 200) as $chunk) {
-                $values = [];
-                foreach ($chunk as $r) {
-                    $num = self::sqlNum($r['value_num'] ?? null);
-                    if (null === $num) {
-                        return $this->rollback('Your answers could not be saved.', 'non_finite_number', $surveyId, $uid);
-                    }
-                    $values[] = '(' . $responseId . ', '
-                        . (int) $r['question_id'] . ', '
-                        . self::sqlInt($r['option_id'] ?? null) . ', '
-                        . self::sqlInt($r['row_option_id'] ?? null) . ', '
-                        . $this->sqlStr($r['value_text'] ?? null) . ', '
-                        . $num . ')';
-                }
-                $this->db->Clear();
-                error_clear_last();
-                if (!$this->exec(
-                    'INSERT INTO ' . DB_PREFIX . 'survey_answer
-                     (response_id, question_id, option_id, row_option_id, value_text, value_num)
-                     VALUES ' . implode(', ', $values)
-                )) {
-                    return $this->rollback('Your answers could not be saved.', 'insert_answers', $surveyId, $uid);
-                }
-            }
+        $stage = '';
+        if (!$this->insertAnswers($responseId, $check['rows'], $stage)) {
+            return $this->rollback('Your answers could not be saved.', $stage, $surveyId, $uid);
         }
 
         if (!$isTest) {
@@ -1409,6 +1643,199 @@ class SurveyResponse
             'Consent'    => $storedConsent,
             'ThanksHtml' => $this->thanksHtml($survey),
             'Credit'     => $credit,
+            'Edited'     => false,
+            'Editable'   => null !== $editKey,
+        ];
+    }
+
+    /**
+     * Insert normalised answer rows for one response: one multi-row INSERT per
+     * chunk, statement-level all-or-nothing, with the caller's transaction
+     * covering the chunk boundaries. On failure $stage names what failed and
+     * the caller rolls back.
+     *
+     * @param list<array<string, mixed>> $rows from validateSubmission()
+     */
+    private function insertAnswers(int $responseId, array $rows, string &$stage = ''): bool
+    {
+        foreach (array_chunk($rows, 200) as $chunk) {
+            $values = [];
+            foreach ($chunk as $r) {
+                $num = self::sqlNum($r['value_num'] ?? null);
+                if (null === $num) {
+                    $stage = 'non_finite_number';
+                    return false;
+                }
+                $values[] = '(' . (int) $responseId . ', '
+                    . (int) $r['question_id'] . ', '
+                    . self::sqlInt($r['option_id'] ?? null) . ', '
+                    . self::sqlInt($r['row_option_id'] ?? null) . ', '
+                    . $this->sqlStr($r['value_text'] ?? null) . ', '
+                    . $num . ')';
+            }
+            $this->db->Clear();
+            error_clear_last();
+            if (!$this->exec(
+                'INSERT INTO ' . DB_PREFIX . 'survey_answer
+                 (response_id, question_id, option_id, row_option_id, value_text, value_num)
+                 VALUES ' . implode(', ', $values)
+            )) {
+                $stage = 'insert_answers';
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The answer map kept for prefilling an edit: only questions that produced
+     * a stored row, so a stale answer to a question the respondent could not
+     * see is not kept beside the response. Null if it cannot be encoded.
+     *
+     * @param array<int|string, mixed>   $answers raw submission
+     * @param list<array<string, mixed>> $rows    from validateSubmission()
+     */
+    private static function editAnswersJson(array $answers, array $rows): ?string
+    {
+        $raw = [];
+        foreach ($answers as $k => $v) {
+            $raw[(int) $k] = $v;
+        }
+        $kept = [];
+        foreach ($rows as $r) {
+            $qid = (int) ($r['question_id'] ?? 0);
+            if ($qid > 0 && array_key_exists($qid, $raw)) {
+                $kept[$qid] = $raw[$qid];
+            }
+        }
+        $json = json_encode((object) $kept, JSON_UNESCAPED_UNICODE);
+        return false === $json ? null : $json;
+    }
+
+    /**
+     * Replace an editable response's answers in place (Update My Answers).
+     * ONE transaction: lock the response row and re-check its edit link ->
+     * re-check the survey is still open (shared lock) -> refresh
+     * edit_answers_json -> replace the answer rows -> delete the draft.
+     *
+     * No participation row, no response_count bump and no bonus credit: the
+     * response was already counted and credited at first submit. Consent and
+     * the scrubbed identity columns stay exactly as first stored, and so does
+     * submitted_at (bonus credit is judged and dated from it, and for partial
+     * and anonymous responses a moved day would be a new timing signal).
+     *
+     * @param  array<string, mixed>       $survey  raw ork_survey row
+     * @param  array<int|string, mixed>   $answers raw submission
+     * @param  list<array<string, mixed>> $rows    validated answer rows
+     * @return array<string, mixed>
+     */
+    private function submitEdit(array $survey, int $uid, array $answers, array $rows): array
+    {
+        $surveyId = (int) $survey['survey_id'];
+        $editable = $this->editableResponse($survey, $uid);
+        if (null === $editable) {
+            return ['Status' => 1, 'Error' => self::reasonMessage('completed'), 'Reason' => 'completed'];
+        }
+        $responseId = $editable['response_id'];
+
+        $editJson = self::editAnswersJson($answers, $rows);
+        if (null === $editJson) {
+            return ['Status' => 1, 'Error' => 'Your answers could not be saved.'];
+        }
+
+        $this->db->Clear();
+        error_clear_last();
+        if (!$this->exec('START TRANSACTION')) {
+            return $this->rollback('Your response could not be saved.', 'start_transaction', $surveyId, $uid);
+        }
+
+        // Lock the row, and re-check the link under the lock: a close or a
+        // toggle-off sweep that landed since editableResponse() ends the edit.
+        $this->db->Clear();
+        $lock = $this->db->DataSet(
+            'SELECT response_id FROM ' . DB_PREFIX . 'survey_response
+             WHERE response_id = ' . $responseId . '
+               AND edit_key = \'' . self::editKey($surveyId, $uid) . '\'
+             FOR UPDATE'
+        );
+        if (!$lock || !$lock->Next()) {
+            $closed = $this->rollback(self::reasonMessage('closed'), 'edit_lock', $surveyId, $uid);
+            $closed['Reason'] = 'closed';
+            return $closed;
+        }
+
+        // And re-read the survey itself under a shared lock: Survey::setStatus
+        // commits the status change BEFORE its sweep, so a close can land
+        // while this edit holds the response lock. A locking read sees the
+        // committed status, and the shared lock holds a close (an UPDATE on
+        // the survey row) until this edit commits, without serialising edits
+        // to the same survey against each other.
+        $this->db->Clear();
+        $open = $this->db->DataSet(
+            'SELECT status, open_at, close_at, allow_edit FROM ' . DB_PREFIX . 'survey
+             WHERE survey_id = ' . $surveyId . '
+             LOCK IN SHARE MODE'
+        );
+        if (!$open || !$open->Next()
+            || empty($open->allow_edit)
+            || !self::isOpenNow([
+                'status'   => (string) $open->status,
+                'open_at'  => $open->open_at,
+                'close_at' => $open->close_at,
+            ])
+        ) {
+            $closed = $this->rollback(self::reasonMessage('closed'), 'edit_survey_closed', $surveyId, $uid);
+            $closed['Reason'] = 'closed';
+            return $closed;
+        }
+
+        // submitted_at stays the first-submit value for EVERY consent level:
+        // bonus credit judges coverage and dates the grant from it
+        // (SurveyCredit::coverage/grant), so an edit must not move it.
+        $this->db->Clear();
+        error_clear_last();
+        if (!$this->exec(
+            'UPDATE ' . DB_PREFIX . 'survey_response SET edit_answers_json = ' . $this->sqlStr($editJson) . '
+             WHERE response_id = ' . $responseId
+        )) {
+            return $this->rollback('Your answers could not be saved.', 'edit_update_response', $surveyId, $uid);
+        }
+
+        $this->db->Clear();
+        error_clear_last();
+        if (!$this->exec('DELETE FROM ' . DB_PREFIX . 'survey_answer WHERE response_id = ' . $responseId)) {
+            return $this->rollback('Your answers could not be saved.', 'edit_delete_answers', $surveyId, $uid);
+        }
+
+        $stage = '';
+        if (!$this->insertAnswers($responseId, $rows, $stage)) {
+            return $this->rollback('Your answers could not be saved.', 'edit_' . $stage, $surveyId, $uid);
+        }
+
+        $this->db->Clear();
+        error_clear_last();
+        if (!$this->exec(
+            'DELETE FROM ' . DB_PREFIX . 'survey_draft
+             WHERE survey_id = ' . $surveyId . ' AND mundane_id = ' . (int) $uid
+        )) {
+            return $this->rollback('Your answers could not be saved.', 'delete_draft', $surveyId, $uid);
+        }
+
+        $this->db->Clear();
+        error_clear_last();
+        if (!$this->exec('COMMIT')) {
+            return $this->rollback('Your answers could not be saved.', 'commit', $surveyId, $uid);
+        }
+
+        return [
+            'Status'     => 0,
+            'Error'      => '',
+            'ResponseId' => $responseId,
+            'Consent'    => $editable['consent'],
+            'ThanksHtml' => $this->thanksHtml($survey),
+            'Credit'     => 'none',
+            'Edited'     => true,
+            'Editable'   => true,
         ];
     }
 
@@ -1528,7 +1955,7 @@ class SurveyResponse
     /**
      * Open surveys this player may answer, soonest deadline first (undated last).
      *
-     * @return list<array{survey_id: int, title: string, description: string, scope_label: string, close_at: ?string, in_progress: bool}>
+     * @return list<array{survey_id: int, title: string, description: string, scope_label: string, close_at: ?string, in_progress: bool, editable: bool}>
      */
     public function availableFor(int $uid): array
     {
@@ -1546,13 +1973,24 @@ class SurveyResponse
      */
     public function availableAndBannerFor(int $uid): array
     {
+        // The frequent read that runs everywhere (memoised per viewer by the
+        // page shell): the place a date-based close gets its edit links wiped
+        // between cron runs. Indexed on uq_edit_key, see sweepEditKeys().
+        $this->sweepEditKeys();
+
         $candidates = $this->candidateSurveys($uid, false, 0);
         $eligible = [];
+        $editable = [];
         foreach ($candidates as $survey) {
-            // candidateSurveys() already excluded answered surveys in SQL, so
-            // "participated" is known false: no participation query at all.
-            if ($this->eligibility($survey, $uid, false)['eligible']) {
+            // candidateSurveys() says per row whether this player answered it
+            // (only allow_edit surveys come back answered), so eligibility()
+            // never runs its own participation query here.
+            $e = $this->eligibility($survey, $uid, !empty($survey['_participated']));
+            if ($e['eligible']) {
                 $eligible[] = $survey;
+                if (!empty($e['editing'])) {
+                    $editable[(int) $survey['survey_id']] = true;
+                }
             }
         }
         if (!$eligible) {
@@ -1585,8 +2023,10 @@ class SurveyResponse
         $bannerIds = [];
         foreach ($eligible as $survey) {
             $sid   = (int) $survey['survey_id'];
-            $out[] = $this->widgetRow($survey, $uid, $labels[$sid] ?? null, $credit[$sid] ?? false, isset($drafts[$sid]));
-            if (!empty($survey['show_banner'])) {
+            // An edit never earns a credit, so an editable card never offers one.
+            $out[] = $this->widgetRow($survey, $uid, $labels[$sid] ?? null, !isset($editable[$sid]) && ($credit[$sid] ?? false), isset($drafts[$sid]), isset($editable[$sid]));
+            // An answered survey is listed (to update) but never promoted again.
+            if (!empty($survey['show_banner']) && !isset($editable[$sid])) {
                 $bannerIds[] = $sid;
             }
         }
@@ -1658,7 +2098,9 @@ class SurveyResponse
 
     /**
      * Open surveys whose scope could reach this player, already excluding ones
-     * they finished (and, for the banner, ones they dismissed). An event-audience
+     * they finished — unless the survey allows editing, when the row comes back
+     * with `_participated` = 1 for eligibility() to decide (and never for the
+     * banner) — and, for the banner, ones they dismissed. An event-audience
      * survey reaches anyone with attendance at that event, wherever they live,
      * so it is a candidate outside the home scope too (review #12).
      *
@@ -1679,7 +2121,11 @@ class SurveyResponse
         $kingdomList = implode(', ', array_map('intval', array_unique($kingdomIds)));
         $parkId = (int) $player['park_id'];
 
-        $sql = 'SELECT s.* FROM ' . DB_PREFIX . 'survey s
+        $participated = 'EXISTS (
+                        SELECT 1 FROM ' . DB_PREFIX . 'survey_participation p
+                        WHERE p.survey_id = s.survey_id AND p.mundane_id = ' . $uid . '
+                  )';
+        $sql = 'SELECT s.*, ' . $participated . ' AS _participated FROM ' . DB_PREFIX . 'survey s
                 WHERE s.status = \'open\'
                   AND (s.open_at IS NULL OR s.open_at <= \'' . self::nowStamp() . '\')
                   AND (s.close_at IS NULL OR s.close_at > \'' . self::nowStamp() . '\')
@@ -1693,10 +2139,7 @@ class SurveyResponse
                               AND a.event_calendardetail_id = s.audience_event_calendardetail_id
                         ))
                   )
-                  AND NOT EXISTS (
-                        SELECT 1 FROM ' . DB_PREFIX . 'survey_participation p
-                        WHERE p.survey_id = s.survey_id AND p.mundane_id = ' . $uid . '
-                  )';
+                  AND ' . ($bannerOnly ? 'NOT ' . $participated : '(s.allow_edit = 1 OR NOT ' . $participated . ')');
         if ($bannerOnly) {
             $sql .= ' AND s.show_banner = 1
                       AND NOT EXISTS (
@@ -1725,9 +2168,10 @@ class SurveyResponse
      * @param  ?string              $scopeLabel      pre-resolved label (availableFor batches them), or null to look it up
      * @param  ?bool                $creditAvailable pre-resolved credit flag (availableFor batches them), or null to look it up
      * @param  ?bool                $hasDraft        pre-resolved draft flag (availableFor batches them), or null to look it up
-     * @return array{survey_id: int, title: string, description: string, scope_label: string, close_at: ?string, in_progress: bool, credit_available: bool}
+     * @param  bool                 $editable        the player already answered and may update it (card says "Update my answers")
+     * @return array{survey_id: int, title: string, description: string, scope_label: string, close_at: ?string, in_progress: bool, credit_available: bool, editable: bool}
      */
-    private function widgetRow(array $survey, int $uid, ?string $scopeLabel = null, ?bool $creditAvailable = null, ?bool $hasDraft = null): array
+    private function widgetRow(array $survey, int $uid, ?string $scopeLabel = null, ?bool $creditAvailable = null, ?bool $hasDraft = null, bool $editable = false): array
     {
         return [
             'survey_id'   => (int) $survey['survey_id'],
@@ -1740,6 +2184,7 @@ class SurveyResponse
             'close_at'    => $survey['close_at'] ?: null,
             'in_progress' => !empty($survey['allow_resume']) && ($hasDraft ?? $this->hasDraft((int) $survey['survey_id'], $uid)),
             'credit_available' => $creditAvailable ?? (new SurveyCredit())->creditAvailableFor($survey, $uid),
+            'editable'    => $editable,
         ];
     }
 

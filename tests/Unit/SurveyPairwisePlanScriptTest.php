@@ -37,6 +37,14 @@ final class SurveyPairwisePlanScriptTest extends TestCase
         }
     }
 
+    public function testJsPlanMatchesPhpForVeryLargeSets(): void
+    {
+        $out = $this->harness();
+        foreach ([32, 33, 45, 46, 63, 64, 100, 101, 141, 142, 150] as $n) {
+            $this->assertSame(SurveyTypes::pairwisePlan($n), $out['large'][$n], 'n=' . $n);
+        }
+    }
+
     public function testQueueCoversEveryPairOnceWithRandomSides(): void
     {
         $q = $this->harness()['queue'];

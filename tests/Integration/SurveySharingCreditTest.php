@@ -1683,4 +1683,34 @@ final class SurveySharingCreditTest extends TestCase
         $this->manualAttendance($uid, date('Y-m-d', strtotime('-3 days')), $this->parkA, $this->k, 6, 'T11SHARE park day');
         $this->assertSame(1, (new SurveyResponse())->audienceCount($this->row($recent)), 'control: a real park day does');
     }
+
+    /**
+     * With no audience rule set, the response-rate denominator counts only
+     * players with a sign-in inside the survey's scope in the past year —
+     * not every account ever homed there. Eligibility is unchanged.
+     */
+    public function testAudienceCountDefaultsToSignInsWithinAYearInScope(): void
+    {
+        $sr = new SurveyResponse();
+        $fresh = $this->player('fresh', $this->parkA, $this->k);
+        $stale = $this->player('stale', $this->parkA, $this->k);
+        $away  = $this->player('awayplay', $this->parkA, $this->k);
+        $this->player('never', $this->parkA, $this->k);
+        $this->manualAttendance($fresh, date('Y-m-d', strtotime('-2 months')), $this->parkA, $this->k, 6, 'T11SHARE fresh');
+        $this->manualAttendance($stale, date('Y-m-d', strtotime('-14 months')), $this->parkA, $this->k, 6, 'T11SHARE stale');
+        $this->manualAttendance($away, date('Y-m-d', strtotime('-1 month')), $this->parkOther, $this->kOther, 6, 'T11SHARE away');
+
+        $ps = $this->openSurvey($this->pOfficerA, 'park', $this->parkA);
+        $this->assertSame(1, $sr->audienceCount($this->row($ps)), 'park: only the player signed in at the park this year');
+        $ks = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);
+        $this->assertSame(1, $sr->audienceCount($this->row($ks)), 'kingdom: a sign-in in another kingdom does not count');
+
+        // An explicit rule replaces the default: a 24-month window takes the 14-month-old sign-in too.
+        $wide = $this->openSurvey($this->pOfficerA, 'park', $this->parkA, ['audience_recent_months' => 24]);
+        $this->assertSame(2, $sr->audienceCount($this->row($wide)), 'a set recent-attendance rule wins over the 12-month default');
+
+        // The default is a denominator only: an in-scope player with no sign-in may still answer.
+        $never = $this->player('never2', $this->parkA, $this->k);
+        $this->assertTrue($sr->eligibility($this->row($ps), $never)['eligible']);
+    }
 }

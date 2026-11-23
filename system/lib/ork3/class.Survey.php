@@ -17,6 +17,7 @@ class Survey
 {
     /** Error returned by every structural mutation once a survey has been opened. */
     public const LOCKED_ERROR = 'Survey structure is locked because it has been opened.';
+    public const EDIT_UNAVAILABLE = 'Changing answers is not available on this ORK: its administrators have not set a survey edit secret (SURVEY_EDIT_SECRET).';
 
     /** Upload limits for survey illustrations (spec §3). */
     private const IMAGE_MAX_BYTES = 2097152;   // 2 MB
@@ -66,6 +67,7 @@ class Survey
         'ShowBanner'               => ['show_banner', 'bool'],
         'ShowProgress'             => ['show_progress', 'bool'],
         'AllowResume'              => ['allow_resume', 'bool'],
+        'AllowEdit'                => ['allow_edit', 'bool'],
         'AccentColor'              => ['accent_color', 'color'],
     ];
 
@@ -598,11 +600,12 @@ class Survey
         }
 
         return $this->ok([
-            'Survey'    => self::withInstants($survey),
+            'Survey'    => self::withInstants($this->withCreator($survey)),
             'Pages'     => $pages,
             'Questions' => $questions,
             'Images'    => $images,
             'Locked'    => $this->isStructureLocked($survey),
+            'EditAvailable' => SurveyResponse::editingConfigured(),
         ]);
     }
 
@@ -658,7 +661,42 @@ class Survey
         return $this->decorateRows($rows);
     }
 
-    /** ScopeName, ResponseCount and Locked for a list of survey rows, in two name queries. */
+    /**
+     * CreatorId / CreatorPersona on a survey row: who made it, for the builder
+     * and results headers and the list. The persona is '' when the account is
+     * gone. Unlike the rest of the row this is display data, not authority:
+     * who may manage a survey is still decided by scope (canManage).
+     */
+    public function withCreator(array $surveyRow): array
+    {
+        $names = $this->creatorNames([(int) ($surveyRow['created_by'] ?? 0)]);
+        return $this->applyCreator($surveyRow, $names);
+    }
+
+    /** persona by mundane_id for the given creator ids, one query. */
+    private function creatorNames(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $i) => $i > 0)));
+        if (!$ids) {
+            return [];
+        }
+        $names = [];
+        foreach ($this->fetchAll('SELECT mundane_id, persona FROM ' . DB_PREFIX . 'mundane
+                                  WHERE mundane_id IN (' . implode(',', $ids) . ')') as $m) {
+            $names[(int) $m['mundane_id']] = (string) $m['persona'];
+        }
+        return $names;
+    }
+
+    private static function applyCreator(array $row, array $names): array
+    {
+        $cid = (int) ($row['created_by'] ?? 0);
+        $row['CreatorId']      = $cid;
+        $row['CreatorPersona'] = $names[$cid] ?? '';
+        return $row;
+    }
+
+    /** ScopeName, ResponseCount, Locked and the creator for a list of survey rows, in three name queries. */
     private function decorateRows(array $rows): array
     {
         // Resolve scope names in two queries rather than one per row.
@@ -671,6 +709,7 @@ class Survey
                 $pIds[(int) $r['scope_id']] = true;
             }
         }
+        $creators = $this->creatorNames(array_column($rows, 'created_by'));
         $kNames = [];
         if ($kIds) {
             foreach ($this->fetchAll('SELECT kingdom_id, name FROM ' . DB_PREFIX . 'kingdom
@@ -694,6 +733,7 @@ class Survey
             } elseif ($r['scope_type'] === 'park') {
                 $name = $pNames[$sid] ?? '';
             }
+            $rows[$i]                  = self::applyCreator($rows[$i], $creators);
             $rows[$i]['ScopeName']     = $name;
             $rows[$i]['ResponseCount'] = (int) $r['response_count'];
             $rows[$i]['Locked']        = $this->isStructureLocked($r);
@@ -896,6 +936,13 @@ class Survey
             return $this->fail('This survey gives bonus credits, which need respondents to be able to choose Any ORK Data.');
         }
 
+        // Edit links are keyed by a dedicated server secret; without it the
+        // promise "respondents can change their answers" could not be kept.
+        if (array_key_exists('AllowEdit', $fields) && $this->truthy($fields['AllowEdit'])
+            && !SurveyResponse::editingConfigured()) {
+            return $this->fail(self::EDIT_UNAVAILABLE);
+        }
+
         $sets = [];
 
         // Scope (ScopeType + ScopeId). Handled before the field loop so the
@@ -1072,6 +1119,12 @@ class Survey
             $this->purgeDrafts($surveyId);
         }
 
+        // Turning editing off ends every respondent's way back in, so the
+        // response-to-player link kept for it goes now (update-answers design).
+        if (array_key_exists('AllowEdit', $fields) && !$this->truthy($fields['AllowEdit'])) {
+            (new SurveyResponse())->sweepEditKeys($surveyId);
+        }
+
         // The survey's bonus-credit category is named after it ("Survey Bonus -
         // {title}"), so a renamed survey renames its credit.
         if ($sets && array_key_exists('Title', $fields)) {
@@ -1227,6 +1280,9 @@ class Survey
             // answers are unreachable — and they are identified and stored
             // BEFORE the consent screen, so they must not outlive the survey.
             $this->purgeDrafts($surveyId);
+            // Likewise the edit link from each response to its player: it
+            // exists only so a respondent can change answers while open.
+            (new SurveyResponse())->sweepEditKeys($surveyId);
         } else {
             $this->purgeStaleDrafts($surveyId);
         }
@@ -1297,13 +1353,13 @@ class Survey
              (scope_type, scope_id, title, slug, description, welcome_md, thanks_md, status,
               open_at, close_at, audience_kingdom_ids, audience_active_only, audience_min_tenure_months,
               audience_recent_months, audience_event_calendardetail_id,
-              data_gate_enabled, results_share, results_share_timing, show_banner, show_progress, allow_resume, accent_color,
+              data_gate_enabled, results_share, results_share_timing, show_banner, show_progress, allow_resume, allow_edit, accent_color,
               created_by, updated_by, created_at, updated_at)
              SELECT scope_type, scope_id, \'' . $this->esc($title) . '\', \'' . $this->esc($slug) . '\',
                     description, welcome_md, thanks_md, \'draft\',
                     NULL, NULL, audience_kingdom_ids, audience_active_only, audience_min_tenure_months,
                     audience_recent_months, NULL,
-                    data_gate_enabled, results_share, results_share_timing, 1, show_progress, allow_resume, accent_color,
+                    data_gate_enabled, results_share, results_share_timing, 1, show_progress, allow_resume, allow_edit, accent_color,
                     ' . (int) $uid . ', ' . (int) $uid . ', ' . self::nowSql() . ', ' . self::nowSql() . '
              FROM ' . DB_PREFIX . 'survey WHERE survey_id = ' . $surveyId
         );

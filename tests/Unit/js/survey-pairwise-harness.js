@@ -24,7 +24,8 @@ function mulberry32(a) {
 }
 function shares(m, n) { return m.a === n.a || m.a === n.b || m.b === n.a || m.b === n.b; }
 
-var out = { plans: {}, queue: {}, stage: {} };
+var out = { plans: {}, large: {}, queue: {}, stage: {} };
+[32, 33, 45, 46, 63, 64, 100, 101, 141, 142, 150].forEach(function (k) { out.large[k] = R.pairwisePlan(k); });
 for (var n = 0; n <= 60; n++) { out.plans[n] = R.pairwisePlan(n); }
 
 var ids = [11, 12, 13, 14, 15, 16, 17, 18];

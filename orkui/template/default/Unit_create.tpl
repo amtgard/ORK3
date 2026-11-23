@@ -3,7 +3,7 @@
 html[data-theme="dark"] #uc-legacy-confirm > div { background: #2d3748 !important; box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important; color: #e2e8f0 !important; }
 html[data-theme="dark"] #uc-legacy-confirm > div > div { border-color: #4a5568 !important; color: #e2e8f0 !important; }
 html[data-theme="dark"] #uc-legacy-confirm p { color: #cbd5e0 !important; }
-html[data-theme="dark"] #uc-legacy-confirm-back { background: #374151 !important; border-color: #4a5568 !important; color: #e2e8f0 !important; }
+html[data-theme="dark"] #uc-legacy-confirm-back { background: var(--ork-bg-tertiary) !important; border-color: #4a5568 !important; color: #e2e8f0 !important; }
 html[data-theme="dark"] .info-container > div[style*="background:#ebf8ff"] { background: rgba(66,153,225,0.1) !important; border-color: #4299e1 !important; color: #90cdf4 !important; }
 </style>
 <div class='info-container'>

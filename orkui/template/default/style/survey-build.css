@@ -158,6 +158,62 @@
     box-shadow: var(--ork-shadow-dropdown);
 }
 
+/* Popout mode (askConfirm opts.anchor): a retype that would lose options
+   asks right under the Type picker instead of in the strip up top. Fixed and
+   placed by survey-build.js placeConfirm(); the arrow points at the picker
+   through --svb-pop-arrow. A warning-tinted edge so it reads as a caution,
+   not a toast. */
+.svb-confirm.svb-confirm-pop:not([hidden]) {
+    position: fixed;
+    margin: 0;
+    width: min(360px, calc(100vw - 32px));
+    padding: 12px 14px;
+    border-color: var(--ork-alert-warning-border);
+    border-left: 4px solid var(--ork-alert-warning-border);
+    z-index: var(--z-dropdown);
+    animation: svb-pop-in 140ms ease-out;
+}
+
+.svb-confirm-pop .svb-confirm-text { flex: 0 0 100%; }
+
+.svb-confirm-pop .svb-confirm-text::before {
+    content: "\f071";
+    font-family: "Font Awesome 7 Free", "Font Awesome 6 Free", "Font Awesome 5 Free";
+    font-weight: 900;
+    margin-right: 8px;
+    color: var(--ork-alert-warning-text);
+}
+
+.svb-confirm-pop .svb-confirm-cancel { margin-left: auto; }
+
+.svb-confirm-pop::before {
+    content: "";
+    position: absolute;
+    top: -7px;
+    left: calc(var(--svb-pop-arrow, 50%) - 6px);
+    width: 12px;
+    height: 12px;
+    background: inherit;
+    border-top: 1px solid var(--ork-alert-warning-border);
+    border-left: 1px solid var(--ork-alert-warning-border);
+    transform: rotate(45deg);
+}
+
+.svb-confirm-pop.svb-confirm-pop-above::before {
+    top: auto;
+    bottom: -7px;
+    transform: rotate(225deg);
+}
+
+@keyframes svb-pop-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .svb-confirm.svb-confirm-pop:not([hidden]) { animation: none; }
+}
+
 .svb-notice-slot { margin-bottom: 12px; }
 
 /* Every notice carries its own Dismiss button beside the message. */

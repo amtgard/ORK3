@@ -2110,7 +2110,7 @@ html {
 .sor-ret-val { font-size:22px; font-weight:700; color:#2b6cb0; }
 .sor-ret-lbl { font-size:11px; color:#718096; margin-top:4px; line-height:1.3; }
 .sor-ret-sub { font-size:13px; font-weight:600; color:#4a5568; margin-top:6px; }
-html[data-theme="dark"] .sor-ret-card { background:rgba(255,255,255,0.04); border-color:var(--ork-input-border,#2d3748); }
+html[data-theme="dark"] .sor-ret-card { background:var(--ork-bg-tertiary); border-color:var(--ork-border); }
 html[data-theme="dark"] .sor-ret-val { color:#63b3ed; }
 html[data-theme="dark"] .sor-ret-lbl { color:var(--ork-text-muted,#a0aec0); }
 html[data-theme="dark"] .sor-ret-sub { color:var(--ork-text,#e2e8f0); }

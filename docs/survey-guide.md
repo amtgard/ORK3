@@ -36,7 +36,7 @@ The builder has two parts:
   question below the last one on a page.
 - **Survey settings** (left) are collapsible sections: Basics, Screens (welcome and thank-you),
   Audience, Schedule, Privacy (the data gate), Promotion (site banner and share link) and
-  Experience (progress bar, resume, accent colour). The site banner is **on** for every new survey;
+  Experience (progress bar, resume, changing answers, accent colour). The site banner is **on** for every new survey;
   untick it in Promotion if you'd rather reach players only by share link.
 
 Everything saves as you go. The pill in the header says **Saved**, **Saving…** or **Not saved**
@@ -49,6 +49,33 @@ on the longest side. A survey can hold up to 40 images and 40 MB in total. When 
 limit, the ORK first clears out images that no question, screen or text uses any more (anything
 uploaded in the last hour is kept, in case you're still placing it). If the survey is still full,
 the upload is refused and the message says which limit you hit.
+
+### Letting players change their answers
+
+In **Experience**, tick **Allow respondents to change their answers before the survey closes**
+to let players come back and update what they sent. It's off by default, and you can turn it on
+or off while the survey is open. It suits long surveys, such as a big pairwise question, where
+players may want to do some matchups now and add more later.
+
+While it's on:
+
+- A player who has answered sees **Update my answers** on the survey's card, and the survey link
+  opens their own answers for them to change. Their thank-you screen also gives them a link they
+  can keep, for coming back later.
+- An update replaces their earlier answers. It's still one response, so it isn't counted twice
+  and never earns a second bonus credit.
+- The data gate isn't asked again. The choice a player made the first time stays.
+- Once the survey closes, the answers are final, and the link says the survey has closed.
+
+**Privacy.** To find a player's response again, the ORK keeps a private link from each response
+to the player who sent it, for as long as the survey is open. Nobody can see it in the results,
+the CSV or anywhere else in the ORK, and it's removed once the survey closes (or when you turn
+this setting off). Anonymous and partial responses are only fully unlinkable from that point on.
+If you share results while the survey is open, an edit can change the shared totals by one
+person's answers, so someone comparing two looks at them could see what that one edit changed.
+
+**Earlier responses.** Responses sent before you turned this on can't be changed, because no
+link was kept for them. Those players see the usual "already completed" message.
 
 ### Question types
 
@@ -94,7 +121,12 @@ your question's own numbers.
 | 31–105 | 30% | 40% | 50% | 60% |
 | 106–200 | 20% | 30% | 40% | 50% |
 | 201–300 | 10% | 20% | 30% | 40% |
-| 301 or more | 10% | 15% | 20% | 25% |
+| 301–500 | 10% | 15% | 20% | 25% |
+| 501–1,000 | 5% | 10% | 15% | 20% |
+| 1,001–2,000 | 2% | 4% | 6% | 8% |
+| 2,001–5,000 | 1% | 2% | 3% | 4% |
+| 5,001–10,000 | 0.5% | 1% | 1.5% | 2% |
+| 10,001 or more | 0.25% | 0.5% | 0.75% | 1% |
 
 - **Required or optional.** A required pairwise question won't let the player move on until they reach
   "Can continue". An optional one can be skipped, and whatever matchups the player did still count.
@@ -286,6 +318,10 @@ On the last screen they choose:
 > - **My Kingdom and How Long I've Been Playing** — Record only my kingdom and a years-played
 >   range, such as 3–5 years. No name, no profile link.
 > - **Anonymous Only** — Record nothing about me.
+
+When the survey allows **Update my answers**, the last option instead reads *"Record nothing about
+me, apart from a private link kept only so I can change my answers; it is wiped when the survey
+closes."* — the link (a key and a copy of the answers) exists on every response until close.
 
 On a park survey that reads, for example, *"The Rivermoor officers, the Kingdom of the Wetlands
 officers, and ORK administrators…"*: kingdom officers can manage every park survey in their kingdom,

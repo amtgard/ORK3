@@ -186,3 +186,6 @@ define('IDP_BASE_URL', 'http://localhost:37080');
 define('IDP_API_URL', 'http://host.docker.internal:37080');
 define('IDP_CLIENT_ID', 'ork3_dev');
 define('IDP_CLIENT_SECRET', 'tt8TTMfSkVUf9fwCdmi8b6G6BCnwVUgB');
+
+// Survey edit links (see config.dist.php). Dev-only value.
+define('SURVEY_EDIT_SECRET', getenv('SURVEY_EDIT_SECRET') ?: 'dev-only-survey-edit-secret-0123456789abcdef');
