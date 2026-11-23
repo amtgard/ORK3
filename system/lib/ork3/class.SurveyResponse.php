@@ -808,6 +808,18 @@ class SurveyResponse
                   AND ' . $closed . ' AND r.survey_id = ' . (int) $surveyId . ' AND s.survey_id = ' . (int) $surveyId;
         } else {
             $where = 'r.edit_key IS NOT NULL AND ' . $closed;
+            // The global sweep runs from the read path (availableAndBannerFor,
+            // every page shell) and the cron: look before writing, so the usual
+            // case is one indexed SELECT and no UPDATE on the response table.
+            $this->db->Clear();
+            $due = $this->db->DataSet(
+                'SELECT 1 FROM ' . DB_PREFIX . 'survey_response r
+                 JOIN ' . DB_PREFIX . 'survey s ON s.survey_id = r.survey_id
+                 WHERE ' . $where . ' LIMIT 1'
+            );
+            if (!$due || !$due->Next()) {
+                return;
+            }
         }
         $this->db->Clear();
         $this->db->Execute(
