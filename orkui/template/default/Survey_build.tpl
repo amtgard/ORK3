@@ -63,6 +63,8 @@ $_svScopeType = (string) ($_svSurvey['scope_type'] ?? 'kingdom');
 $_svScopeIcon = $_svScopeType === 'park' ? 'fa-campground' : ($_svScopeType === 'ork' ? 'fa-globe' : 'fa-crown');
 $_svScopeWord = $_svScopeType === 'park' ? 'Park' : ($_svScopeType === 'ork' ? 'All of Amtgard' : 'Kingdom');
 $_svShareLink = HTTP_UI_REMOTE . 'index.php?Route=Survey/s/' . rawurlencode((string) ($_svSurvey['slug'] ?? ''));
+$_svCreatorId   = (int) ($_svSurvey['CreatorId'] ?? 0);
+$_svCreatorName = (string) ($_svSurvey['CreatorPersona'] ?? '');
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(__DIR__ . '/style/reports.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/survey.css?v=<?= filemtime(__DIR__ . '/style/survey.css') ?>">
@@ -96,6 +98,12 @@ $_svShareLink = HTTP_UI_REMOTE . 'index.php?Route=Survey/s/' . rawurlencode((str
 					<i class="fas <?= $_svScopeIcon ?>" aria-hidden="true"></i>
 					<span id="svb-scopename"><?= htmlspecialchars($_svScopeWord) ?></span>
 				</span>
+<?php if ($_svCreatorId > 0 && $_svCreatorName !== ''): ?>
+				<span class="rp-header-creator">
+					<span class="rp-scope-chip-label">Created by:</span>
+					<a class="rp-scope-chip" href="<?= UIR ?>Player/profile/<?= $_svCreatorId ?>"><i class="fas fa-user" aria-hidden="true"></i> <?= htmlspecialchars($_svCreatorName) ?></a>
+				</span>
+<?php endif; ?>
 			</div>
 		</div>
 		<div class="rp-header-actions">

@@ -133,7 +133,7 @@ button.rp-filter-pill { font: inherit; font-size: 11px; font-weight: 600; line-h
    qualifier outranks it; the colours are the same tokens the buttons use. */
 html[data-theme="dark"] #theme_container a.sv-row-btn { color: var(--rp-text-body); }
 html[data-theme="dark"] #theme_container a.sv-row-btn:hover { color: var(--rp-text); }
-.sv-survey-meta { font-size: 11px; color: var(--ork-text-secondary); margin-top: 2px; white-space: nowrap; }
+.sv-survey-meta { font-size: 11px; color: var(--ork-text-secondary); margin-top: 2px; }
 html[data-theme="dark"] .sv-survey-meta { color: var(--ork-text-muted); }
 /* #theme_container-qualified for the same reason as a.sv-row-btn above: without
    it these lost to default.theme's dark link blue. */
@@ -506,7 +506,7 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 <?php else: ?>
 								<a href="<?=UIR?>Survey/build/<?=$_sid?>"><?=htmlspecialchars((string)$_row['title'])?></a>
 <?php endif; ?>
-								<div class="sv-survey-meta">Created <?=date('M j, Y', strtotime((string)$_row['created_at']))?></div>
+								<div class="sv-survey-meta"><span class="sv-nowrap">Created <?=date('M j, Y', strtotime((string)$_row['created_at']))?></span><?php if (!empty($_row['CreatorPersona'])): ?> by <a href="<?=UIR?>Player/profile/<?=(int)$_row['CreatorId']?>"><?=htmlspecialchars((string)$_row['CreatorPersona'])?></a><?php endif; ?></div>
 							</td>
 							<td role="cell" data-label="Scope"><?=htmlspecialchars($_row['scope_type'] === 'ork' ? 'All of Amtgard' : (string)$_row['ScopeName'])?></td>
 							<td role="cell" data-label="Status" data-order="<?=$_status_rank?>" data-search="<?=htmlspecialchars($_status)?>"><span class="sv-status-pill sv-status-pill-<?=htmlspecialchars($_status)?>"><?=$_label?></span></td>

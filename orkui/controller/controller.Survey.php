@@ -289,7 +289,7 @@ class Controller_Survey extends Controller
                     $this->setPageTitle('Survey Results: ' . $row['title']);
                 }
                 $this->data['SurveyId']           = $surveyId;
-                $this->data['Survey']             = ['Survey' => $row];
+                $this->data['Survey']             = ['Survey' => $this->Survey->with_creator($row)];
                 $this->data['ResultsPendingText'] = $this->Survey->sharing_pending_text($pending['opens_at']);
                 return;
             }

@@ -83,6 +83,11 @@ class Model_Survey extends Model
         return $this->_survey()->get($surveyId);
     }
 
+    public function with_creator(array $surveyRow): array
+    {
+        return $this->_survey()->withCreator($surveyRow);
+    }
+
     public function list_manageable(int $uid, ?string $scopeType = null, ?int $scopeId = null): array
     {
         return $this->_survey()->listManageable($uid, $scopeType, $scopeId);

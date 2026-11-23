@@ -600,7 +600,7 @@ class Survey
         }
 
         return $this->ok([
-            'Survey'    => self::withInstants($survey),
+            'Survey'    => self::withInstants($this->withCreator($survey)),
             'Pages'     => $pages,
             'Questions' => $questions,
             'Images'    => $images,
@@ -661,7 +661,42 @@ class Survey
         return $this->decorateRows($rows);
     }
 
-    /** ScopeName, ResponseCount and Locked for a list of survey rows, in two name queries. */
+    /**
+     * CreatorId / CreatorPersona on a survey row: who made it, for the builder
+     * and results headers and the list. The persona is '' when the account is
+     * gone. Unlike the rest of the row this is display data, not authority:
+     * who may manage a survey is still decided by scope (canManage).
+     */
+    public function withCreator(array $surveyRow): array
+    {
+        $names = $this->creatorNames([(int) ($surveyRow['created_by'] ?? 0)]);
+        return $this->applyCreator($surveyRow, $names);
+    }
+
+    /** persona by mundane_id for the given creator ids, one query. */
+    private function creatorNames(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $i) => $i > 0)));
+        if (!$ids) {
+            return [];
+        }
+        $names = [];
+        foreach ($this->fetchAll('SELECT mundane_id, persona FROM ' . DB_PREFIX . 'mundane
+                                  WHERE mundane_id IN (' . implode(',', $ids) . ')') as $m) {
+            $names[(int) $m['mundane_id']] = (string) $m['persona'];
+        }
+        return $names;
+    }
+
+    private static function applyCreator(array $row, array $names): array
+    {
+        $cid = (int) ($row['created_by'] ?? 0);
+        $row['CreatorId']      = $cid;
+        $row['CreatorPersona'] = $names[$cid] ?? '';
+        return $row;
+    }
+
+    /** ScopeName, ResponseCount, Locked and the creator for a list of survey rows, in three name queries. */
     private function decorateRows(array $rows): array
     {
         // Resolve scope names in two queries rather than one per row.
@@ -674,6 +709,7 @@ class Survey
                 $pIds[(int) $r['scope_id']] = true;
             }
         }
+        $creators = $this->creatorNames(array_column($rows, 'created_by'));
         $kNames = [];
         if ($kIds) {
             foreach ($this->fetchAll('SELECT kingdom_id, name FROM ' . DB_PREFIX . 'kingdom
@@ -697,6 +733,7 @@ class Survey
             } elseif ($r['scope_type'] === 'park') {
                 $name = $pNames[$sid] ?? '';
             }
+            $rows[$i]                  = self::applyCreator($rows[$i], $creators);
             $rows[$i]['ScopeName']     = $name;
             $rows[$i]['ResponseCount'] = (int) $r['response_count'];
             $rows[$i]['Locked']        = $this->isStructureLocked($r);

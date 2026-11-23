@@ -104,6 +104,15 @@
     margin-right: 2px;
 }
 
+/* "Created by: <persona chip>" beside the scope chip (survey builder/results):
+   the label and its chip wrap as one unit, never between the two words. */
+.rp-header-creator {
+    display    : inline-flex;
+    align-items: center;
+    gap        : 6px;
+    white-space: nowrap;
+}
+
 .rp-header-actions {
     display   : flex;
     gap       : 8px;

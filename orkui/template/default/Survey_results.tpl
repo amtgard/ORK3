@@ -29,6 +29,8 @@ $_svr_error    = isset($Error) ? trim((string) $Error) : '';
 $_svr_pending  = isset($ResultsPendingText) ? trim((string) $ResultsPendingText) : '';
 
 $_svr_title  = isset($_svr_row['title']) && $_svr_row['title'] !== '' ? (string) $_svr_row['title'] : 'Survey';
+$_svr_creator_id   = (int) ($_svr_row['CreatorId'] ?? 0);
+$_svr_creator_name = (string) ($_svr_row['CreatorPersona'] ?? '');
 $_svr_status = isset($_svr_row['status']) ? (string) $_svr_row['status'] : '';
 
 /* Sharing lens (sharing-and-credits spec §2, §5). A shared viewer (one org
@@ -147,10 +149,18 @@ $_svr_show_crosstab = $_svr_crosstab && $_svr_xt_targets >= 2;
 				<span class="svr-status-pill svr-status-<?=htmlspecialchars($_svr_status)?>"><?=htmlspecialchars(ucfirst($_svr_status))?></span>
 <?php endif; ?>
 			</div>
-<?php if ($_svr_scope_name !== '') : ?>
+<?php if ($_svr_scope_name !== '' || $_svr_creator_id > 0) : ?>
 			<div class="rp-header-scope">
+<?php if ($_svr_scope_name !== '') : ?>
 				<span class="rp-scope-chip-label">Scope:</span>
 				<span class="rp-scope-chip"><i class="fas <?=htmlspecialchars($_svr_scope_icon)?>"></i> <?=htmlspecialchars($_svr_scope_name)?></span>
+<?php endif; ?>
+<?php if ($_svr_creator_id > 0 && $_svr_creator_name !== '') : ?>
+				<span class="rp-header-creator">
+					<span class="rp-scope-chip-label">Created by:</span>
+					<a class="rp-scope-chip" href="<?=UIR?>Player/profile/<?=$_svr_creator_id?>"><i class="fas fa-user" aria-hidden="true"></i> <?=htmlspecialchars($_svr_creator_name)?></a>
+				</span>
+<?php endif; ?>
 			</div>
 <?php endif; ?>
 		</div>
