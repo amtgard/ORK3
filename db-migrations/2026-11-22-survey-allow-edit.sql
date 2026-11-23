@@ -8,7 +8,6 @@
 --     the bounded exception to the response privacy model: never selected by
 --     results, export, rows or any manager-facing read, and set NULL when the
 --     survey closes (status change or date sweep) or allow_edit is switched off.
---   * ork_survey_response.edit_uuid — opaque id for the respondent's reopen link.
 --   * ork_survey_response.edit_answers_json — the respondent's submitted answer
 --     map, used only to prefill the runner on edit; wiped with edit_key.
 -- DDL only, no data. Existing responses get NULLs (they cannot be edited).
@@ -20,6 +19,5 @@ ALTER TABLE ork_survey ADD COLUMN IF NOT EXISTS allow_edit TINYINT(1) NOT NULL D
 
 ALTER TABLE ork_survey_response
   ADD COLUMN IF NOT EXISTS edit_key CHAR(64) NULL,
-  ADD COLUMN IF NOT EXISTS edit_uuid CHAR(36) NULL,
   ADD COLUMN IF NOT EXISTS edit_answers_json MEDIUMTEXT NULL,
   ADD UNIQUE KEY IF NOT EXISTS uq_edit_key (edit_key);

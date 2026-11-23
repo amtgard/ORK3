@@ -720,23 +720,21 @@ class Controller_SurveyAjax extends Controller
             'thanks_html' => $r['ThanksHtml'],
             'credit'      => $r['Credit'] ?? 'none',
             'edited'      => !empty($r['Edited']),
-            'edit_url'    => $this->editUrl($surveyId, (string) ($r['EditUuid'] ?? '')),
+            'edit_url'    => !empty($r['Editable']) ? $this->editUrl($surveyId) : null,
         ]);
     }
 
     /**
      * The "change your answers" link for an allow_edit response: the share
-     * slug route (the runner's own Survey/take/{id} when a survey has no slug)
-     * with &r={uuid}. Null when the response cannot be changed.
+     * slug route (the runner's own Survey/take/{id} when a survey has no slug).
+     * The runner finds the signed-in player's own response by its server key,
+     * so the link carries nothing about the response.
      */
-    private function editUrl(int $surveyId, string $uuid): ?string
+    private function editUrl(int $surveyId): string
     {
-        if ($uuid === '') {
-            return null;
-        }
         $row  = $this->Survey->get_row($surveyId);
         $slug = (string) ($row['slug'] ?? '');
-        return UIR . ($slug !== '' ? 'Survey/s/' . rawurlencode($slug) : 'Survey/take/' . $surveyId) . '&r=' . rawurlencode($uuid);
+        return UIR . ($slug !== '' ? 'Survey/s/' . rawurlencode($slug) : 'Survey/take/' . $surveyId);
     }
 
     public function available($p = null)

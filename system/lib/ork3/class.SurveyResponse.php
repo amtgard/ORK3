@@ -26,9 +26,9 @@
  *
  * One deliberate, bounded exception (design 2026-11-22-survey-update-answers):
  * when a survey has `allow_edit` on, a response row carries `edit_key` — an
- * HMAC of (survey, player) under a server secret — plus `edit_uuid` and
- * `edit_answers_json`, so the respondent can reopen and change their answers.
- * Only this class reads or writes those three columns; results, export, rows
+ * HMAC of (survey, player) under a server secret — plus `edit_answers_json`,
+ * so the respondent can reopen and change their answers.
+ * Only this class reads or writes those two columns; results, export, rows
  * and every other manager-facing read must never select them. They are wiped
  * (sweepEditKeys()) when the survey closes, by status or by date, and when
  * `allow_edit` is switched off.
@@ -716,16 +716,6 @@ class SurveyResponse
         return null !== self::editSecret();
     }
 
-    /** A random RFC 4122 version 4 UUID, lower-case. */
-    private static function uuidV4(): string
-    {
-        $b = random_bytes(16);
-        $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
-        $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
-        $h = bin2hex($b);
-        return substr($h, 0, 8) . '-' . substr($h, 8, 4) . '-' . substr($h, 12, 4) . '-' . substr($h, 16, 4) . '-' . substr($h, 20);
-    }
-
     /**
      * Is $surveyRow open for answers right now by status and schedule? The same
      * test eligibility() applies before it looks at the player.
@@ -753,7 +743,7 @@ class SurveyResponse
      * link does not outlive the reason for it.
      *
      * @param  array<string, mixed> $surveyRow raw ork_survey row
-     * @return ?array{response_id: int, edit_uuid: string, answers: array<int|string, mixed>, consent: string}
+     * @return ?array{response_id: int, answers: array<int|string, mixed>, consent: string}
      */
     public function editableResponse(array $surveyRow, int $uid): ?array
     {
@@ -777,7 +767,7 @@ class SurveyResponse
 
         $this->db->Clear();
         $r = $this->db->DataSet(
-            'SELECT response_id, consent, edit_uuid, edit_answers_json FROM ' . DB_PREFIX . 'survey_response
+            'SELECT response_id, consent, edit_answers_json FROM ' . DB_PREFIX . 'survey_response
              WHERE survey_id = ' . $surveyId . '
                AND edit_key = \'' . self::editKey($surveyId, $uid) . '\'
                AND is_test = 0
@@ -789,14 +779,13 @@ class SurveyResponse
         $answers = json_decode((string) $r->edit_answers_json, true);
         return [
             'response_id' => (int) $r->response_id,
-            'edit_uuid'   => (string) $r->edit_uuid,
             'answers'     => is_array($answers) ? $answers : [],
             'consent'     => (string) $r->consent,
         ];
     }
 
     /**
-     * Wipe the edit link (edit_key, edit_uuid, edit_answers_json) from the
+     * Wipe the edit link (edit_key, edit_answers_json) from the
      * responses of every survey that is not open, has passed its close_at (PHP
      * clock: close_at is the builder's PHP-local wall time, see nowStamp()), or
      * has `allow_edit` off. With $surveyId, only that survey's responses.
@@ -805,7 +794,7 @@ class SurveyResponse
      * (bin/survey-credit-sweep.php) and from the Available Surveys read
      * (availableAndBannerFor()), so a survey that closes by date alone loses
      * its links even if nobody opens it again. It filters on `edit_key IS NOT
-     * NULL` only — the three columns are always written and wiped together —
+     * NULL` only — the two columns are always written and wiped together —
      * so the scan stays on uq_edit_key: just the live links, never every
      * response ever sent.
      */
@@ -815,7 +804,7 @@ class SurveyResponse
                        OR s.allow_edit = 0
                        OR (s.close_at IS NOT NULL AND s.close_at > \'1000-01-01\' AND s.close_at <= \'' . self::nowStamp() . '\'))';
         if (null !== $surveyId) {
-            $where = '(r.edit_key IS NOT NULL OR r.edit_uuid IS NOT NULL OR r.edit_answers_json IS NOT NULL)
+            $where = '(r.edit_key IS NOT NULL OR r.edit_answers_json IS NOT NULL)
                   AND ' . $closed . ' AND r.survey_id = ' . (int) $surveyId . ' AND s.survey_id = ' . (int) $surveyId;
         } else {
             $where = 'r.edit_key IS NOT NULL AND ' . $closed;
@@ -824,7 +813,7 @@ class SurveyResponse
         $this->db->Execute(
             'UPDATE ' . DB_PREFIX . 'survey_response r
              JOIN ' . DB_PREFIX . 'survey s ON s.survey_id = r.survey_id
-             SET r.edit_key = NULL, r.edit_uuid = NULL, r.edit_answers_json = NULL
+             SET r.edit_key = NULL, r.edit_answers_json = NULL
              WHERE ' . $where
         );
     }
@@ -842,11 +831,11 @@ class SurveyResponse
      * survey; a caller who may not manage it gets Status 3.
      *
      * When the player already answered and may change it (allow_edit, survey
-     * still open), `Edit` carries their response's edit uuid and the answers
-     * they submitted, for the runner to prefill; `Draft` is then an edit in
+     * still open), `Edit` carries the answers they submitted, for the runner
+     * to prefill; `Draft` is then an edit in
      * progress, if one was autosaved. `Edit` is null otherwise, and only ever
      * describes the CALLER's own response: it is looked up by the caller's
-     * edit_key, never by a uuid a client presents.
+     * edit_key, never by anything a client presents.
      *
      * @return array<string, mixed> QualTest-style envelope + Survey, Pages, Draft, Edit, Eligible, Reason
      */
@@ -951,7 +940,7 @@ class SurveyResponse
         if ($editing) {
             $editable = $this->editableResponse($survey, $uid);
             if (null !== $editable) {
-                $edit = ['uuid' => $editable['edit_uuid'], 'answers' => $editable['answers']];
+                $edit = ['answers' => $editable['answers']];
             }
         }
 
@@ -1436,12 +1425,12 @@ class SurveyResponse
      * Update My Answers: when eligibility() says the player is `editing`, the
      * submission replaces their existing response instead (submitEdit()). On a
      * first submit to a survey with `allow_edit` on, the response row also
-     * gets its edit link (edit_key, edit_uuid, edit_answers_json); a test row
+     * gets its edit link (edit_key, edit_answers_json); a test row
      * never does.
      *
      * @param  array<int|string, mixed> $answers
      * @return array<string, mixed> QualTest-style envelope; +ResponseId, Consent, ThanksHtml,
-     *                              Credit, Edited (bool), EditUuid (?string: the reopen link's id)
+     *                              Credit, Edited (bool), Editable (bool: the player can change this response until the survey closes)
      */
     public function submit(int $surveyId, int $uid, array $answers, string $consent, int $durationSeconds, bool $isTest, bool $creditNotice = false): array
     {
@@ -1490,7 +1479,6 @@ class SurveyResponse
 
         // The edit link, for a real response to a survey that allows editing.
         $editKey = null;
-        $editUuid = null;
         $editJson = null;
         if (!$isTest && !empty($survey['allow_edit']) && self::editingConfigured()) {
             $editJson = self::editAnswersJson($answers, $check['rows']);
@@ -1498,7 +1486,6 @@ class SurveyResponse
                 return ['Status' => 1, 'Error' => 'Your answers could not be saved.'];
             }
             $editKey  = self::editKey($surveyId, $uid);
-            $editUuid = self::uuidV4();
         }
 
         $storedConsent = self::effectiveConsent(!empty($survey['data_gate_enabled']), $consent, $isTest);
@@ -1552,7 +1539,7 @@ class SurveyResponse
         $ok = $this->exec(
             'INSERT INTO ' . DB_PREFIX . 'survey_response
              (survey_id, consent, mundane_id, kingdom_id, park_id, credit_notice, tenure_months, is_test, started_at, submitted_at, duration_seconds,
-              edit_key, edit_uuid, edit_answers_json)
+              edit_key, edit_answers_json)
              VALUES (' . $surveyId . ',
                      \'' . $storedConsent . '\',
                      ' . self::sqlInt($row['mundane_id']) . ',
@@ -1565,7 +1552,6 @@ class SurveyResponse
                      ' . $this->sqlStr($row['submitted_at']) . ',
                      ' . self::sqlInt($row['duration_seconds']) . ',
                      ' . $this->sqlStr($editKey) . ',
-                     ' . $this->sqlStr($editUuid) . ',
                      ' . $this->sqlStr($editJson) . ')'
         );
         if (!$ok) {
@@ -1646,7 +1632,7 @@ class SurveyResponse
             'ThanksHtml' => $this->thanksHtml($survey),
             'Credit'     => $credit,
             'Edited'     => false,
-            'EditUuid'   => $editUuid,
+            'Editable'   => null !== $editKey,
         ];
     }
 
@@ -1837,7 +1823,7 @@ class SurveyResponse
             'ThanksHtml' => $this->thanksHtml($survey),
             'Credit'     => 'none',
             'Edited'     => true,
-            'EditUuid'   => $editable['edit_uuid'],
+            'Editable'   => true,
         ];
     }
 

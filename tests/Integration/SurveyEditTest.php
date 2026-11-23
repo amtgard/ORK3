@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
  *
  * A respondent who submitted while `allow_edit` was on may resubmit until the
  * survey closes. The response row is updated in place; consent, response_count
- * and bonus credit are untouched; the edit link (edit_key / edit_uuid /
+ * and bonus credit are untouched; the edit link (edit_key /
  * edit_answers_json) is wiped at close or when the toggle goes off, and no
  * manager-facing read ever selects it.
  */
@@ -56,11 +56,10 @@ final class SurveyEditTest extends TestCase
         [$off, $offQ, $offA] = $this->editSurvey(false);
         $p1 = $this->player('off', $this->park, $this->k);
         $r = $this->submit($off, $p1, [$offQ => $offA], 'full');
-        $this->assertNull($r['EditUuid']);
+        $this->assertFalse($r['Editable']);
         $this->assertFalse($r['Edited']);
         $row = $this->responseRow($off);
         $this->assertNull($row['edit_key']);
-        $this->assertNull($row['edit_uuid']);
         $this->assertNull($row['edit_answers_json']);
 
         [$on, $onQ, $onA] = $this->editSurvey(true);
@@ -68,8 +67,7 @@ final class SurveyEditTest extends TestCase
         $r = $this->submit($on, $p2, [$onQ => $onA], 'anonymous');
         $row = $this->responseRow($on);
         $this->assertSame(SurveyResponse::editKey($on, $p2), $row['edit_key']);
-        $this->assertMatchesRegularExpression('/^[0-9a-f-]{36}$/', (string) $row['edit_uuid']);
-        $this->assertSame($row['edit_uuid'], $r['EditUuid']);
+        $this->assertTrue($r['Editable']);
         $this->assertSame([(string) $onQ => $onA], json_decode((string) $row['edit_answers_json'], true));
         $this->assertNotSame(SurveyResponse::editKey($on, $p1), $row['edit_key'], 'the key is per player');
         $this->assertNotSame(SurveyResponse::editKey($off, $p2), $row['edit_key'], 'and per survey');
@@ -77,7 +75,7 @@ final class SurveyEditTest extends TestCase
         // A builder's test response never carries an edit link.
         $t = (new SurveyResponse())->submit($on, $this->owner, [$onQ => $onA], 'full', 5, true);
         $this->assertSame(0, $t['Status'], (string) ($t['Error'] ?? ''));
-        $this->assertNull($t['EditUuid']);
+        $this->assertFalse($t['Editable']);
         $this->assertSame('0', (string) $this->scalar('SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_response
                                                        WHERE survey_id = ' . $on . ' AND is_test = 1 AND edit_key IS NOT NULL'));
     }
@@ -103,7 +101,7 @@ final class SurveyEditTest extends TestCase
 
         $def = $sr->definitionForRespondent($sid, $uid, false);
         $this->assertTrue($def['Eligible']);
-        $this->assertSame(['uuid' => $first['EditUuid'], 'answers' => [$q => $a]], $def['Edit']);
+        $this->assertSame(['answers' => [$q => $a]], $def['Edit']);
         $this->assertNull($def['Draft']);
         $this->assertSame(1, $def['Survey']['allow_edit']);
 
@@ -119,7 +117,7 @@ final class SurveyEditTest extends TestCase
         $edit = $this->submit($sid, $uid, [$q => $b], 'anonymous');
         $this->assertTrue($edit['Edited']);
         $this->assertSame($responseId, (int) $edit['ResponseId']);
-        $this->assertSame($first['EditUuid'], $edit['EditUuid']);
+        $this->assertTrue($edit['Editable']);
         $this->assertSame('full', $edit['Consent']);
         $this->assertSame('none', $edit['Credit']);
 
@@ -134,7 +132,7 @@ final class SurveyEditTest extends TestCase
         $this->assertSame([$b], $this->answerOptions($responseId));
         $this->assertSame([(string) $q => $b], json_decode((string) $after['edit_answers_json'], true));
         $this->assertSame('0', (string) $this->scalar('SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_draft WHERE survey_id = ' . $sid), 'draft deleted on resubmit');
-        $this->assertSame(['uuid' => $first['EditUuid'], 'answers' => [$q => $b]], $sr->definitionForRespondent($sid, $uid, false)['Edit']);
+        $this->assertSame(['answers' => [$q => $b]], $sr->definitionForRespondent($sid, $uid, false)['Edit']);
     }
 
     public function testEditRefusedWhenTheSurveyClosedUnderneathIt(): void
@@ -372,7 +370,7 @@ final class SurveyEditTest extends TestCase
         $this->assertMatchesRegularExpression('/new SurveyResponse\(\)\)->sweepEditKeys\(\)/', $src);
     }
 
-    public function testForeignUuidIgnored(): void
+    public function testAnotherPlayersResponseIsNeverOffered(): void
     {
         [$sid, $q, $a, $b] = $this->editSurvey(true);
         $alice = $this->player('alice', $this->park, $this->k);
@@ -383,14 +381,13 @@ final class SurveyEditTest extends TestCase
         $def = $sr->definitionForRespondent($sid, $bob, false);
         $this->assertTrue($def['Eligible']);
         $this->assertNull($def['Edit']);
-        $this->assertStringNotContainsString((string) $ra['EditUuid'], (string) json_encode($def));
         $this->assertSame(['eligible' => true, 'reason' => 'ok'], $sr->eligibility($this->row($sid), $bob), 'a first attempt is not an edit');
 
         $rb = $this->submit($sid, $bob, [$q => $b], 'full');
         $this->assertFalse($rb['Edited']);
-        $this->assertNotSame($ra['EditUuid'], $rb['EditUuid']);
-        $this->assertSame(['uuid' => $rb['EditUuid'], 'answers' => [$q => $b]], $sr->definitionForRespondent($sid, $bob, false)['Edit']);
-        $this->assertSame(['uuid' => $ra['EditUuid'], 'answers' => [$q => $a]], $sr->definitionForRespondent($sid, $alice, false)['Edit']);
+        $this->assertTrue($rb['Editable']);
+        $this->assertSame(['answers' => [$q => $b]], $sr->definitionForRespondent($sid, $bob, false)['Edit']);
+        $this->assertSame(['answers' => [$q => $a]], $sr->definitionForRespondent($sid, $alice, false)['Edit']);
         $this->assertSame([$a], $this->answerOptions((int) $ra['ResponseId']), "Bob's submit never touches Alice's response");
     }
 
@@ -422,7 +419,7 @@ final class SurveyEditTest extends TestCase
     {
         foreach (['class.SurveyReport.php', 'class.SurveyCredit.php', 'class.Survey.php'] as $file) {
             $src = (string) file_get_contents(DIR_LIB . 'ork3/' . $file);
-            $this->assertDoesNotMatchRegularExpression('/edit_key|edit_uuid|edit_answers_json/', $src, $file . ' must not read the edit link');
+            $this->assertDoesNotMatchRegularExpression('/edit_key|edit_answers_json/', $src, $file . ' must not read the edit link');
         }
         $report = (string) file_get_contents(DIR_LIB . 'ork3/class.SurveyReport.php');
         $this->assertDoesNotMatchRegularExpression('/\br\.\*/', $report);
@@ -505,7 +502,7 @@ final class SurveyEditTest extends TestCase
     {
         $this->assertSame('0', (string) $this->scalar('SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_response
                                                        WHERE survey_id = ' . $sid . '
-                                                         AND (edit_key IS NOT NULL OR edit_uuid IS NOT NULL OR edit_answers_json IS NOT NULL)'));
+                                                         AND (edit_key IS NOT NULL OR edit_answers_json IS NOT NULL)'));
     }
 
     private function widgetFor(int $uid, int $sid): ?array

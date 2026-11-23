@@ -151,7 +151,7 @@
     // ---------------------------------------------------------------- state
 
     var def = null;          // {survey, pages, draft, edit, eligible, reason}
-    // Changing an answered allow_edit survey: def.edit = {uuid, answers}. The
+    // Changing an answered allow_edit survey: def.edit = {answers}. The
     // consent level is fixed at first submit, so the data gate is skipped.
     var editing = false;
     var editNoted = false;   // the "you've already answered" note shows once

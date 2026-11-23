@@ -120,6 +120,6 @@
     "2026-11-15-event-staff-category-leads.sql": { "class": "S", "render": "full", "notes": "Category leads on event staff; auto-filled flag on schedule leads. Idempotent." },
     "2026-11-16-event-schedule-batch-tokens.sql": { "class": "S", "render": "full", "notes": "Request tokens for schedule batches and copies, so a retried request applies once; CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-11-15-online-attendance.sql": { "class": "S+RC", "render": "full", "notes": "Online flag on ork_attendance/ork_attendance_link plus per-kingdom CountOnlineAttendance config seed; idempotent" },
-    "2026-11-22-survey-allow-edit.sql": { "class": "S", "render": "full", "notes": "Survey Update My Answers: ork_survey.allow_edit (TINYINT NOT NULL DEFAULT 0); ork_survey_response.edit_key CHAR(64) (unique uq_edit_key), edit_uuid CHAR(36), edit_answers_json MEDIUMTEXT, all nullable and wiped at close; DDL only, no data; idempotent" }
+    "2026-11-22-survey-allow-edit.sql": { "class": "S", "render": "full", "notes": "Survey Update My Answers: ork_survey.allow_edit (TINYINT NOT NULL DEFAULT 0); ork_survey_response.edit_key CHAR(64) (unique uq_edit_key), edit_answers_json MEDIUMTEXT, all nullable and wiped at close; DDL only, no data; idempotent" }
   }
 }

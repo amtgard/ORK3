@@ -7,7 +7,6 @@
  * Route=Survey/build/{id}                 builder
  * Route=Survey/take/{id}[/preview]        runner
  * Route=Survey/s/{slug}                   runner, resolved by share slug
- *   (either runner route takes &r={uuid}: the "change your answers" link)
  * Route=Survey/results/{id}               reporting
  * Route=Survey/export/{id}?filters=<json> CSV download
  *
@@ -72,8 +71,8 @@ class Controller_Survey extends Controller
             'survey'   => $r['Survey'],
             'pages'    => $r['Pages'],
             'draft'    => $r['Draft'],
-            // The "change your answers" link's &r= is never read: the domain
-            // finds the viewer's own response by its server key alone.
+            // The viewer's own answered response (allow_edit), found by its
+            // server key alone; null when there is nothing to change.
             'edit'     => $edit,
             'eligible' => (bool) $r['Eligible'],
             'reason'   => $r['Reason'],
