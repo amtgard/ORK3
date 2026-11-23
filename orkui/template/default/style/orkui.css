@@ -972,7 +972,9 @@ p {
 #nav-search-wrap .ops-filter { opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0s 0.2s; }
 #nav-search-wrap:hover .ops-filter,
 #nav-search-wrap.nav-search-open .ops-filter { opacity: 1; visibility: visible; transition: opacity 0.2s ease, visibility 0s 0s; }
-/* The nav sits at the viewport top, so the component's tips open downward here. */
+/* The nav sits at the viewport top, so the component's tips open downward here, over the
+   results dropdown (hence the overlay's z-index above it). */
+#nav-search-wrap .ops-filter { z-index: calc(var(--ork-z-nav-overlay, 10001) + 1); }
 #nav-search-wrap .ops-filter [data-tip]:hover::after,
 #nav-search-wrap .ops-filter .ops-filter-btn[data-tip]:focus-visible::after { top: calc(100% + 6px) !important; bottom: auto !important; }
 #nav-search-dropdown {

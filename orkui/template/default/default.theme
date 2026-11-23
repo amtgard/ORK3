@@ -628,9 +628,11 @@ document.addEventListener('keydown', function (e) {
 		nsFilter = (nsInput && window.OrkPlayerSearch) ? OrkPlayerSearch.filterField(nsInput, {
 			uir: nsUir,
 			scope: {},
+			placement: 'anchored',   // popover just under the search bar, not a centred modal
 			onChange: function() {
 				var term = $.trim(nsInput.value);
 				clearTimeout(nsTimer);
+				if (nsXhr) nsXhr.abort();
 				if (term.length >= 2) nsSearch(term);
 				else $('#nav-search-dropdown').removeClass('nsdd-visible').empty();
 			}
@@ -730,9 +732,13 @@ document.addEventListener('keydown', function (e) {
 
 			// Escalation to the full Advanced Player Search page (always offered — it
 			// reaches inactive players and filters the header search can't).
+			// An active filter pill carries over, with the same params the component's Advanced link uses.
 			var advTerm = $.trim($('#UniversalSearch').val() || '');
+			var advF = nsFilter ? nsFilter.get() : null;
+			var advScope = advF ? (advF.parkId ? '&parkId=' + encodeURIComponent(advF.parkId) : '')
+				+ '&kingdomId=' + encodeURIComponent(advF.kingdomId) : '';
 			html += '<div class="nsdd-divider"></div>' +
-				'<a class="nsdd-item" href="' + nsUir + 'Search/advanced&q=' + encodeURIComponent(advTerm) + '">' +
+				'<a class="nsdd-item" href="' + nsUir + 'Search/advanced&q=' + encodeURIComponent(advTerm) + advScope + '">' +
 				'<span class="nsdd-item-icon"><i class="fas fa-search-plus fa-fw"></i></span>' +
 				'<span class="nsdd-item-content"><div class="nsdd-item-label">Advanced Player Search</div>' +
 				'<div class="nsdd-item-sub">Filter by kingdom, park, status and last attendance</div></span></a>';
