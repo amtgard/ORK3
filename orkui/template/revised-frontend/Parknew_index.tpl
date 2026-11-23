@@ -25,6 +25,10 @@
 	// already rejects update/config for inactive parks; this prevents the
 	// dead-end UX of opening the modal only to receive a server rejection).
 	$pkCanManageBanner = !empty($CanManagePark) && !$parkIsInactive;
+	// Avg / Week + Avg / Month attendance-type filter (In-Person / Online / All): park officers,
+	// officers of its kingdom, and ORK admins (park EDIT cascades). Informational only, default
+	// All; never the kingdom's Count Online Attendance setting.
+	$pkAvgFilter = !empty($CanManagePark);
 
 	$officerList    = $park_officers['Officers']          ?? [];
 	$parkDayList    = $park_days['ParkDays']              ?? [];
@@ -432,15 +436,19 @@
 		<div class="pk-stat-value"><?= $activePlayersYear ?></div>
 		<div class="pk-stat-label">Players, Last 6 Months <span class="pk-stat-tip" data-tip="Everyone who signed in at this park in the past 6 months. This is not the same as the Active Players report, which only counts players who meet the kingdom's attendance requirements, so that report's total is usually lower."><i class="fas fa-info-circle"></i></span></div>
 	</div>
-	<div class="pk-stat-card">
+	<div class="pk-stat-card<?= $pkAvgFilter ? ' orn-avgf-host' : '' ?>">
+		<?php if ($pkAvgFilter): ?><span class="orn-avgf-corner"><button type="button" class="orn-avgf-btn" aria-label="Filter averages by attendance type" data-tip="In-Person / Online / All"><i class="fas fa-filter"></i></button></span><?php endif; ?>
 		<div class="pk-stat-icon"><i class="fas fa-chart-bar"></i></div>
 		<div class="pk-stat-value" id="pk-stat-avgwk"><?= $WeeklyAvg > 0 ? number_format($WeeklyAvg, 1) : '&mdash;' ?></div>
 		<div class="pk-stat-label">Avg / Week <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per week, averaged over the past 6 months. Each player counts once per week. This matches the Top Parks ranking formula.</span></span></div>
+		<?php if ($pkAvgFilter): ?><div class="orn-avgf-status" hidden></div><?php endif; ?>
 	</div>
-	<div class="pk-stat-card">
+	<div class="pk-stat-card<?= $pkAvgFilter ? ' orn-avgf-host' : '' ?>">
+		<?php if ($pkAvgFilter): ?><span class="orn-avgf-corner"><button type="button" class="orn-avgf-btn" aria-label="Filter averages by attendance type" data-tip="In-Person / Online / All"><i class="fas fa-filter"></i></button></span><?php endif; ?>
 		<div class="pk-stat-icon"><i class="fas fa-chart-line"></i></div>
 		<div class="pk-stat-value" id="pk-stat-avgmo"><?= $MonthlyAvg > 0 ? number_format($MonthlyAvg, 1) : '&mdash;' ?></div>
 		<div class="pk-stat-label">Avg / Month <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per month, averaged over the past 12 months. Higher than Avg/Week because a monthly window captures players who don&rsquo;t attend every week.</span></span></div>
+		<?php if ($pkAvgFilter): ?><div class="orn-avgf-status" hidden></div><?php endif; ?>
 	</div>
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('events')">
 		<div class="pk-stat-icon"><i class="fas fa-flag"></i></div>
@@ -495,13 +503,6 @@
 		</div>
 	</div>
 	<?php endif; ?>
-</div>
-<?php /* Avg / Week + Avg / Month by attendance type. Informational only, default All;
-         never the kingdom's Count Online Attendance setting. */ ?>
-<div class="pk-avg-type" id="pk-avg-type">
-	<span class="pk-avg-type-label">Averages</span>
-	<?= ork_attendance_type_control('all') ?>
-	<span class="pk-avg-type-note" id="pk-avg-type-note" aria-live="polite"></span>
 </div>
 
 <!-- =============================================
@@ -1958,23 +1959,23 @@ window.pkEventMapLocations  = <?= json_encode(array_values($pkEventMapLocations 
 window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 </script>
 <script>
-/* Hero Avg / Week + Avg / Month: In-Person / Online / All refetches the two figures. */
+/* Hero Avg / Week + Avg / Month: the corner filter (officers only) refetches the two figures
+   as In-Person / Online / All. */
 (function () {
-	var el = document.querySelector('#pk-avg-type .orn-type-control');
-	if (!el || typeof window.ornAttendanceTypeControl !== 'function' || !PkConfig.parkId) return;
+	var btns = document.querySelectorAll('.pk-stats-row .orn-avgf-btn');
+	if (!btns.length || typeof window.ornAvgFilter !== 'function' || !PkConfig.parkId) return;
 	var seq = 0;
 	function fmt(n) {
 		n = Number(n) || 0;
 		return n > 0 ? n.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '\u2014';
 	}
-	window.ornAttendanceTypeControl(el, {
+	window.ornAvgFilter({
+		buttons: btns,
 		value: 'all',
 		onChange: function (type) {
 			var mine = ++seq;
 			var wk = document.getElementById('pk-stat-avgwk');
 			var mo = document.getElementById('pk-stat-avgmo');
-			var note = document.getElementById('pk-avg-type-note');
-			if (note) note.textContent = window.ornAttendanceTypeControl.note(type);
 			[wk, mo].forEach(function (n) { if (n) n.classList.add('pk-avg-loading'); });
 			var qs = type !== 'all' ? '&AttendanceType=' + encodeURIComponent(type) : '';
 			fetch(PkConfig.uir + 'Park/attendance_averages_json/' + PkConfig.parkId + qs)

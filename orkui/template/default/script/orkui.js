@@ -25412,4 +25412,89 @@ function _typeof(e) {
         if (ctl && input) input.value = ctl.get();
         return ctl;
     };
+    /* Stat-card attendance-type filter: a small filter icon in the corner of each
+       card (.orn-avgf-btn) opens one shared popover with the In-Person / Online /
+       All control. Choosing applies to every card in the set, marks the icons
+       active and fills each card's .orn-avgf-status line. The page renders the
+       icons only for viewers allowed to filter. cfg = { buttons, value, onChange }. */
+    w.ornAvgFilter = function (cfg) {
+        cfg = cfg || {};
+        var btns = Array.prototype.slice.call(cfg.buttons || []);
+        if (!btns.length) return null;
+        var cur = norm(cfg.value);
+        var openBtn = null;
+        var pop = d.createElement('div');
+        pop.className = 'orn-avgf-pop';
+        pop.setAttribute('role', 'dialog');
+        pop.setAttribute('aria-label', 'Averages by attendance type');
+        pop.hidden = true;
+        var title = d.createElement('div');
+        title.className = 'orn-avgf-title';
+        title.textContent = 'Count attendance';
+        pop.appendChild(title);
+        d.body.appendChild(pop);
+        var short = { in_person: 'In-person only', online: 'Online only' };
+        function paint() {
+            btns.forEach(function (b) {
+                var on = cur !== 'all';
+                b.classList.toggle('orn-avgf-on', on);
+                var card = b.closest('.orn-avgf-host') || b.parentNode;
+                var st = card && card.querySelector('.orn-avgf-status');
+                if (st) { st.textContent = short[cur] || ''; st.hidden = !on; }
+            });
+        }
+        function place() {
+            if (!openBtn) return;
+            var r = openBtn.getBoundingClientRect();
+            var vw = d.documentElement.clientWidth;
+            var pw = pop.offsetWidth;
+            var left = Math.max(8, Math.min(r.right - pw, vw - 8 - pw));
+            pop.style.left = left + 'px';
+            pop.style.top = (r.bottom + 6) + 'px';
+        }
+        function close(refocus) {
+            if (!openBtn) return;
+            var b = openBtn;
+            openBtn = null;
+            pop.hidden = true;
+            b.setAttribute('aria-expanded', 'false');
+            if (refocus) b.focus();
+        }
+        function open(b) {
+            openBtn = b;
+            b.setAttribute('aria-expanded', 'true');
+            pop.hidden = false;
+            place();
+            var act = pop.querySelector('.orn-type-opt.orn-type-active') || pop.querySelector('.orn-type-opt');
+            if (act) act.focus();
+        }
+        w.ornAttendanceTypeControl(pop, {
+            value: cur,
+            onChange: function (v) {
+                cur = norm(v);
+                paint();
+                close(true);
+                if (typeof cfg.onChange === 'function') cfg.onChange(cur);
+            }
+        });
+        btns.forEach(function (b) {
+            b.setAttribute('aria-haspopup', 'dialog');
+            b.setAttribute('aria-expanded', 'false');
+            b.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (openBtn === b) close(false); else { close(false); open(b); }
+            });
+        });
+        d.addEventListener('click', function (e) {
+            if (openBtn && !pop.contains(e.target)) close(false);
+        });
+        d.addEventListener('keydown', function (e) {
+            if (openBtn && e.key === 'Escape') close(true);
+        });
+        w.addEventListener('resize', function () { close(false); });
+        w.addEventListener('scroll', function () { place(); }, true);
+        paint();
+        return { get: function () { return cur; } };
+    };
 })(window, document);
