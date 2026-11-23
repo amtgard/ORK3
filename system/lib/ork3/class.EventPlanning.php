@@ -2,13 +2,190 @@
 
 class EventPlanning extends Ork3
 {
+    /**
+     * Schedule item categories, in display order. The single source for the
+     * allow-list, the Schedule tab's palette, selects, filters, board and entry grammar.
+     * `key` is the keyboard shortcut; `bold` is the solid fill behind white text.
+     * `tag` is the `#tag` the entry grammar writes; `aliases` are the other names a
+     * typed `#tag` or `Name:` prefix may use. `keywords` are the title words that
+     * guess the category (whole words, optional trailing 's'); the guess tries the
+     * categories in ascending `keywordRank` and the first match wins (Other has no
+     * keywords and ranks last).
+     */
     private const SCHEDULE_CATEGORIES = [
-        'Administrative', 'Tournament', 'Battlegame', 'Arts and Sciences', 'Class',
-        'Feast and Food', 'Court', 'Meeting', 'Other',
+        'Administrative'      => ['key' => '1', 'icon' => 'fa-clipboard-list', 'color' => '#546e7a', 'bg' => '#eceff1', 'colorDark' => '#90a4ae', 'bgDark' => '#2a3136', 'bold' => '#546e7a',
+            'tag' => 'admin', 'aliases' => ['admin'], 'keywordRank' => 9,
+            'keywords' => ['troll', 'gate', 'setup', 'set up', 'clean', 'cleanup', 'teardown', 'tear down', 'check-in', 'checkin', 'offsite', 'crat']],
+        'Tournament'          => ['key' => '2', 'icon' => 'fa-trophy',         'color' => '#b8860b', 'bg' => '#fffde7', 'colorDark' => '#ffd54f', 'bgDark' => '#3a2f15', 'bold' => '#8a6500',
+            'tag' => 'tourney', 'aliases' => ['tourney'], 'keywordRank' => 4,
+            'keywords' => ['tournament', 'tourney', 'warmaster', 'weaponmaster', 'bracket']],
+        'Battlegame'          => ['key' => '3', 'icon' => 'fa-shield-alt',     'color' => '#c0392b', 'bg' => '#fdecea', 'colorDark' => '#ff9a93', 'bgDark' => '#3d1e1a', 'bold' => '#c0392b',
+            'tag' => 'bg', 'aliases' => ['bg', 'battle game'], 'keywordRank' => 7,
+            'keywords' => ['battlegame', 'battle game', 'bg', 'militia', 'ditch']],
+        'Arts and Sciences'   => ['key' => '4', 'icon' => 'fa-palette',        'color' => '#7b1fa2', 'bg' => '#f3e5f5', 'colorDark' => '#ce93d8', 'bgDark' => '#2d1935', 'bold' => '#7b1fa2',
+            'tag' => 'as', 'aliases' => ['as', 'a&s'], 'keywordRank' => 1,
+            'keywords' => ['a&s', 'arts and sciences', 'judging', 'dragonmaster']],
+        'Class'               => ['key' => '5', 'icon' => 'fa-graduation-cap', 'color' => '#1565c0', 'bg' => '#e3f2fd', 'colorDark' => '#90caf9', 'bgDark' => '#0f2540', 'bold' => '#1565c0',
+            'tag' => 'class', 'aliases' => [], 'keywordRank' => 5,
+            'keywords' => ['class', 'workshop', 'seminar']],
+        'Feast and Food'      => ['key' => '6', 'icon' => 'fa-utensils',       'color' => '#e65100', 'bg' => '#fff3e0', 'colorDark' => '#ffb74d', 'bgDark' => '#3a2410', 'bold' => '#bf4d00',
+            'tag' => 'feast', 'aliases' => ['feast', 'food'], 'keywordRank' => 2,
+            'keywords' => ['feast', 'dinner', 'lunch', 'breakfast', 'brunch', 'potluck', 'tavern']],
+        'Court'               => ['key' => '7', 'icon' => 'fa-crown',          'color' => '#4e342e', 'bg' => '#efebe9', 'colorDark' => '#bcaaa4', 'bgDark' => '#2a201d', 'bold' => '#4e342e',
+            'tag' => 'court', 'aliases' => [], 'keywordRank' => 3,
+            'keywords' => ['court', 'coronation', 'knighting', 'ceremony', 'oath']],
+        'Meeting'             => ['key' => '8', 'icon' => 'fa-users',          'color' => '#276749', 'bg' => '#f0fff4', 'colorDark' => '#81c784', 'bgDark' => '#143024', 'bold' => '#276749',
+            'tag' => 'meeting', 'aliases' => [], 'keywordRank' => 8,
+            'keywords' => ['meeting', 'althing', 'allthing']],
+        'Roleplay and Quests' => ['key' => '9', 'icon' => 'fa-dragon',         'color' => '#c2185b', 'bg' => '#fce4ec', 'colorDark' => '#f48fb1', 'bgDark' => '#3a1626', 'bold' => '#c2185b',
+            'tag' => 'rp', 'aliases' => ['rp', 'roleplay', 'quest'], 'keywordRank' => 6,
+            'keywords' => ['quest', 'rp', 'roleplay', 'role play']],
+        'Other'               => ['key' => '0', 'icon' => 'fa-star',           'color' => '#757575', 'bg' => '#fafafa', 'colorDark' => '#bdbdbd', 'bgDark' => '#2a2a2a', 'bold' => '#616161',
+            'tag' => 'other', 'aliases' => [], 'keywordRank' => 10,
+            'keywords' => []],
     ];
+
+    /** Most changes one schedule batch may carry. */
+    private const SCHEDULE_BATCH_MAX_OPS = 200;
+
+    /** Fields a feast-capable caller may write; everyone else's are ignored. */
+    private const SCHEDULE_MEAL_FIELDS = ['Menu' => 'menu', 'Cost' => 'cost', 'Dietary' => 'dietary', 'Allergens' => 'allergens'];
+
+    /** Largest Cost event_schedule.cost (DECIMAL(8,2)) holds. */
+    private const SCHEDULE_COST_MAX = 999999.99;
+
+    /** Most leads one schedule item may have. */
+    private const SCHEDULE_LEADS_MAX = 20;
+
+    /** A BatchToken / RequestToken: what makes a repeated batch or copy apply once. */
+    private const SCHEDULE_REQUEST_TOKEN_RE = '/^[A-Za-z0-9_-]{16,64}$/';
+
+    /** Longest text (characters) a batch op may write to each field, and the field's name in the refusal. */
+    private const SCHEDULE_TEXT_LIMITS = [
+        'Title' => [255, 'title'],
+        'Location' => [255, 'location'],
+        'Category' => [50, 'category'],
+        'SecondaryCategory' => [50, 'secondary category'],
+        'Description' => [4000, 'description'],
+        'Menu' => [4000, 'menu'],
+        'Dietary' => [500, 'dietary note'],
+        'Allergens' => [500, 'allergens note'],
+    ];
+
+    /** How far (days) before the occurrence's start date or after its end date an item may start. */
+    private const SCHEDULE_WINDOW_DAYS = 7;
+
+    /** The legacy form's refusal when the item changed after the form read it. */
+    private const SCHEDULE_CHANGED_ELSEWHERE = 'Someone else changed this item. Close this form and open it again to see their version.';
+
+    /** Most items one occurrence's schedule may hold. */
+    private const SCHEDULE_MAX_ITEMS = 500;
+
+    /** The category whose items a feast editor (can_feast without can_schedule) may change. */
+    private const FEAST_CATEGORY = 'Feast and Food';
+
+    /**
+     * Ordered map of category name to its definition
+     * (`key`, `icon`, `color`, `bg`, `colorDark`, `bgDark`, `bold`, `tag`,
+     * `aliases`, `keywords`, `keywordRank`).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function ScheduleCategories(): array
+    {
+        return self::SCHEDULE_CATEGORIES;
+    }
+
+    public function GetScheduleCategories($request = [])
+    {
+        return [
+            'Status' => Success(),
+            'Categories' => self::ScheduleCategories(),
+        ];
+    }
+
+    /** Most changes one schedule batch (EventAjax/schedule_batch) may carry. */
+    public static function ScheduleBatchMaxOps(): int
+    {
+        return self::SCHEDULE_BATCH_MAX_OPS;
+    }
+
+    public function GetScheduleBatchMax($request = [])
+    {
+        return [
+            'Status' => Success(),
+            'BatchMaxOps' => self::ScheduleBatchMaxOps(),
+        ];
+    }
+
+    /**
+     * Most items one occurrence's schedule may hold (SCHEDULE_MAX_ITEMS). A method so
+     * a test can lower the ceiling instead of seeding hundreds of rows; the refusals
+     * are built from it, so their number is always the ceiling actually applied.
+     */
+    protected function scheduleMaxItems(): int
+    {
+        return self::SCHEDULE_MAX_ITEMS;
+    }
+
+    /** The refusal of an add (batch or legacy form) that would put the schedule over its ceiling. */
+    private function scheduleFullError(): array
+    {
+        return InvalidParameter('A schedule can hold at most ' . $this->scheduleMaxItems() . ' items.');
+    }
+
+    /**
+     * Locks the occurrence's row (FOR UPDATE) to the end of the caller's transaction,
+     * so adders that count against the ceiling run one at a time: each counts only
+     * after the one before it has committed its items. Taken as the transaction's
+     * first statement: a request-token claim or an item insert first takes a shared
+     * lock on this row (their foreign key), and two adders each holding that shared
+     * lock while waiting to upgrade it would deadlock. False when the read failed.
+     */
+    private function lockScheduleDetail(int $detailId): bool
+    {
+        $this->db->Clear();
+        $row = @$this->db->DataSet(
+            'SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' FOR UPDATE'
+        );
+
+        return $this->resultSucceeded($row) && $row->Next();
+    }
+
+    /**
+     * The occurrence's item count, or null when the read failed. A caller that adds
+     * against the ceiling holds lockScheduleDetail first, in the same transaction.
+     */
+    private function countScheduleItems(int $detailId): ?int
+    {
+        $this->db->Clear();
+        $row = @$this->db->DataSet(
+            'SELECT COUNT(*) AS item_count FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . $detailId
+        );
+        if (!$this->resultSucceeded($row) || !$row->Next()) {
+            return null;
+        }
+
+        return (int) $row->item_count;
+    }
+
+    /** Whether a primary/secondary category pair makes an item a feast item. */
+    private function isFeastItem(string $category, string $secondaryCategory): bool
+    {
+        return $category === self::FEAST_CATEGORY || $secondaryCategory === self::FEAST_CATEGORY;
+    }
 
     /** @var array<int, bool> */
     private array $mundaneEligibleCache = [];
+
+    /**
+     * categoryLeadMap's results while one ApplyScheduleOps call runs (occurrence id =>
+     * map); null outside a batch, where every call reads afresh.
+     *
+     * @var array<int, array<string, list<int>>>|null
+     */
+    private ?array $batchCategoryLeads = null;
 
     /**
      * Centralized staff delegation check (T-EVA-02, 04, 07–11).
@@ -767,21 +944,42 @@ class EventPlanning extends Ork3
             ];
         }
 
+        $categories = $this->fetchStaffLeadCategories(array_column($staffList, 'EventStaffId'));
+        foreach ($staffList as &$staffRow) {
+            $staffRow['LeadCategories'] = $categories[$staffRow['EventStaffId']] ?? [];
+        }
+        unset($staffRow);
+
         return $staffList;
     }
 
-    /** @return list<array<string, mixed>> */
-    private function fetchScheduleList(int $detailId): array
+    /**
+     * Schedule items of one occurrence with their leads; a positive $scheduleId
+     * narrows it to that one item, and a list of ids to those items (still scoped
+     * to the occurrence; an empty list reads nothing).
+     *
+     * @param int|list<int> $scheduleId
+     * @return list<array<string, mixed>>
+     */
+    private function fetchScheduleList(int $detailId, int|array $scheduleId = 0): array
     {
+        $only = is_array($scheduleId)
+            ? array_values(array_unique(array_filter(array_map('intval', $scheduleId), 'valid_id')))
+            : ($scheduleId > 0 ? [$scheduleId] : []);
+        if (is_array($scheduleId) && $only === []) {
+            return [];
+        }
         $this->db->Clear();
         $scheduleRows = $this->db->DataSet(
             'SELECT event_schedule_id AS EventScheduleId, title AS Title,
                     start_time AS StartTime, end_time AS EndTime,
                     location AS Location, description AS Description, category AS Category,
                     secondary_category AS SecondaryCategory,
-                    menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
+                    menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens,
+                    DATE_FORMAT(modified, \'%Y-%m-%d %H:%i:%s\') AS Modified
              FROM ' . DB_PREFIX . 'event_schedule
-             WHERE event_calendardetail_id = ' . $detailId . '
+             WHERE event_calendardetail_id = ' . $detailId
+            . ($only !== [] ? ' AND event_schedule_id IN (' . implode(',', $only) . ')' : '') . '
              ORDER BY start_time'
         );
         $scheduleList = [];
@@ -799,6 +997,10 @@ class EventPlanning extends Ork3
                 'Cost' => $scheduleRows->Cost !== null ? (float) $scheduleRows->Cost : null,
                 'Dietary' => $scheduleRows->Dietary,
                 'Allergens' => $scheduleRows->Allergens,
+                // The row's version: every write this class makes to the item advances it,
+                // its leads included (batch ops, the form's save through them, and the staff-side
+                // category-lead fill and removal).
+                'Modified' => (string) ($scheduleRows->Modified ?? ''),
             ];
         }
 
@@ -806,7 +1008,8 @@ class EventPlanning extends Ork3
             $slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
             $this->db->Clear();
             $leadRows = $this->db->DataSet(
-                'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
+                'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona,
+                        sl.is_auto AS IsAuto
                  FROM ' . DB_PREFIX . 'event_schedule_lead sl
                  JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
                  WHERE sl.event_schedule_id IN (' . $slIds . ')
@@ -817,6 +1020,7 @@ class EventPlanning extends Ork3
                 $leadsMap[(int) $leadRows->EventScheduleId][] = [
                     'MundaneId' => (int) $leadRows->MundaneId,
                     'Persona' => $leadRows->Persona,
+                    'Auto' => (bool) (int) $leadRows->IsAuto,
                 ];
             }
             foreach ($scheduleList as &$schItem) {
@@ -892,7 +1096,7 @@ class EventPlanning extends Ork3
                     d.allergen_milk, d.allergen_eggs, d.allergen_fish, d.allergen_shellfish, d.allergen_treenuts,
                     d.allergen_peanuts, d.allergen_wheat, d.allergen_soy, d.allergen_sesame, d.allergen_garlic,
                     d.allergen_gluten, d.allergen_onion, d.allergen_mushroom, d.allergen_corn, d.allergen_coconut,
-                    d.allergen_cocoa
+                    d.allergen_cocoa, d.allergen_nightshades
              FROM (
                  SELECT mundane_id FROM ' . DB_PREFIX . "event_rsvp
                  WHERE event_calendardetail_id = {$detailId} AND status = 'going'
@@ -945,6 +1149,7 @@ class EventPlanning extends Ork3
                 'AllergenCorn' => (int) ($dsRows->allergen_corn ?? 0),
                 'AllergenCoconut' => (int) ($dsRows->allergen_coconut ?? 0),
                 'AllergenCocoa' => (int) ($dsRows->allergen_cocoa ?? 0),
+                'AllergenNightshades' => (int) ($dsRows->allergen_nightshades ?? 0),
             ];
         }
 
@@ -1054,7 +1259,7 @@ class EventPlanning extends Ork3
             "SELECT a.attendance_id AS AttendanceId, a.mundane_id AS MundaneId, m.persona AS Persona,
                     m.kingdom_id AS KingdomId, k.name AS KingdomName, k.abbreviation AS KAbbr,
                     m.park_id AS ParkId, p.name AS ParkName, p.abbreviation AS PAbbr,
-                    c.name AS ClassName, a.credits AS Credits
+                    c.name AS ClassName, a.credits AS Credits, a.online AS Online
              FROM " . DB_PREFIX . "attendance a
              LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
              LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
@@ -1078,6 +1283,7 @@ class EventPlanning extends Ork3
             'PAbbr' => $row->PAbbr,
             'ClassName' => $row->ClassName,
             'Credits' => $row->Credits,
+            'Online' => (int) $row->Online,
         ];
     }
 
@@ -1090,7 +1296,7 @@ class EventPlanning extends Ork3
         if ($mundaneId <= 0) {
             return BadToken();
         }
-        if (!valid_id($eventId) || !valid_id($detailId)) {
+        if (!valid_id($eventId) || !valid_id($detailId) || !$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Invalid Event ID.');
         }
         if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'create')) {
@@ -1112,65 +1318,156 @@ class EventPlanning extends Ork3
             return InvalidParameter('A role is required.');
         }
 
+        // Absent means "leave them as they are" on an update and "none" on an add.
+        $leadCategories = array_key_exists('LeadCategories', $request)
+            ? $this->normalizeLeadCategories($request['LeadCategories'])
+            : null;
+
         $priorState = $this->fetchStaffPriorState($detailId, $staffIdIn, $targetMundane);
-        $roleSafe = $this->sq($roleName);
+        $isUpdate = $staffIdIn > 0 && $priorState;
+
+        // As a batch's: the lead rules lock schedule items, which a batch may be writing.
+        $this->beginReadCommittedTrans();
+        try {
+            [$error, $staff, $leadsAdded, $leadsRemoved] = $this->writeStaffRow(
+                $detailId,
+                $isUpdate ? $staffIdIn : 0,
+                $targetMundane,
+                $roleName,
+                [$canManage, $canAttendance, $canSchedule, $canFeast],
+                $leadCategories
+            );
+            if ($error !== null) {
+                $this->db->RollbackTrans();
+                return $error;
+            }
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ProcessingError('Could not save the staff member.');
+        }
+
+        return [
+            'Status' => Success(),
+            'PriorState' => $priorState,
+            'Staff' => [
+                'EventStaffId' => $staff['EventStaffId'],
+                'MundaneId' => $targetMundane,
+                'Persona' => $staff['Persona'],
+                'RoleName' => $roleName,
+                'CanManage' => $canManage,
+                'CanAttendance' => $canAttendance,
+                'CanSchedule' => $canSchedule,
+                'CanFeast' => $canFeast,
+                'LeadCategories' => $staff['LeadCategories'],
+            ],
+            'LeadsAdded' => $leadsAdded,
+            'LeadsRemoved' => $leadsRemoved,
+        ];
+    }
+
+    /**
+     * Inserts or updates one staff row and, when $leadCategories is not null,
+     * replaces its lead categories and applies the fill and removal rules.
+     * Runs inside AddEventStaff's transaction.
+     *
+     * @param array{0: int, 1: int, 2: int, 3: int} $caps manage, attendance, schedule, feast
+     * @param list<string>|null $leadCategories null leaves the stored categories as they are
+     * @return array{0: ?array, 1: array{EventStaffId: int, Persona: string, LeadCategories: list<string>}, 2: int, 3: int}
+     */
+    private function writeStaffRow(
+        int $detailId,
+        int $staffIdIn,
+        int $targetMundane,
+        string $roleName,
+        array $caps,
+        ?array $leadCategories
+    ): array {
+        [$canManage, $canAttendance, $canSchedule, $canFeast] = $caps;
+        $failed = [ProcessingError('Could not save the staff member.'), [], 0, 0];
 
         $this->db->Clear();
-        if ($staffIdIn > 0 && $priorState) {
-            $this->db->Execute(
-                'UPDATE ' . DB_PREFIX . 'event_staff
-                 SET role_name = \'' . $roleSafe . '\',
-                     can_manage = ' . $canManage . ',
-                     can_attendance = ' . $canAttendance . ',
-                     can_schedule = ' . $canSchedule . ',
-                     can_feast = ' . $canFeast . '
-                 WHERE event_staff_id = ' . $staffIdIn . '
-                   AND event_calendardetail_id = ' . $detailId
+        $this->db->role_name = $roleName;
+        $capsSql = 'can_manage = ' . $canManage . ', can_attendance = ' . $canAttendance
+            . ', can_schedule = ' . $canSchedule . ', can_feast = ' . $canFeast;
+        if ($staffIdIn > 0) {
+            $ok = $this->db->ExecuteChecked(
+                'UPDATE ' . DB_PREFIX . 'event_staff SET role_name = :role_name, ' . $capsSql . '
+                 WHERE event_staff_id = ' . $staffIdIn . ' AND event_calendardetail_id = ' . $detailId
             );
         } else {
-            $this->db->Execute(
+            $ok = $this->db->ExecuteChecked(
                 'INSERT INTO ' . DB_PREFIX . 'event_staff
                  (event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast)
-                 VALUES (' . $detailId . ', ' . $targetMundane . ', \'' . $roleSafe . '\', '
+                 VALUES (' . $detailId . ', ' . $targetMundane . ', :role_name, '
                 . $canManage . ', ' . $canAttendance . ', ' . $canSchedule . ', ' . $canFeast . ')
                  ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage),
                  can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule),
                  can_feast = VALUES(can_feast)'
             );
         }
-
-        $this->db->Clear();
-        if ($staffIdIn > 0) {
-            $idrow = $this->db->DataSet(
-                'SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s
-                 LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
-                 WHERE s.event_staff_id = ' . $staffIdIn . ' LIMIT 1'
-            );
-        } else {
-            $idrow = $this->db->DataSet(
-                'SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s
-                 LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
-                 WHERE s.event_calendardetail_id = ' . $detailId . ' AND s.mundane_id = ' . $targetMundane
-                . ' ORDER BY s.event_staff_id DESC LIMIT 1'
-            );
+        if (!$ok) {
+            return $failed;
         }
 
-        $staffId = ($idrow && $idrow->Next()) ? (int) $idrow->event_staff_id : 0;
-        $persona = ($idrow && isset($idrow->persona)) ? (string) $idrow->persona : '';
+        $this->db->Clear();
+        $idrow = $this->db->DataSet(
+            'SELECT s.event_staff_id, s.mundane_id, m.persona FROM ' . DB_PREFIX . 'event_staff s
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
+             WHERE s.event_calendardetail_id = ' . $detailId
+            . ($staffIdIn > 0
+                ? ' AND s.event_staff_id = ' . $staffIdIn
+                : ' AND s.mundane_id = ' . $targetMundane . ' ORDER BY s.event_staff_id DESC')
+            . ' LIMIT 1'
+        );
+        if (!$idrow || !$idrow->Next()) {
+            return $failed;
+        }
+        $staffId = (int) $idrow->event_staff_id;
+        $staffMundane = (int) $idrow->mundane_id;
+        $persona = (string) ($idrow->persona ?? '');
+
+        $current = $this->fetchStaffLeadCategories([$staffId])[$staffId] ?? [];
+        $leadsAdded = 0;
+        $leadsRemoved = 0;
+        if ($leadCategories !== null) {
+            $added = array_values(array_diff($leadCategories, $current));
+            $dropped = array_values(array_diff($current, $leadCategories));
+            foreach ($dropped as $category) {
+                $this->db->Clear();
+                $this->db->category = $category;
+                if (!$this->db->ExecuteChecked(
+                    'DELETE FROM ' . DB_PREFIX . 'event_staff_category
+                     WHERE event_staff_id = ' . $staffId . ' AND category = :category'
+                )) {
+                    return $failed;
+                }
+            }
+            foreach ($added as $category) {
+                $this->db->Clear();
+                $this->db->category = $category;
+                if (!$this->db->ExecuteChecked(
+                    'INSERT IGNORE INTO ' . DB_PREFIX . 'event_staff_category (event_staff_id, category)
+                     VALUES (' . $staffId . ', :category)'
+                )) {
+                    return $failed;
+                }
+            }
+            $leadsRemoved = $this->removeAutoCategoryLeads($detailId, $staffMundane, $dropped, $staffId);
+            $leadsAdded = $leadsRemoved === null ? null : $this->fillCategoryLeads($detailId, $staffMundane, $added);
+            if ($leadsRemoved === null || $leadsAdded === null) {
+                return $failed;
+            }
+            $current = $leadCategories;
+        }
 
         return [
-            'Status' => Success(),
-            'PriorState' => $priorState,
-            'Staff' => [
-                'EventStaffId' => $staffId,
-                'MundaneId' => $targetMundane,
-                'Persona' => $persona,
-                'RoleName' => $roleName,
-                'CanManage' => $canManage,
-                'CanAttendance' => $canAttendance,
-                'CanSchedule' => $canSchedule,
-                'CanFeast' => $canFeast,
-            ],
+            null,
+            ['EventStaffId' => $staffId, 'Persona' => $persona, 'LeadCategories' => $current],
+            $leadsAdded,
+            $leadsRemoved,
         ];
     }
 
@@ -1187,22 +1484,309 @@ class EventPlanning extends Ork3
         if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($staffId)) {
             return InvalidParameter('Invalid parameters.');
         }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Invalid Event ID.');
+        }
         if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'create')) {
             return NoAuthorization();
         }
 
         $priorState = $this->fetchStaffPriorStateById($staffId, $detailId);
+        $leadsRemoved = 0;
 
-        $this->db->Clear();
-        $this->db->Execute(
-            'DELETE FROM ' . DB_PREFIX . 'event_staff
-             WHERE event_staff_id = ' . $staffId . ' AND event_calendardetail_id = ' . $detailId
-        );
+        // As a batch's: the removal rule locks schedule items, which a batch may be writing.
+        $this->beginReadCommittedTrans();
+        try {
+            if ($priorState !== null) {
+                $leadsRemoved = $this->removeAutoCategoryLeads(
+                    $detailId,
+                    $priorState['mundane_id'],
+                    $priorState['lead_categories'],
+                    $staffId
+                );
+            }
+            $ok = $leadsRemoved !== null;
+            if ($ok) {
+                // Its category rows go with it (ON DELETE CASCADE).
+                $this->db->Clear();
+                $ok = $this->db->ExecuteChecked(
+                    'DELETE FROM ' . DB_PREFIX . 'event_staff
+                     WHERE event_staff_id = ' . $staffId . ' AND event_calendardetail_id = ' . $detailId
+                );
+            }
+            if (!$ok) {
+                $this->db->RollbackTrans();
+                return ProcessingError('Could not remove the staff member.');
+            }
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ProcessingError('Could not remove the staff member.');
+        }
 
         return [
             'Status' => Success(),
             'PriorState' => $priorState,
+            'LeadsRemoved' => $leadsRemoved,
         ];
+    }
+
+    /**
+     * Category names from a request, keeping only known schedule categories,
+     * de-duplicated and in definition order.
+     *
+     * @return list<string>
+     */
+    private function normalizeLeadCategories(mixed $raw): array
+    {
+        $wanted = [];
+        foreach (is_array($raw) ? $raw : [] as $name) {
+            if (is_string($name)) {
+                $wanted[trim($name)] = true;
+            }
+        }
+
+        return array_values(array_filter(
+            array_keys(self::SCHEDULE_CATEGORIES),
+            static fn (string $category): bool => isset($wanted[$category])
+        ));
+    }
+
+    /**
+     * Lead categories of the given staff rows, each list in definition order.
+     *
+     * @param list<int> $staffIds
+     * @return array<int, list<string>>
+     */
+    private function fetchStaffLeadCategories(array $staffIds): array
+    {
+        $staffIds = array_values(array_filter(array_map('intval', $staffIds), 'valid_id'));
+        if ($staffIds === []) {
+            return [];
+        }
+        $this->db->Clear();
+        $rows = $this->db->DataSet(
+            'SELECT event_staff_id, category FROM ' . DB_PREFIX . 'event_staff_category
+             WHERE event_staff_id IN (' . implode(',', $staffIds) . ')'
+        );
+        $found = [];
+        while ($rows && $rows->Next()) {
+            $found[(int) $rows->event_staff_id][(string) $rows->category] = true;
+        }
+        $order = array_keys(self::SCHEDULE_CATEGORIES);
+        $out = [];
+        foreach ($found as $staffId => $set) {
+            $out[$staffId] = array_values(array_filter($order, static fn (string $c): bool => isset($set[$c])));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Fill rule: on every item of the occurrence whose primary category is one of
+     * $categories and which has no lead at all, adds $mundaneId as an auto-filled lead.
+     * Each item filled has its `modified` advanced, as a batch op's write would.
+     *
+     * Lock order, as in a batch: the item rows first (a locking read), then
+     * their lead rows. The opposite order deadlocks against a batch, which locks
+     * the item (FOR UPDATE) before it rewrites the leads. Once the items are locked
+     * they are read again, so the fill acts on them as they are now, not as they
+     * were before another save that this one waited for.
+     *
+     * @param list<string> $categories
+     * @return int|null rows inserted, or null when a write failed
+     */
+    private function fillCategoryLeads(int $detailId, int $mundaneId, array $categories): ?int
+    {
+        // All the categories at once: an item has one primary category, so the
+        // sets are disjoint and one pass fills exactly what one pass per category would.
+        $candidates = $this->unledItemIds($detailId, $categories, null);
+        if ($candidates === []) {
+            return 0;
+        }
+        if (!$this->lockScheduleItems($candidates)) {
+            return null;
+        }
+        // Only the items still unled now that they are locked are filled and bumped: one
+        // that gained a lead meanwhile keeps its version.
+        $fill = $this->unledItemIds($detailId, $categories, $candidates);
+        if ($fill === []) {
+            return 0;
+        }
+        if (!$this->bumpScheduleModified($fill)) {
+            return null;
+        }
+        $rows = array_map(static fn (int $scheduleId): array => [$scheduleId, $mundaneId, 1], $fill);
+        // A plain INSERT (not IGNORE): it either adds every row or fails, so the count is count($fill).
+        if (!$this->insertScheduleLeadRows($rows, false)) {
+            return null;
+        }
+
+        return count($fill);
+    }
+
+    /**
+     * Locks the given item rows (FOR UPDATE) to the end of the caller's transaction,
+     * without changing them. False when the read failed.
+     *
+     * @param list<int> $scheduleIds
+     */
+    private function lockScheduleItems(array $scheduleIds): bool
+    {
+        $scheduleIds = array_values(array_unique(array_filter(array_map('intval', $scheduleIds), 'valid_id')));
+        if ($scheduleIds === []) {
+            return true;
+        }
+        $this->db->Clear();
+        $rows = @$this->db->DataSet(
+            'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule
+             WHERE event_schedule_id IN (' . implode(',', $scheduleIds) . ') FOR UPDATE'
+        );
+
+        return $this->resultSucceeded($rows);
+    }
+
+    /**
+     * Items of the occurrence whose primary category is one of $categories and which
+     * have no lead at all; with $onlyIds, only those of these items.
+     *
+     * @param list<string> $categories
+     * @param list<int>|null $onlyIds
+     * @return list<int>
+     */
+    private function unledItemIds(int $detailId, array $categories, ?array $onlyIds): array
+    {
+        $known = array_values(array_intersect(array_keys(self::SCHEDULE_CATEGORIES), $categories));
+        if ($known === []) {
+            return [];
+        }
+        $this->db->Clear();
+        $placeholders = [];
+        foreach ($known as $i => $category) {
+            $this->db->{'category' . $i} = $category;
+            $placeholders[] = ':category' . $i;
+        }
+        $rows = $this->db->DataSet(
+            'SELECT s.event_schedule_id FROM ' . DB_PREFIX . 'event_schedule s
+             WHERE s.event_calendardetail_id = ' . $detailId . ' AND s.category IN (' . implode(', ', $placeholders) . ')'
+            . ($onlyIds !== null ? ' AND s.event_schedule_id IN (' . implode(',', array_map('intval', $onlyIds)) . ')' : '') . '
+               AND NOT EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'event_schedule_lead sl
+                               WHERE sl.event_schedule_id = s.event_schedule_id)'
+        );
+        $scheduleIds = [];
+        while ($rows && $rows->Next()) {
+            $scheduleIds[] = (int) $rows->event_schedule_id;
+        }
+
+        return $scheduleIds;
+    }
+
+    /**
+     * Removal rule: deletes $mundaneId's auto-filled leads on items of the occurrence
+     * whose primary category is one of $categories. A category the same person still
+     * leads through another staff row of this occurrence is left alone. Hand-picked
+     * leads (is_auto = 0) are never touched. Each item that loses a lead has its
+     * `modified` advanced, as a batch op's write would. An item left with no lead at
+     * all gets the category's remaining leads as auto-filled leads (the fill rule);
+     * the count returned is of deleted rows only.
+     *
+     * Lock order, as in a batch: the item rows first (the `modified` bump), then
+     * their lead rows. The opposite order deadlocks against a batch, which locks
+     * the item (FOR UPDATE) before it rewrites the leads. Once the items are locked
+     * their leads are read again, so only leads that still exist are deleted and counted.
+     *
+     * @param list<string> $categories
+     * @return int|null rows deleted, or null when a write failed
+     */
+    private function removeAutoCategoryLeads(int $detailId, int $mundaneId, array $categories, int $staffId): ?int
+    {
+        if ($categories === []) {
+            return 0;
+        }
+        $this->db->Clear();
+        $others = $this->db->DataSet(
+            'SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff
+             WHERE event_calendardetail_id = ' . $detailId . ' AND mundane_id = ' . $mundaneId
+            . ' AND event_staff_id <> ' . $staffId
+        );
+        $otherIds = [];
+        while ($others && $others->Next()) {
+            $otherIds[] = (int) $others->event_staff_id;
+        }
+        $stillLed = array_merge([], ...array_values($this->fetchStaffLeadCategories($otherIds)));
+
+        $removed = 0;
+        $leadMap = null;
+        foreach (array_diff($categories, $stillLed) as $category) {
+            [, $scheduleIds] = $this->autoLeadRows($detailId, $mundaneId, $category, null);
+            if ($scheduleIds === []) {
+                continue;
+            }
+            if (!$this->bumpScheduleModified($scheduleIds)) {
+                return null;
+            }
+            [$leadIds] = $this->autoLeadRows($detailId, $mundaneId, $category, $scheduleIds);
+            if ($leadIds === []) {
+                continue;
+            }
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked(
+                'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead
+                 WHERE event_schedule_lead_id IN (' . implode(',', $leadIds) . ')'
+            )) {
+                return null;
+            }
+            $removed += count($leadIds);
+
+            // The fill rule again, for the items this left with no lead at all: they get
+            // the category's other leads (this person excluded: on a staff removal their
+            // row is still there) as auto-filled leads. Those items are already locked
+            // and bumped above.
+            $leadMap ??= $this->categoryLeadMap($detailId);
+            $others = array_values(array_diff($leadMap[$category] ?? [], [$mundaneId]));
+            $refill = $others === [] ? [] : $this->unledItemIds($detailId, [$category], $scheduleIds);
+            $rows = [];
+            foreach ($refill as $scheduleId) {
+                foreach ($others as $leadId) {
+                    $rows[] = [$scheduleId, $leadId, 1];
+                }
+            }
+            if (!$this->insertScheduleLeadRows($rows, true)) {
+                return null;
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
+     * $mundaneId's auto-filled leads on items of the occurrence whose primary category
+     * is $category; with $onlyIds, only on those items.
+     *
+     * @param list<int>|null $onlyIds
+     * @return array{0: list<int>, 1: list<int>} [lead row ids, their item ids]
+     */
+    private function autoLeadRows(int $detailId, int $mundaneId, string $category, ?array $onlyIds): array
+    {
+        $this->db->Clear();
+        $this->db->category = $category;
+        $rows = $this->db->DataSet(
+            'SELECT sl.event_schedule_lead_id, sl.event_schedule_id FROM ' . DB_PREFIX . 'event_schedule_lead sl
+             JOIN ' . DB_PREFIX . 'event_schedule s ON s.event_schedule_id = sl.event_schedule_id
+             WHERE s.event_calendardetail_id = ' . $detailId . ' AND s.category = :category
+               AND sl.mundane_id = ' . $mundaneId . ' AND sl.is_auto = 1'
+            . ($onlyIds !== null ? ' AND sl.event_schedule_id IN (' . implode(',', array_map('intval', $onlyIds)) . ')' : '')
+        );
+        $leadIds = [];
+        $scheduleIds = [];
+        while ($rows && $rows->Next()) {
+            $leadIds[] = (int) $rows->event_schedule_lead_id;
+            $scheduleIds[] = (int) $rows->event_schedule_id;
+        }
+
+        return [$leadIds, array_values(array_unique($scheduleIds))];
     }
 
     public function AddEventSchedule($request)
@@ -1225,35 +1809,400 @@ class EventPlanning extends Ork3
         if ($mundaneId <= 0) {
             return BadToken();
         }
-        if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($scheduleId)) {
+        if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($scheduleId)
+            || !$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Invalid parameters.');
         }
 
-        if (!Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        // A feast editor (can_feast without can_schedule) may remove only an item whose
+        // stored categories make it a feast item: checked here, and again by the delete
+        // itself, so a category change made meanwhile is not removed by them.
+        $feastItemsOnly = false;
+        if (!$this->staffScheduleCaps($mundaneId, $eventId, $detailId)['can_schedule']) {
             $this->db->Clear();
             $catRow = $this->db->DataSet(
                 'SELECT category, secondary_category FROM ' . DB_PREFIX . 'event_schedule
                  WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId . ' LIMIT 1'
             );
-            $isFeast = false;
-            if ($catRow && $catRow->Next()) {
-                $cat = (string) ($catRow->category ?? '');
-                $scat = (string) ($catRow->secondary_category ?? '');
-                $isFeast = ($cat === 'Feast and Food' || $scat === 'Feast and Food');
+            $isFeast = ($catRow && $catRow->Next())
+                && $this->isFeastItem((string) ($catRow->category ?? ''), (string) ($catRow->secondary_category ?? ''));
+            if (!$isFeast || !$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'feast')) {
+                return NoAuthorization();
             }
-            $cap = $isFeast ? 'feast' : 'schedule';
-            if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, $cap)) {
+            $feastItemsOnly = true;
+        }
+
+        $this->db->Clear();
+        if ($feastItemsOnly) {
+            $this->db->feast = self::FEAST_CATEGORY;
+            $this->db->feast2 = self::FEAST_CATEGORY;
+        }
+        if (!$this->db->ExecuteChecked(
+            'DELETE FROM ' . DB_PREFIX . 'event_schedule
+             WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId
+            . ($feastItemsOnly ? ' AND (category = :feast OR secondary_category = :feast2)' : '')
+        )) {
+            return ProcessingError('Could not remove the schedule item.');
+        }
+
+        // Nothing removed: an item that is already gone is not an error, but one the
+        // feast guard kept (recategorised since the read above) was not removed. An
+        // unreadable count is checked the same way.
+        if ($feastItemsOnly && ($this->lastStatementRowCount() ?? 0) === 0) {
+            $stillThere = $this->fetchScheduleTimesOnDetail($scheduleId, $detailId);
+            if ($stillThere === false) {
+                return ProcessingError('Could not remove the schedule item.');
+            }
+            if ($stillThere !== null) {
                 return NoAuthorization();
             }
         }
 
-        $this->db->Clear();
-        $this->db->Execute(
-            'DELETE FROM ' . DB_PREFIX . 'event_schedule
-             WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId
-        );
-
         return Success();
+    }
+
+    /**
+     * The rows the previous statement on this connection changed (ROW_COUNT()), or
+     * null when that cannot be read.
+     */
+    private function lastStatementRowCount(): ?int
+    {
+        $this->db->Clear();
+        $row = @$this->db->DataSet('SELECT ROW_COUNT() AS row_count');
+        if (!$this->resultSucceeded($row) || !$row->Next()) {
+            return null;
+        }
+
+        return (int) $row->row_count;
+    }
+
+    /**
+     * Applies a list of schedule changes to one occurrence in a single transaction:
+     * either every op is applied or none is.
+     *
+     * Ops: ['op' => 'add', 'cid' => string, 'item' => array],
+     *      ['op' => 'update', 'id' => int, 'fields' => array, 'seen' => ?string] (only the keys sent change),
+     *      ['op' => 'remove', 'id' => int].
+     *
+     * An update or remove of an item that is no longer on the occurrence is not an
+     * error: its result carries 'gone' => true and the batch goes on. An update whose
+     * 'seen' (the item's Modified as the caller last had it) is not the item's current
+     * Modified is not applied: its result carries the current row and 'conflict' => true.
+     *
+     * With a 'BatchToken', the batch applies once: a repeat of the token returns the
+     * first call's Results and changes nothing. A batch that fails stores nothing.
+     * 'FailedIndex' is the refused op's index when an op's content was refused
+     * (InvalidParameter), and -1 for anything else, a processing failure included.
+     * An add that would take the occurrence past SCHEDULE_MAX_ITEMS items (counted at
+     * the start, then kept up to date by the batch's own adds and removes) is refused
+     * at its index.
+     *
+     * Each result's 'schedule' is the item as committed by this batch, or, for a
+     * conflict, as the other save committed it; an item that a later op of the same
+     * batch changes or removes is shown as the op that names it left it.
+     *
+     * @return array{Status: array, Results?: list<array{op: string, cid: string, id: int, schedule: ?array, gone?: bool, conflict?: bool}>, FailedIndex?: int}
+     */
+    public function ApplyScheduleOps(array $request): array
+    {
+        // The occurrence's category leads are read once for the whole batch, not per op;
+        // the memo lives only for this call, so a later staff change is never missed.
+        $this->batchCategoryLeads = [];
+        try {
+            return $this->applyScheduleBatch($request);
+        } finally {
+            $this->batchCategoryLeads = null;
+        }
+    }
+
+    /** ApplyScheduleOps's work, with the batch's category-lead memo in place. */
+    private function applyScheduleBatch(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        $ops = $request['Ops'] ?? null;
+        $batchToken = $request['BatchToken'] ?? null;
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken(), 'FailedIndex' => -1];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId) || !is_array($ops) || !array_is_list($ops)
+            || ($batchToken !== null && !$this->isRequestToken($batchToken))) {
+            return ['Status' => InvalidParameter('Invalid parameters.'), 'FailedIndex' => -1];
+        }
+        $caps = $this->staffScheduleCaps($mundaneId, $eventId, $detailId);
+        if (!$caps['can_schedule']) {
+            return ['Status' => NoAuthorization(), 'FailedIndex' => -1];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.'), 'FailedIndex' => -1];
+        }
+        if (count($ops) > self::SCHEDULE_BATCH_MAX_OPS) {
+            return ['Status' => InvalidParameter('Too many changes in one request.'), 'FailedIndex' => -1];
+        }
+        if ($ops === []) {
+            return ['Status' => Success(), 'Results' => []];
+        }
+        if ($batchToken !== null) {
+            $stored = $this->fetchScheduleRequestResult($detailId, $batchToken, 'batch');
+            if ($stored !== null) {
+                return ['Status' => Success(), 'Results' => $stored];
+            }
+            $this->pruneScheduleRequestTokens();
+        }
+
+        // The last op that names each existing item by id. A result row is read once,
+        // after the loop, unless a later op of this batch changes or removes that item:
+        // then it is read when its op runs, so it shows the item as that op left it.
+        $lastTouch = [];
+        $hasAdd = false;
+        foreach ($ops as $index => $op) {
+            $kind = is_array($op) ? ($op['op'] ?? null) : null;
+            $hasAdd = $hasAdd || $kind === 'add';
+            if ($kind === 'update' || $kind === 'remove') {
+                $touchedId = $this->strictId($op['id'] ?? null);
+                if ($touchedId > 0) {
+                    $lastTouch[$touchedId] = $index;
+                }
+            }
+        }
+
+        $results = [];
+        $written = [];
+        $pending = [];
+        $this->beginReadCommittedTrans();
+        try {
+            // A batch that adds holds the occurrence for its ceiling count (see lockScheduleDetail).
+            if ($hasAdd && !$this->lockScheduleDetail($detailId)) {
+                $this->db->RollbackTrans();
+                return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+            }
+            if ($batchToken !== null && !$this->claimScheduleRequestToken($detailId, $batchToken, 'batch')) {
+                $this->db->RollbackTrans();
+                // Another request with this token got there first: answer with what it stored.
+                $stored = $this->fetchScheduleRequestResult($detailId, $batchToken, 'batch');
+                return $stored !== null
+                    ? ['Status' => Success(), 'Results' => $stored]
+                    : ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+            }
+            // The ceiling: the items now on the occurrence, counted once under the lock above.
+            $itemCount = $hasAdd ? $this->countScheduleItems($detailId) : 0;
+            if ($itemCount === null) {
+                $this->db->RollbackTrans();
+                return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+            }
+            if ($hasAdd) {
+                // Walk the ops in order with the running count before anything is written:
+                // the first add that would pass the ceiling is refused at its index.
+                $removable = [];
+                foreach ($ops as $op) {
+                    $removeId = (is_array($op) && ($op['op'] ?? null) === 'remove') ? $this->strictId($op['id'] ?? null) : 0;
+                    if ($removeId > 0) {
+                        $removable[$removeId] = false;
+                    }
+                }
+                if ($removable !== []) {
+                    $this->db->Clear();
+                    $found = @$this->db->DataSet(
+                        'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = '
+                        . $detailId . ' AND event_schedule_id IN (' . implode(',', array_map('intval', array_keys($removable))) . ')'
+                    );
+                    if (!$this->resultSucceeded($found)) {
+                        $this->db->RollbackTrans();
+                        return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+                    }
+                    while ($found->Next()) {
+                        $removable[(int) $found->event_schedule_id] = true;
+                    }
+                }
+                $running = $itemCount;
+                foreach ($ops as $index => $op) {
+                    $kind = is_array($op) ? ($op['op'] ?? null) : null;
+                    if ($kind === 'add') {
+                        if ($running >= $this->scheduleMaxItems()) {
+                            $this->db->RollbackTrans();
+                            return ['Status' => $this->scheduleFullError(), 'FailedIndex' => $index];
+                        }
+                        $running++;
+                    } elseif ($kind === 'remove') {
+                        $removeId = $this->strictId($op['id'] ?? null);
+                        if ($removeId > 0 && !empty($removable[$removeId])) {
+                            $removable[$removeId] = false;
+                            $running--;
+                        }
+                    }
+                }
+            }
+            foreach ($ops as $index => $op) {
+                [$error, $result, $readLater] = $this->applyScheduleOp(
+                    is_array($op) ? $op : [],
+                    $detailId,
+                    $caps['can_feast'],
+                    $written,
+                    static fn (int $scheduleId): bool => ($lastTouch[$scheduleId] ?? -1) > $index
+                );
+                if ($error !== null) {
+                    $this->db->RollbackTrans();
+                    // A refusal of the op's content names the op. A processing failure (a
+                    // failed read or write, a lock-wait timeout) says nothing about the op:
+                    // the request may simply be sent again, with the same token.
+                    $refused = ($error['Status'] ?? null) === ServiceErrorIds::InvalidParameter;
+                    return ['Status' => $error, 'FailedIndex' => $refused ? $index : -1];
+                }
+                if ($readLater > 0) {
+                    $pending[count($results)] = $readLater;
+                }
+                $results[] = $result;
+            }
+            if ($pending !== []) {
+                // One read for every result row left to the end. Nothing else can have
+                // changed these items meanwhile: this transaction holds their rows.
+                $rows = [];
+                foreach ($this->fetchScheduleList($detailId, array_values($pending)) as $row) {
+                    $rows[$row['EventScheduleId']] = $row;
+                }
+                foreach ($pending as $resultIndex => $scheduleId) {
+                    if (!isset($rows[$scheduleId])) {
+                        $this->db->RollbackTrans();
+                        return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+                    }
+                    $results[$resultIndex]['schedule'] = $rows[$scheduleId];
+                }
+            }
+            if ($batchToken !== null && !$this->storeScheduleRequestResult($detailId, $batchToken, $results)) {
+                $this->db->RollbackTrans();
+                return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+            }
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+        }
+
+        return ['Status' => Success(), 'Results' => $results];
+    }
+
+    /**
+     * Opens the batch's transaction at READ COMMITTED (for that transaction only, the
+     * way YapoMysql::BeginReadSnapshot sets its level), so every read in it sees what
+     * other saves have committed. Under the server's REPEATABLE READ the batch would
+     * read its first snapshot: a 'conflict' result could carry the row as it was
+     * before the other save, and with innodb_snapshot_isolation (on by default in
+     * current MariaDB) the locking read of a row committed after that snapshot fails
+     * the batch instead of reporting the conflict. Inside a caller's transaction the
+     * level cannot change, and the caller's is kept.
+     */
+    private function beginReadCommittedTrans(): void
+    {
+        if (!$this->db->InTrans()) {
+            $this->db->Clear();
+            $this->db->ExecuteChecked('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        }
+        $this->db->BeginTrans();
+    }
+
+    /** Whether $value is a well-formed BatchToken / RequestToken. */
+    private function isRequestToken(mixed $value): bool
+    {
+        return is_string($value) && preg_match(self::SCHEDULE_REQUEST_TOKEN_RE, $value) === 1;
+    }
+
+    /**
+     * The stored result of an earlier request with this token on this occurrence,
+     * decoded, or null when there is none (or it was made by the other kind of request).
+     */
+    private function fetchScheduleRequestResult(int $detailId, string $token, string $kind): ?array
+    {
+        $this->db->Clear();
+        $this->db->token = $token;
+        $row = $this->db->DataSet(
+            'SELECT kind, results FROM ' . DB_PREFIX . 'event_schedule_batch
+             WHERE event_calendardetail_id = ' . $detailId . ' AND token = :token LIMIT 1'
+        );
+        if (!$row || !$row->Next() || (string) $row->kind !== $kind) {
+            return null;
+        }
+        $decoded = json_decode((string) $row->results, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /** Opportunistic cleanup: request tokens are kept for one day. */
+    private function pruneScheduleRequestTokens(): void
+    {
+        $this->db->Clear();
+        $this->db->ExecuteChecked(
+            'DELETE FROM ' . DB_PREFIX . 'event_schedule_batch WHERE created < NOW() - INTERVAL 1 DAY'
+        );
+    }
+
+    /**
+     * Claims the token inside the caller's transaction, before its writes, so a
+     * concurrent request with the same token waits on the primary key and then
+     * finds the stored result. False when the claim failed (normally: the token is
+     * already taken); the caller rolls back and reads the stored result back.
+     */
+    private function claimScheduleRequestToken(int $detailId, string $token, string $kind): bool
+    {
+        $this->db->Clear();
+        $this->db->token = $token;
+        $this->db->kind = $kind;
+
+        return (bool) @$this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'event_schedule_batch (event_calendardetail_id, token, kind, results)
+             VALUES (' . $detailId . ', :token, :kind, \'\')'
+        );
+    }
+
+    /** Stores the result of the request that claimed the token (inside its transaction). */
+    private function storeScheduleRequestResult(int $detailId, string $token, array $result): bool
+    {
+        $json = json_encode($result, JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json === false) {
+            return false;
+        }
+        $this->db->Clear();
+        $this->db->token = $token;
+        $this->db->results = $json;
+
+        return $this->db->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'event_schedule_batch SET results = :results
+             WHERE event_calendardetail_id = ' . $detailId . ' AND token = :token'
+        );
+    }
+
+    /**
+     * The occurrence's schedule and staff for a caller who can manage the schedule.
+     *
+     * @return array{Status: array, ScheduleList?: list<array<string, mixed>>, StaffList?: list<array<string, mixed>>}
+     */
+    public function GetScheduleForManage(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken()];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'schedule')) {
+            return ['Status' => NoAuthorization()];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+
+        return [
+            'Status' => Success(),
+            'ScheduleList' => $this->fetchScheduleList($detailId),
+            'StaffList' => $this->fetchStaffList($detailId),
+        ];
     }
 
     public function ListCopySourceEvents($request)
@@ -1312,6 +2261,346 @@ class EventPlanning extends Ork3
             'Status' => Success(),
             'Results' => $results,
         ];
+    }
+
+    /**
+     * Occurrences whose schedule a schedule manager may copy into this one: first the
+     * event's other occurrences (newest first), then the latest past occurrence of each
+     * event ListCopySourceEvents offers for this event's kingdom and park. Only
+     * occurrences with at least one schedule item; at most 25.
+     *
+     * @return array{Status: array, Sources?: list<array{EventId: int, EventCalendarDetailId: int, Name: string, StartDate: string, ItemCount: int, SameEvent: bool}>}
+     */
+    public function ListScheduleCopySources(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken()];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        if (!$this->staffScheduleCaps($mundaneId, $eventId, $detailId)['can_schedule']) {
+            return ['Status' => NoAuthorization()];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+
+        return ['Status' => Success(), 'Sources' => $this->scheduleCopySources($eventId, $detailId)];
+    }
+
+    /**
+     * Appends a copy of another occurrence's schedule to this one, every item moved by
+     * the whole days between the two occurrences' start dates (clock times kept).
+     * Feast items are skipped, and counted, for a caller who cannot manage feast.
+     * A copied item left with no lead gets all of this occurrence's category leads for
+     * its primary category, as auto-filled leads, as an add without 'Leads' would.
+     *
+     * With a 'RequestToken', the copy applies once: a repeat of the token answers
+     * with the first call's items (as they are now) and copies nothing.
+     *
+     * @return array{Status: array, Schedule?: list<array<string, mixed>>, SkippedFeast?: int}
+     */
+    public function CopyScheduleInto(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        $sourceId = $this->strictId($request['SourceDetailId'] ?? null);
+        $requestToken = $request['RequestToken'] ?? null;
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken()];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId) || $sourceId === 0
+            || ($requestToken !== null && !$this->isRequestToken($requestToken))) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        $caps = $this->staffScheduleCaps($mundaneId, $eventId, $detailId);
+        if (!$caps['can_schedule']) {
+            return ['Status' => NoAuthorization()];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        if ($requestToken !== null) {
+            $stored = $this->fetchScheduleRequestResult($detailId, $requestToken, 'copy');
+            if ($stored !== null) {
+                return $this->copyResponse($detailId, $stored);
+            }
+        }
+        $allowed = array_column($this->scheduleCopySources($eventId, $detailId), 'EventCalendarDetailId');
+        if (!in_array($sourceId, $allowed, true)) {
+            return ['Status' => NoAuthorization()];
+        }
+
+        $sourceStart = $this->fetchDetailStart($sourceId);
+        $targetStart = $this->fetchDetailStart($detailId);
+        $shiftDays = ($sourceStart !== null && $targetStart !== null)
+            ? $this->calendarDaysBetween($sourceStart, $targetStart) : null;
+        if ($shiftDays === null) {
+            return ['Status' => InvalidParameter('The occurrence dates could not be read.')];
+        }
+        if ($requestToken !== null) {
+            $this->pruneScheduleRequestTokens();
+        }
+
+        $skippedFeast = 0;
+        $mod = ['schedule' => true, 'feast' => $caps['can_feast'], 'meals' => $caps['can_feast']];
+        $this->db->BeginTrans();
+        try {
+            // Held for the ceiling count, as a batch that adds holds it (see lockScheduleDetail).
+            if (!$this->lockScheduleDetail($detailId)) {
+                throw new \RuntimeException('Could not lock the occurrence.');
+            }
+            if ($requestToken !== null && !$this->claimScheduleRequestToken($detailId, $requestToken, 'copy')) {
+                $this->db->RollbackTrans();
+                // Another request with this token got there first: answer with what it stored.
+                $stored = $this->fetchScheduleRequestResult($detailId, $requestToken, 'copy');
+                return $stored !== null
+                    ? $this->copyResponse($detailId, $stored)
+                    : ['Status' => ProcessingError('Could not copy the schedule.')];
+            }
+            $itemCount = $this->countScheduleItems($detailId);
+            if ($itemCount === null) {
+                throw new \RuntimeException('Could not count the schedule.');
+            }
+            $roomLeft = max(0, $this->scheduleMaxItems() - $itemCount);
+            $newIds = $this->copyScheduleModules($sourceId, $detailId, $mod, $shiftDays, null, $skippedFeast, $roomLeft);
+            if ($newIds === null) {
+                // Nothing was written; the rollback also frees the request token.
+                $this->db->RollbackTrans();
+                return ['Status' => InvalidParameter(
+                    'That would put more than ' . $this->scheduleMaxItems() . ' items on this schedule.'
+                )];
+            }
+            $this->demoteForeignAutoLeads($detailId, $newIds);
+            $this->fillCopiedItemLeads($detailId, $newIds);
+            $stored = ['Ids' => $newIds, 'SkippedFeast' => $skippedFeast];
+            if ($requestToken !== null && !$this->storeScheduleRequestResult($detailId, $requestToken, $stored)) {
+                throw new \RuntimeException('Could not store the copy token.');
+            }
+        } catch (\RuntimeException $e) {
+            $this->db->RollbackTrans();
+            return ['Status' => ProcessingError('Could not copy the schedule.')];
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ['Status' => ProcessingError('Could not copy the schedule.')];
+        }
+
+        return $this->copyResponse($detailId, $stored);
+    }
+
+    /**
+     * CopyScheduleInto's answer from what it stores: the copied items still on the
+     * occurrence, in copy order, and the count of feast items skipped.
+     *
+     * @param array{Ids?: list<int>, SkippedFeast?: int} $stored
+     */
+    private function copyResponse(int $detailId, array $stored): array
+    {
+        $byId = [];
+        foreach ($this->fetchScheduleList($detailId) as $row) {
+            $byId[$row['EventScheduleId']] = $row;
+        }
+        $schedule = [];
+        foreach (is_array($stored['Ids'] ?? null) ? $stored['Ids'] : [] as $newId) {
+            if (isset($byId[(int) $newId])) {
+                $schedule[] = $byId[(int) $newId];
+            }
+        }
+
+        return ['Status' => Success(), 'Schedule' => $schedule, 'SkippedFeast' => (int) ($stored['SkippedFeast'] ?? 0)];
+    }
+
+    /**
+     * Copied items left with no lead at all get every one of the occurrence's category
+     * leads for their primary category, as auto-filled leads: the same leads an add
+     * without a 'Leads' key gets (applyCategoryLeads).
+     *
+     * @param list<int> $scheduleIds the copied items, all on $detailId
+     * @throws \RuntimeException when a write fails
+     */
+    private function fillCopiedItemLeads(int $detailId, array $scheduleIds): void
+    {
+        $scheduleIds = array_values(array_filter(array_map('intval', $scheduleIds), 'valid_id'));
+        if ($scheduleIds === []) {
+            return;
+        }
+        $this->db->Clear();
+        $rows = $this->db->DataSet(
+            'SELECT s.event_schedule_id, s.category FROM ' . DB_PREFIX . 'event_schedule s
+             WHERE s.event_calendardetail_id = ' . $detailId . '
+               AND s.event_schedule_id IN (' . implode(',', $scheduleIds) . ')
+               AND NOT EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'event_schedule_lead sl
+                               WHERE sl.event_schedule_id = s.event_schedule_id)'
+        );
+        $unled = [];
+        while ($rows && $rows->Next()) {
+            $unled[(int) $rows->event_schedule_id] = (string) $rows->category;
+        }
+        if ($unled === []) {
+            return;
+        }
+        // The occurrence's category leads read once for every item, written in one statement.
+        $leadMap = $this->categoryLeadMap($detailId);
+        $leadRows = [];
+        foreach ($unled as $scheduleId => $category) {
+            foreach ($leadMap[$category] ?? [] as $leadId) {
+                $leadRows[] = [$scheduleId, $leadId, 1];
+            }
+        }
+        if (!$this->insertScheduleLeadRows($leadRows, true)) {
+            throw new \RuntimeException('Could not copy a schedule lead.');
+        }
+    }
+
+    /**
+     * A lead copied in from another occurrence stays auto-filled only when that person
+     * leads the item's primary category on this occurrence; otherwise it is stored as
+     * hand-picked, so a later staff change here never removes it.
+     *
+     * @param list<int> $scheduleIds the copied items, all on $detailId
+     * @throws \RuntimeException when the write fails
+     */
+    private function demoteForeignAutoLeads(int $detailId, array $scheduleIds): void
+    {
+        $scheduleIds = array_values(array_filter(array_map('intval', $scheduleIds), 'valid_id'));
+        if ($scheduleIds === []) {
+            return;
+        }
+        $this->db->Clear();
+        if (!$this->db->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'event_schedule_lead sl
+             JOIN ' . DB_PREFIX . 'event_schedule s ON s.event_schedule_id = sl.event_schedule_id
+             SET sl.is_auto = 0
+             WHERE sl.event_schedule_id IN (' . implode(',', $scheduleIds) . ')
+               AND s.event_calendardetail_id = ' . $detailId . ' AND sl.is_auto = 1
+               AND NOT EXISTS (
+                   SELECT 1 FROM ' . DB_PREFIX . 'event_staff st
+                   JOIN ' . DB_PREFIX . 'event_staff_category sc ON sc.event_staff_id = st.event_staff_id
+                   WHERE st.event_calendardetail_id = ' . $detailId . '
+                     AND st.mundane_id = sl.mundane_id AND sc.category = s.category
+               )'
+        )) {
+            throw new \RuntimeException('Could not copy a schedule lead.');
+        }
+    }
+
+    /**
+     * The copy sources for a target occurrence (see ListScheduleCopySources); no access check.
+     *
+     * @return list<array{EventId: int, EventCalendarDetailId: int, Name: string, StartDate: string, ItemCount: int, SameEvent: bool}>
+     */
+    private function scheduleCopySources(int $eventId, int $detailId): array
+    {
+        // CopyScheduleInto accepts only sources in this list, so a same-event occurrence beyond the cap cannot be copied from.
+        $limit = 25;
+        $this->db->Clear();
+        $eventRow = $this->db->DataSet(
+            'SELECT name, kingdom_id, park_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId . ' LIMIT 1'
+        );
+        if (!$eventRow || !$eventRow->Next()) {
+            return [];
+        }
+        $eventName = (string) $eventRow->name;
+        $kingdomId = (int) $eventRow->kingdom_id;
+        $parkId = (int) $eventRow->park_id;
+
+        $sources = [];
+        $this->db->Clear();
+        $sameRs = $this->db->DataSet(
+            'SELECT cd.event_calendardetail_id, cd.event_start, COUNT(s.event_schedule_id) AS item_count
+             FROM ' . DB_PREFIX . 'event_calendardetail cd
+             JOIN ' . DB_PREFIX . 'event_schedule s ON s.event_calendardetail_id = cd.event_calendardetail_id
+             WHERE cd.event_id = ' . $eventId . ' AND cd.event_calendardetail_id != ' . $detailId . '
+             GROUP BY cd.event_calendardetail_id, cd.event_start
+             ORDER BY cd.event_start DESC, cd.event_calendardetail_id DESC
+             LIMIT ' . $limit
+        );
+        while ($sameRs && $sameRs->Next()) {
+            $sources[] = [
+                'EventId' => $eventId,
+                'EventCalendarDetailId' => (int) $sameRs->event_calendardetail_id,
+                'Name' => $eventName,
+                'StartDate' => substr((string) $sameRs->event_start, 0, 10),
+                'ItemCount' => (int) $sameRs->item_count,
+                'SameEvent' => true,
+            ];
+        }
+        if (count($sources) >= $limit) {
+            return $sources;
+        }
+
+        $offered = $this->ListCopySourceEvents([
+            'KingdomId' => $kingdomId,
+            'ParkId' => $parkId,
+            'ExcludeEventId' => $eventId,
+        ]);
+        $names = [];
+        foreach ($offered['Results'] ?? [] as $result) {
+            $names[(int) $result['eventId']] = (string) $result['name'];
+        }
+        if ($names === []) {
+            return $sources;
+        }
+
+        $this->db->Clear();
+        $latestRs = $this->db->DataSet(
+            'SELECT cd.event_id, cd.event_calendardetail_id, cd.event_start,
+                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_schedule s
+                     WHERE s.event_calendardetail_id = cd.event_calendardetail_id) AS item_count
+             FROM ' . DB_PREFIX . 'event_calendardetail cd
+             WHERE cd.event_id IN (' . implode(',', array_map('intval', array_keys($names))) . ')
+               AND cd.event_start < NOW()
+             ORDER BY cd.event_start DESC, cd.event_calendardetail_id DESC'
+        );
+        $latest = [];
+        while ($latestRs && $latestRs->Next()) {
+            $otherId = (int) $latestRs->event_id;
+            if (isset($latest[$otherId])) {
+                continue;
+            }
+            $latest[$otherId] = [
+                'EventId' => $otherId,
+                'EventCalendarDetailId' => (int) $latestRs->event_calendardetail_id,
+                'Name' => $names[$otherId],
+                'StartDate' => substr((string) $latestRs->event_start, 0, 10),
+                'ItemCount' => (int) $latestRs->item_count,
+                'SameEvent' => false,
+            ];
+        }
+        foreach (array_keys($names) as $otherId) {
+            $candidate = $latest[$otherId] ?? null;
+            if ($candidate === null || $candidate['ItemCount'] < 1) {
+                continue;
+            }
+            $sources[] = $candidate;
+            if (count($sources) >= $limit) {
+                break;
+            }
+        }
+
+        return $sources;
+    }
+
+    /** The occurrence's event_start as stored, or null when it does not exist. */
+    private function fetchDetailStart(int $detailId): ?string
+    {
+        $this->db->Clear();
+        $row = $this->db->DataSet(
+            'SELECT event_start FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+
+        return ($row && $row->Next()) ? (string) $row->event_start : null;
     }
 
     public function CreateEventWithCopy($request)
@@ -1463,12 +2752,27 @@ class EventPlanning extends Ork3
             $this->copyDetailFeesAndLinks($srcDetailId, $newDetailId);
         }
 
+        $newScheduleIds = [];
         if ($mod['schedule'] || $mod['feast']) {
-            $this->copyScheduleModules($srcDetailId, $newDetailId, $mod, $deltaSeconds);
+            try {
+                $newScheduleIds = $this->copyScheduleModules($srcDetailId, $newDetailId, $mod, 0, $deltaSeconds) ?? [];
+            } catch (\RuntimeException $e) {
+                $this->rollbackCopiedEvent($newEventId);
+                return ProcessingError('Failed to copy the schedule.');
+            }
         }
 
         if ($mod['staff']) {
             $this->copyStaffModule($srcDetailId, $newDetailId);
+        }
+
+        // As CopyScheduleInto: a copied auto lead stays auto only for someone who leads
+        // that category here, so after the staff (and their categories) are copied.
+        try {
+            $this->demoteForeignAutoLeads($newDetailId, $newScheduleIds);
+        } catch (\RuntimeException $e) {
+            $this->rollbackCopiedEvent($newEventId);
+            return ProcessingError('Failed to copy the schedule.');
         }
 
         $warnings = [];
@@ -1495,15 +2799,20 @@ class EventPlanning extends Ork3
         ];
     }
 
-    public function ScheduleFeastAllowed(int $mundaneId, int $eventId, int $detailId, string $category): bool
-    {
-        $isFeast = ($category === 'Feast and Food');
-        if (!$isFeast) {
-            return $this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'schedule');
-        }
-        return $this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'feast');
-    }
-
+    /**
+     * The schedule form's save (EventAjax add_schedule / update_schedule), as a thin
+     * wrapper over the batch's op writer. It keeps only what is the form's own: the
+     * caller's rights (schedule managers, event editors, and a feast editor's rules),
+     * the form's fields turned into one op, and the op's result turned into the reply
+     * the form reads. The content rules (strict times, the event window, end not before
+     * start, text limits, the lead rules), the item ceiling, the 'Seen' check and every
+     * write are the batch's, run through applyScheduleOp in one transaction opened as
+     * the batch's is.
+     *
+     * A feast editor (can_feast without can_schedule) may add a feast item (judged by
+     * the posted categories), and update an item stored as one (judged under the row
+     * lock, so a concurrent change of category cannot slip past) that stays one.
+     */
     private function saveEventSchedule($request, bool $isUpdate)
     {
         $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
@@ -1514,7 +2823,7 @@ class EventPlanning extends Ork3
         if ($mundaneId <= 0) {
             return BadToken();
         }
-        if (!valid_id($eventId) || !valid_id($detailId)) {
+        if (!valid_id($eventId) || !valid_id($detailId) || !$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Invalid Event ID.');
         }
         if ($isUpdate && !valid_id($scheduleId)) {
@@ -1522,170 +2831,894 @@ class EventPlanning extends Ork3
         }
 
         $caps = $this->staffScheduleCaps($mundaneId, $eventId, $detailId);
-        if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
-            $caps = ['can_schedule' => true, 'can_feast' => true];
-        }
-
-        $title = trim((string) ($request['Title'] ?? ''));
-        $startTime = trim((string) ($request['StartTime'] ?? ''));
-        $endTime = trim((string) ($request['EndTime'] ?? ''));
-        $location = trim((string) ($request['Location'] ?? ''));
-        $description = trim((string) ($request['Description'] ?? ''));
-        $category = trim((string) ($request['Category'] ?? 'Other'));
-        $secondaryCategory = trim((string) ($request['SecondaryCategory'] ?? ''));
-
-        if (!in_array($category, self::SCHEDULE_CATEGORIES, true)) {
-            $category = 'Other';
-        }
-        if ($secondaryCategory !== '' && !in_array($secondaryCategory, self::SCHEDULE_CATEGORIES, true)) {
-            $secondaryCategory = '';
-        }
-
-        $isFeast = ($category === 'Feast and Food' || $secondaryCategory === 'Feast and Food');
-        if ($isFeast) {
-            if (!$caps['can_schedule'] && !$caps['can_feast']) {
-                return NoAuthorization();
-            }
-        } elseif (!$caps['can_schedule']) {
+        $feastEditor = !$caps['can_schedule'];
+        $postedFeast = $this->isFeastItem(
+            $this->coerceScheduleCategory($this->scheduleText($request['Category'] ?? 'Other')),
+            $this->coerceSecondaryCategory($this->scheduleText($request['SecondaryCategory'] ?? ''))
+        );
+        if ($feastEditor && (!$caps['can_feast'] || (!$isUpdate && !$postedFeast))) {
             return NoAuthorization();
         }
 
-        if ($title === '') {
-            return InvalidParameter('A title is required.');
-        }
-
-        $menu = null;
-        $cost = null;
-        $dietary = null;
-        $allergens = null;
-        $startFmt = '';
-        $endFmt = '';
-
-        if (!$isUpdate || $caps['can_schedule']) {
-            if ($startTime === '' || $endTime === '') {
-                return InvalidParameter('Start and end times are required.');
-            }
-            $startTs = strtotime($startTime);
-            $endTs = strtotime($endTime);
-            if (!$startTs || !$endTs) {
-                return InvalidParameter('Invalid time format.');
-            }
-            if ($endTs < $startTs) {
-                return InvalidParameter('End time cannot be before start time.');
-            }
-            $startFmt = date('Y-m-d H:i:s', $startTs);
-            $endFmt = date('Y-m-d H:i:s', $endTs);
-        }
-
+        // The form's fields as one op, by the batch's names. The form writes every
+        // field it posts (one it leaves out is written empty, as it always was); the
+        // meal fields only for a caller with feast rights. Leads: sent (even an empty
+        // list) means stored as sent; not sent means the category's lead rules apply.
+        $fields = [
+            'Title' => $request['Title'] ?? '',
+            'StartTime' => $request['StartTime'] ?? '',
+            'EndTime' => $request['EndTime'] ?? '',
+            'Location' => $request['Location'] ?? '',
+            'Description' => $request['Description'] ?? '',
+            'Category' => $request['Category'] ?? 'Other',
+            'SecondaryCategory' => $request['SecondaryCategory'] ?? '',
+        ];
         if ($caps['can_feast']) {
-            $rawMenu = trim((string) ($request['Menu'] ?? ''));
-            $rawCost = trim((string) ($request['Cost'] ?? ''));
-            $rawDietary = trim((string) ($request['Dietary'] ?? ''));
-            $rawAllergens = trim((string) ($request['Allergens'] ?? ''));
-            $menu = ($rawMenu !== '') ? $rawMenu : null;
-            $cost = ($rawCost !== '' && is_numeric($rawCost)) ? round((float) $rawCost, 2) : null;
-            $dietary = ($rawDietary !== '') ? $rawDietary : null;
-            $allergens = ($rawAllergens !== '') ? $rawAllergens : null;
-        } elseif ($isUpdate) {
-            $this->db->Clear();
-            $existRow = $this->db->DataSet(
-                'SELECT menu, cost, dietary, allergens FROM ' . DB_PREFIX . 'event_schedule
-                 WHERE event_schedule_id = ' . $scheduleId . ' LIMIT 1'
-            );
-            if (!$existRow || !$existRow->Next()) {
-                return InvalidParameter('Schedule item not found.');
+            foreach (array_keys(self::SCHEDULE_MEAL_FIELDS) as $key) {
+                $fields[$key] = $request[$key] ?? '';
             }
-            $menu = $existRow->menu;
-            $cost = $existRow->cost !== null ? (float) $existRow->cost : null;
-            $dietary = $existRow->dietary;
-            $allergens = $existRow->allergens;
+        }
+        if (array_key_exists('Leads', $request)) {
+            $fields['Leads'] = is_array($request['Leads']) ? $request['Leads'] : [];
+        }
+        if ($isUpdate) {
+            $op = ['op' => 'update', 'id' => $scheduleId, 'fields' => $fields];
+            // Seen: the item's Modified when the form opened; none (or '') saves unchecked.
+            $seen = $request['Seen'] ?? null;
+            if ($seen !== null && $seen !== '') {
+                $op['seen'] = $seen;
+            }
+        } else {
+            $op = ['op' => 'add', 'item' => $fields];
         }
 
-        if ($isUpdate) {
-            $setParts = ['title = \'' . $this->sq($title) . '\''];
-            if ($caps['can_schedule']) {
-                $setParts[] = 'start_time = \'' . $startFmt . '\'';
-                $setParts[] = 'end_time = \'' . $endFmt . '\'';
-                $setParts[] = 'location = \'' . $this->sq($location) . '\'';
-                $setParts[] = 'description = \'' . $this->sq($description) . '\'';
-                $setParts[] = 'category = \'' . $this->sq($category) . '\'';
-                $setParts[] = 'secondary_category = \'' . $this->sq($secondaryCategory) . '\'';
+        $this->beginReadCommittedTrans();
+        try {
+            [$error, $row] = $this->applyFormScheduleOp($op, $detailId, $caps['can_feast'], $feastEditor, $postedFeast);
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if ($error !== null) {
+            $this->db->RollbackTrans();
+            return $error;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ProcessingError('Could not save the schedule.');
+        }
+
+        // The item as saved, its leads and Modified (its new version) included.
+        return ['Status' => Success(), 'Schedule' => $row];
+    }
+
+    /**
+     * The form's one op, inside saveEventSchedule's transaction: the feast editor's
+     * check of the stored item (on the locking read, which holds the row to the end
+     * of the transaction), the ceiling for an add, the op itself, and its result read
+     * as the form's reply row.
+     *
+     * @return array{0: ?array, 1: ?array} [error status or null, the saved item in the fetchScheduleList shape]
+     */
+    private function applyFormScheduleOp(array $op, int $detailId, bool $canFeast, bool $feastEditor, bool $postedFeast): array
+    {
+        if ($op['op'] === 'update' && $feastEditor) {
+            $stored = $this->fetchScheduleTimesOnDetail($op['id'], $detailId);
+            if ($stored === false) {
+                return [ProcessingError('Could not save the schedule.'), null];
             }
-            if ($caps['can_feast']) {
-                $setParts[] = 'menu = ' . ($menu !== null ? "'" . $this->sq($menu) . "'" : 'NULL');
-                $setParts[] = 'cost = ' . ($cost !== null ? (string) $cost : 'NULL');
-                $setParts[] = 'dietary = ' . ($dietary !== null ? "'" . $this->sq($dietary) . "'" : 'NULL');
-                $setParts[] = 'allergens = ' . ($allergens !== null ? "'" . $this->sq($allergens) . "'" : 'NULL');
+            if ($stored === null) {
+                return [InvalidParameter('Schedule item not found.'), null];
             }
+            if (!$this->isFeastItem($stored['category'], $stored['secondary_category'])) {
+                return [NoAuthorization(), null];
+            }
+            if (!$postedFeast) {
+                return [InvalidParameter('A feast item must stay in ' . self::FEAST_CATEGORY . '.'), null];
+            }
+        }
+        if ($op['op'] === 'add') {
+            // The add's first statement: held for the ceiling count (see lockScheduleDetail).
+            $itemCount = $this->lockScheduleDetail($detailId) ? $this->countScheduleItems($detailId) : null;
+            if ($itemCount === null) {
+                return [ProcessingError('Could not save the schedule.'), null];
+            }
+            if ($itemCount >= $this->scheduleMaxItems()) {
+                return [$this->scheduleFullError(), null];
+            }
+        }
+
+        $written = [];
+        [$error, $result] = $this->applyScheduleOp($op, $detailId, $canFeast, $written, static fn (int $id): bool => false);
+        if ($error !== null) {
+            return [$error, null];
+        }
+        if (!empty($result['conflict'])) {
+            return [InvalidParameter(self::SCHEDULE_CHANGED_ELSEWHERE), null];
+        }
+        if (!empty($result['gone'])) {
+            return [InvalidParameter('Schedule item not found.'), null];
+        }
+        $row = $this->fetchScheduleRowForResult((int) $result['id'], $detailId);
+
+        return $row !== null ? [null, $row] : [ProcessingError('Could not save the schedule.'), null];
+    }
+
+    /**
+     * One batch op, run inside ApplyScheduleOps's transaction. $written collects the
+     * ids this batch has added or updated, so a later update to one of them skips the
+     * 'seen' check.
+     *
+     * A result that carries the item's row ('schedule') has it read here only when
+     * $readNow says a later op of the batch changes that item; otherwise 'schedule' is
+     * left null and the item's id is returned for the caller to read after the loop.
+     *
+     * @param array<int, bool> $written
+     * @param callable(int): bool $readNow
+     * @return array{0: ?array, 1: ?array, 2: int} [error status or null, result or null, id whose row the caller reads, or 0]
+     */
+    private function applyScheduleOp(array $op, int $detailId, bool $canFeast, array &$written, callable $readNow): array
+    {
+        $kind = $op['op'] ?? null;
+        $cid = is_scalar($op['cid'] ?? null) ? (string) $op['cid'] : '';
+
+        if ($kind === 'add') {
+            if (!is_array($op['item'] ?? null)) {
+                return [InvalidParameter('Invalid parameters.'), null, 0];
+            }
+            [$error, $scheduleId] = $this->insertScheduleItem($detailId, $op['item'], $canFeast);
+        } elseif ($kind === 'update' || $kind === 'remove') {
+            $scheduleId = $this->strictId($op['id'] ?? null);
+            if ($scheduleId === 0) {
+                return [InvalidParameter('Invalid parameters.'), null, 0];
+            }
+            $stored = $this->fetchScheduleTimesOnDetail($scheduleId, $detailId);
+            if ($stored === false) {
+                // The read failed (a deadlock, a lock-wait timeout): not an absent item.
+                return [ProcessingError('Could not save the schedule.'), null, 0];
+            }
+            if ($stored === null) {
+                // An item of another occurrence was never this one's to change; one
+                // that no longer exists was removed meanwhile, which is not an error.
+                $exists = $this->scheduleIdExists($scheduleId);
+                if ($exists === null) {
+                    return [ProcessingError('Could not save the schedule.'), null, 0];
+                }
+                if ($exists) {
+                    return [InvalidParameter('Schedule item not found.'), null, 0];
+                }
+                return [null, ['op' => $kind, 'cid' => $cid, 'id' => $scheduleId, 'schedule' => null, 'gone' => true], 0];
+            }
+            if ($kind === 'remove') {
+                $error = $this->deleteScheduleItem($scheduleId, $detailId);
+            } elseif (!is_array($op['fields'] ?? null)) {
+                $error = InvalidParameter('Invalid parameters.');
+            } else {
+                $seen = $op['seen'] ?? null;
+                if ($seen !== null && !isset($written[$scheduleId])
+                    && (!is_string($seen) || $seen !== $stored['modified'])) {
+                    // Changed by someone else since the caller last saw it: not applied.
+                    // Its result carries the row as the other save committed it.
+                    $result = ['op' => 'update', 'cid' => $cid, 'id' => $scheduleId, 'schedule' => null, 'conflict' => true];
+                    return $this->withResultRow($result, $scheduleId, $detailId, $readNow);
+                }
+                $error = $this->updateScheduleItem($scheduleId, $detailId, $op['fields'], $stored, $canFeast);
+            }
+        } else {
+            return [InvalidParameter('Unknown change type.'), null, 0];
+        }
+        if ($error !== null) {
+            return [$error, null, 0];
+        }
+
+        $result = ['op' => $kind, 'cid' => $cid, 'id' => $scheduleId, 'schedule' => null];
+        if ($kind === 'remove') {
+            return [null, $result, 0];
+        }
+        $written[$scheduleId] = true;
+
+        return $this->withResultRow($result, $scheduleId, $detailId, $readNow);
+    }
+
+    /**
+     * An op's result with its item's row: read now when $readNow says a later op of
+     * the batch changes the item, else left for the caller's single read after the loop.
+     *
+     * @param callable(int): bool $readNow
+     * @return array{0: ?array, 1: ?array, 2: int} as applyScheduleOp
+     */
+    private function withResultRow(array $result, int $scheduleId, int $detailId, callable $readNow): array
+    {
+        if (!$readNow($scheduleId)) {
+            return [null, $result, $scheduleId];
+        }
+        $result['schedule'] = $this->fetchScheduleRowForResult($scheduleId, $detailId);
+        if ($result['schedule'] === null) {
+            return [ProcessingError('Could not save the schedule.'), null, 0];
+        }
+
+        return [null, $result, 0];
+    }
+
+    /**
+     * An add's leads: as sent (sanitised) when the item has a 'Leads' key, even an
+     * empty one; otherwise the occurrence's category leads for its primary category.
+     *
+     * @return array{0: ?array, 1: int} [error status or null, new schedule id]
+     */
+    private function insertScheduleItem(int $detailId, array $item, bool $canFeast): array
+    {
+        $tooLong = $this->scheduleTextLimitError($item, $canFeast) ?? $this->scheduleCostError($item, $canFeast);
+        if ($tooLong !== null) {
+            return [$tooLong, 0];
+        }
+        $title = $this->scheduleText($item['Title'] ?? '');
+        if ($title === '') {
+            return [InvalidParameter('A title is required.'), 0];
+        }
+        [$timeError, $start, $end] = $this->normalizeBatchScheduleTimes(
+            $this->scheduleText($item['StartTime'] ?? ''),
+            $this->scheduleText($item['EndTime'] ?? ''),
+            $detailId,
+            true
+        );
+        if ($timeError !== null) {
+            return [InvalidParameter($timeError), 0];
+        }
+
+        $values = [
+            'event_calendardetail_id' => $detailId,
+            'title' => $title,
+            'start_time' => $start,
+            'end_time' => $end,
+            'location' => $this->scheduleText($item['Location'] ?? ''),
+            'description' => $this->scheduleText($item['Description'] ?? ''),
+            'category' => $this->coerceScheduleCategory($this->scheduleText($item['Category'] ?? 'Other')),
+            'secondary_category' => $this->coerceSecondaryCategory($this->scheduleText($item['SecondaryCategory'] ?? '')),
+        ];
+        if ($canFeast) {
+            foreach (self::SCHEDULE_MEAL_FIELDS as $key => $column) {
+                $values[$column] = $this->normalizeMealField($key, $item[$key] ?? '');
+            }
+        }
+
+        $this->db->Clear();
+        foreach ($values as $column => $value) {
+            $this->db->$column = $value;
+        }
+        $columns = array_keys($values);
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'event_schedule (' . implode(', ', $columns) . ')
+             VALUES (:' . implode(', :', $columns) . ')'
+        );
+        $scheduleId = $ok ? (int) $this->db->GetLastInsertId() : 0;
+        if ($scheduleId <= 0) {
+            return [ProcessingError('Could not save the schedule.'), 0];
+        }
+
+        $error = array_key_exists('Leads', $item)
+            ? $this->replaceScheduleLeads($scheduleId, $item['Leads'], false, [$detailId, $values['category']])
+            : $this->applyCategoryLeads($scheduleId, $detailId, $values['category'], false);
+        if ($error !== null) {
+            return [$error, 0];
+        }
+
+        return [null, $scheduleId];
+    }
+
+    /**
+     * Writes only the fields present in $fields. Meal fields are skipped unless
+     * $canFeast; when only one of start/end is sent, the order check uses the stored other.
+     * Leads: as sent (sanitised) when $fields has 'Leads'; otherwise a change of
+     * primary category swaps the item's auto-filled leads for the new category's
+     * leads and keeps the hand-picked ones. Any change advances the row's `modified`.
+     *
+     * @param array{start_time: string, end_time: string, category: string, cost: ?float, modified: string} $stored
+     */
+    private function updateScheduleItem(int $scheduleId, int $detailId, array $fields, array $stored, bool $canFeast): ?array
+    {
+        $tooLong = $this->scheduleTextLimitError($fields, $canFeast) ?? $this->scheduleCostError($fields, $canFeast, $stored);
+        if ($tooLong !== null) {
+            return $tooLong;
+        }
+        $values = [];
+        if (array_key_exists('Title', $fields)) {
+            $values['title'] = $this->scheduleText($fields['Title']);
+            if ($values['title'] === '') {
+                return InvalidParameter('A title is required.');
+            }
+        }
+        $hasStart = array_key_exists('StartTime', $fields);
+        $hasEnd = array_key_exists('EndTime', $fields);
+        if ($hasStart || $hasEnd) {
+            [$timeError, $values['start_time'], $values['end_time']] = $this->normalizeBatchScheduleTimes(
+                $hasStart ? $this->scheduleText($fields['StartTime']) : $stored['start_time'],
+                $hasEnd ? $this->scheduleText($fields['EndTime']) : $stored['end_time'],
+                $detailId,
+                $hasStart
+            );
+            if ($timeError !== null) {
+                return InvalidParameter($timeError);
+            }
+        }
+        if (array_key_exists('Location', $fields)) {
+            $values['location'] = $this->scheduleText($fields['Location']);
+        }
+        if (array_key_exists('Description', $fields)) {
+            $values['description'] = $this->scheduleText($fields['Description']);
+        }
+        if (array_key_exists('Category', $fields)) {
+            $values['category'] = $this->coerceScheduleCategory($this->scheduleText($fields['Category']));
+        }
+        if (array_key_exists('SecondaryCategory', $fields)) {
+            $values['secondary_category'] = $this->coerceSecondaryCategory($this->scheduleText($fields['SecondaryCategory']));
+        }
+        if ($canFeast) {
+            foreach (self::SCHEDULE_MEAL_FIELDS as $key => $column) {
+                if (array_key_exists($key, $fields)) {
+                    $values[$column] = $this->normalizeMealField($key, $fields[$key]);
+                }
+            }
+        }
+        $leadsSent = array_key_exists('Leads', $fields);
+        $categoryChanged = isset($values['category']) && $values['category'] !== $stored['category'];
+
+        if ($values !== [] || $leadsSent) {
             $this->db->Clear();
-            $this->db->Execute(
+            $setParts = [];
+            foreach ($values as $column => $value) {
+                $this->db->$column = $value;
+                $setParts[] = $column . ' = :' . $column;
+            }
+            $setParts[] = $this->scheduleModifiedBump();
+            $ok = $this->db->ExecuteChecked(
                 'UPDATE ' . DB_PREFIX . 'event_schedule SET ' . implode(', ', $setParts)
                 . ' WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId
             );
-        } else {
-            $menuSql = $menu !== null ? "'" . $this->sq($menu) . "'" : 'NULL';
-            $costSql = $cost !== null ? (string) $cost : 'NULL';
-            $dietarySql = $dietary !== null ? "'" . $this->sq($dietary) . "'" : 'NULL';
-            $allergensSql = $allergens !== null ? "'" . $this->sq($allergens) . "'" : 'NULL';
-            $this->db->Clear();
-            $this->db->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'event_schedule
-                 (event_calendardetail_id, title, start_time, end_time, location, description,
-                  category, secondary_category, menu, cost, dietary, allergens)
-                 VALUES (' . $detailId . ', \'' . $this->sq($title) . '\', \'' . $startFmt . '\', \''
-                . $endFmt . '\', \'' . $this->sq($location) . '\', \'' . $this->sq($description) . '\', \''
-                . $this->sq($category) . '\', \'' . $this->sq($secondaryCategory) . '\', '
-                . $menuSql . ', ' . $costSql . ', ' . $dietarySql . ', ' . $allergensSql . ')'
-            );
-            $this->db->Clear();
-            $idrow = $this->db->DataSet(
-                'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule
-                 WHERE event_calendardetail_id = ' . $detailId . ' ORDER BY event_schedule_id DESC LIMIT 1'
-            );
-            $scheduleId = ($idrow && $idrow->Next()) ? (int) $idrow->event_schedule_id : 0;
+            if (!$ok) {
+                return ProcessingError('Could not save the schedule.');
+            }
         }
 
-        $leadsOut = [];
-        $leadsIn = is_array($request['Leads'] ?? null) ? $request['Leads'] : [];
-        if (($isUpdate ? $caps['can_schedule'] : true) && is_array($leadsIn)) {
-            if ($isUpdate) {
-                $this->db->Clear();
-                $this->db->Execute(
-                    'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId
-                );
+        if ($leadsSent) {
+            return $this->replaceScheduleLeads(
+                $scheduleId,
+                $fields['Leads'],
+                true,
+                [$detailId, $values['category'] ?? $stored['category']]
+            );
+        }
+        if ($categoryChanged) {
+            return $this->applyCategoryLeads($scheduleId, $detailId, $values['category'], true);
+        }
+
+        return null;
+    }
+
+    /**
+     * The SET clause that advances an item's `modified`. The column has one-second
+     * resolution and only moves by itself when a value changes, so two writes in the
+     * same second, or a write that changes only the leads, would otherwise leave it as it was.
+     */
+    private function scheduleModifiedBump(): string
+    {
+        return 'modified = GREATEST(NOW(), COALESCE(modified, NOW()) + INTERVAL 1 SECOND)';
+    }
+
+    /**
+     * Advances `modified` on items whose leads were changed outside a batch op (the
+     * staff-side fill and removal rules). False when the write failed.
+     *
+     * @param list<int> $scheduleIds
+     */
+    private function bumpScheduleModified(array $scheduleIds): bool
+    {
+        $scheduleIds = array_values(array_unique(array_filter(array_map('intval', $scheduleIds), 'valid_id')));
+        if ($scheduleIds === []) {
+            return true;
+        }
+        $this->db->Clear();
+
+        return $this->db->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'event_schedule SET ' . $this->scheduleModifiedBump() . '
+             WHERE event_schedule_id IN (' . implode(',', $scheduleIds) . ')'
+        );
+    }
+
+    private function deleteScheduleItem(int $scheduleId, int $detailId): ?array
+    {
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId
+        );
+        if ($ok) {
+            $this->db->Clear();
+            $ok = $this->db->ExecuteChecked(
+                'DELETE FROM ' . DB_PREFIX . 'event_schedule
+                 WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId
+            );
+        }
+
+        return $ok ? null : ProcessingError('Could not save the schedule.');
+    }
+
+    /**
+     * Sets an item's leads to $leads (list of ['MundaneId' => int, 'Auto' => bool]),
+     * sanitised by prepareScheduleLeads against the item's stored primary category;
+     * $clearFirst drops the old ones. A caller that has just written the item (a batch
+     * op, inside its transaction) passes its occurrence and stored primary category in
+     * $known, which saves reading the item again.
+     *
+     * @param array{0: int, 1: string}|null $known [occurrence id, stored primary category]
+     */
+    private function replaceScheduleLeads(int $scheduleId, mixed $leads, bool $clearFirst, ?array $known = null): ?array
+    {
+        if ($known !== null) {
+            [$detailId, $category] = $known;
+        } else {
+            $this->db->Clear();
+            $itemRow = $this->db->DataSet(
+                'SELECT event_calendardetail_id, category FROM ' . DB_PREFIX . 'event_schedule
+                 WHERE event_schedule_id = ' . $scheduleId . ' LIMIT 1'
+            );
+            if (!$itemRow || !$itemRow->Next()) {
+                return ProcessingError('Could not save the schedule.');
             }
-            foreach ($leadsIn as $lead) {
-                $lmid = (int) ($lead['MundaneId'] ?? 0);
-                if (!valid_id($lmid)) {
-                    continue;
+            $detailId = (int) $itemRow->event_calendardetail_id;
+            $category = (string) $itemRow->category;
+        }
+
+        [$error, $prepared] = $this->prepareScheduleLeads(
+            $leads,
+            $detailId,
+            $category,
+            $clearFirst ? $this->fetchScheduleLeadIds($scheduleId) : []
+        );
+        if ($error !== null) {
+            return $error;
+        }
+        if ($clearFirst) {
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked(
+                'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId
+            )) {
+                return ProcessingError('Could not save the schedule.');
+            }
+        }
+        $rows = array_map(static fn (array $lead): array => [$scheduleId, $lead[0], $lead[1]], $prepared);
+        if (!$this->insertScheduleLeadRows($rows, true)) {
+            return ProcessingError('Could not save the schedule.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Leads from a request, ready to store: invalid ids dropped, each person once,
+     * at most SCHEDULE_LEADS_MAX, every one an eligible player (a person who already
+     * leads the item, in $existingIds, or who leads $category on the occurrence, may
+     * be a lead even if not eligible), and
+     * auto-filled only when asked for AND that person leads $category on the occurrence.
+     *
+     * @param list<int> $existingIds the item's current leads
+     * @return array{0: ?array, 1: list<array{0: int, 1: int}>} [error status or null, [mundane id, is_auto] pairs]
+     */
+    private function prepareScheduleLeads(mixed $leads, int $detailId, string $category, array $existingIds): array
+    {
+        if (!is_array($leads)) {
+            return [InvalidParameter('Invalid parameters.'), []];
+        }
+        $wanted = [];
+        foreach ($leads as $lead) {
+            $leadId = is_array($lead) ? $this->strictId($lead['MundaneId'] ?? null) : 0;
+            if ($leadId === 0 || isset($wanted[$leadId])) {
+                continue;
+            }
+            $wanted[$leadId] = $this->leadIsAuto($lead);
+        }
+        if (count($wanted) > self::SCHEDULE_LEADS_MAX) {
+            return [InvalidParameter('Too many leads on one item.'), []];
+        }
+        $this->primeMundaneEligible(array_values(array_diff(array_keys($wanted), $existingIds)));
+        // Read only when needed: for an auto flag, or for someone who is not eligible.
+        $categoryLeads = null;
+        $out = [];
+        foreach ($wanted as $leadId => $askedAuto) {
+            if (!in_array($leadId, $existingIds, true) && !$this->isMundaneEligible($leadId)) {
+                // A category lead of the item's category was chosen through staff
+                // management, and the server's own fills add them unchecked: the
+                // client's preview of those leads must not be refused.
+                $categoryLeads ??= $this->categoryLeadIds($detailId, $category);
+                if (!in_array($leadId, $categoryLeads, true)) {
+                    return [InvalidParameter('That player cannot be a lead.'), []];
                 }
-                $this->db->Clear();
-                $this->db->Execute(
-                    'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id)
-                     VALUES (' . $scheduleId . ', ' . $lmid . ')'
-                );
-                $leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? ''];
             }
+            if ($askedAuto) {
+                $categoryLeads ??= $this->categoryLeadIds($detailId, $category);
+            }
+            $out[] = [$leadId, ($askedAuto && in_array($leadId, $categoryLeads ?? [], true)) ? 1 : 0];
+        }
+
+        return [null, $out];
+    }
+
+    /** @return list<int> the item's current leads */
+    private function fetchScheduleLeadIds(int $scheduleId): array
+    {
+        $this->db->Clear();
+        $rows = $this->db->DataSet(
+            'SELECT mundane_id FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId
+        );
+        $ids = [];
+        while ($rows && $rows->Next()) {
+            $ids[] = (int) $rows->mundane_id;
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Category leads of the occurrence: category name => the people who lead it, in
+     * staff order.
+     *
+     * @return array<string, list<int>>
+     */
+    private function categoryLeadMap(int $detailId): array
+    {
+        if (isset($this->batchCategoryLeads[$detailId])) {
+            return $this->batchCategoryLeads[$detailId];
+        }
+        $this->db->Clear();
+        $rows = $this->db->DataSet(
+            'SELECT st.mundane_id, sc.category FROM ' . DB_PREFIX . 'event_staff st
+             JOIN ' . DB_PREFIX . 'event_staff_category sc ON sc.event_staff_id = st.event_staff_id
+             WHERE st.event_calendardetail_id = ' . $detailId . '
+             ORDER BY st.event_staff_id'
+        );
+        $map = [];
+        while ($rows && $rows->Next()) {
+            $leadId = (int) $rows->mundane_id;
+            $category = (string) $rows->category;
+            if (!in_array($leadId, $map[$category] ?? [], true)) {
+                $map[$category][] = $leadId;
+            }
+        }
+        if ($this->batchCategoryLeads !== null) {
+            $this->batchCategoryLeads[$detailId] = $map;
+        }
+
+        return $map;
+    }
+
+    /** @return list<int> the people who lead $category on the occurrence */
+    private function categoryLeadIds(int $detailId, string $category): array
+    {
+        return $this->categoryLeadMap($detailId)[$category] ?? [];
+    }
+
+    /**
+     * Gives the item the occurrence's category leads for $category as auto-filled
+     * leads. $dropAuto first removes the item's auto-filled leads (a category change);
+     * hand-picked leads are kept, and a person already on the item stays as they are.
+     */
+    private function applyCategoryLeads(int $scheduleId, int $detailId, string $category, bool $dropAuto): ?array
+    {
+        if ($dropAuto) {
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked(
+                'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId . ' AND is_auto = 1'
+            )) {
+                return ProcessingError('Could not save the schedule.');
+            }
+        }
+        $rows = array_map(
+            static fn (int $leadId): array => [$scheduleId, $leadId, 1],
+            $this->categoryLeadIds($detailId, $category)
+        );
+        if (!$this->insertScheduleLeadRows($rows, true)) {
+            return ProcessingError('Could not save the schedule.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Writes lead rows in one multi-row INSERT (per chunk of 500 rows); INSERT IGNORE
+     * when $ignore, so a person already on the item stays as they are. True when there
+     * was nothing to write. False when a statement failed.
+     *
+     * @param list<array{0: int, 1: int, 2: int}> $rows [schedule id, mundane id, is_auto]
+     */
+    private function insertScheduleLeadRows(array $rows, bool $ignore): bool
+    {
+        foreach (array_chunk($rows, 500) as $chunk) {
+            $values = array_map(
+                static fn (array $row): string => '(' . (int) $row[0] . ', ' . (int) $row[1] . ', ' . ((int) $row[2] === 1 ? 1 : 0) . ')',
+                $chunk
+            );
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked(
+                'INSERT ' . ($ignore ? 'IGNORE ' : '') . 'INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+                 VALUES ' . implode(', ', $values)
+            )) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** One item in the fetchScheduleList shape, or null when it is not on this occurrence. */
+    private function fetchScheduleRowForResult(int $scheduleId, int $detailId): ?array
+    {
+        $rows = $this->fetchScheduleList($detailId, $scheduleId);
+
+        return $rows[0] ?? null;
+    }
+
+    /**
+     * A locking read (FOR UPDATE): inside a transaction it waits for any other
+     * uncommitted write to the item, then returns the row as committed (or nothing,
+     * if that write removed it), and holds the row until this transaction ends, so
+     * the batch's 'seen' check cannot pass on a version another save is replacing.
+     * Outside a transaction (the form's remove, re-reading an item it did not remove)
+     * the lock ends with the statement.
+     *
+     * @return array{start_time: string, end_time: string, category: string, secondary_category: string, modified: string}|null|false
+     *         null when the read succeeded and the item is not on this occurrence;
+     *         false when the statement failed (a deadlock, a lock-wait timeout), which
+     *         says nothing about whether the item exists
+     */
+    private function fetchScheduleTimesOnDetail(int $scheduleId, int $detailId): array|null|false
+    {
+        $this->db->Clear();
+        // @: a failure is read from the result's SQLSTATE below; PDO's warning would
+        // only be printed into the response.
+        $row = @$this->db->DataSet(
+            'SELECT start_time, end_time, category, secondary_category, cost,
+                    DATE_FORMAT(modified, \'%Y-%m-%d %H:%i:%s\') AS modified_at
+             FROM ' . DB_PREFIX . 'event_schedule
+             WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId . ' LIMIT 1
+             FOR UPDATE'
+        );
+        if (!$this->resultSucceeded($row)) {
+            return false;
+        }
+        if (!$row->Next()) {
+            return null;
         }
 
         return [
-            'Status' => Success(),
-            'Schedule' => [
-                'EventScheduleId' => $scheduleId,
-                'Title' => $title,
-                'StartTime' => $startFmt,
-                'EndTime' => $endFmt,
-                'Location' => $location,
-                'Description' => $description,
-                'Category' => $category,
-                'SecondaryCategory' => $secondaryCategory,
-                'Menu' => $menu,
-                'Cost' => $cost,
-                'Dietary' => $dietary,
-                'Allergens' => $allergens,
-                'Leads' => $leadsOut,
-            ],
+            'start_time' => (string) $row->start_time,
+            'end_time' => (string) $row->end_time,
+            'category' => (string) $row->category,
+            'secondary_category' => (string) ($row->secondary_category ?? ''),
+            'cost' => ($row->cost ?? null) === null ? null : round((float) $row->cost, 2),
+            'modified' => (string) ($row->modified_at ?? ''),
         ];
+    }
+
+    /**
+     * Whether a schedule item with this id exists on any occurrence; null when the
+     * statement failed, which says nothing either way.
+     */
+    private function scheduleIdExists(int $scheduleId): ?bool
+    {
+        $this->db->Clear();
+        $row = @$this->db->DataSet(
+            'SELECT 1 AS found FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ' . $scheduleId . ' LIMIT 1'
+        );
+        if (!$this->resultSucceeded($row)) {
+            return null;
+        }
+
+        return $row->Next();
+    }
+
+    /**
+     * Whether a DataSet() result came from a statement that ran. DataSet() returns a
+     * result even for a failed statement (PDO runs in ERRMODE_WARNING), which then
+     * reads as no rows; its SQLSTATE, as ExecuteChecked reads it, tells the two apart.
+     */
+    private function resultSucceeded(mixed $result): bool
+    {
+        return is_object($result)
+            && in_array($result->__ERROR[0][1] ?? null, ['00000', null], true);
+    }
+
+    /**
+     * A refusal naming the first text field of a batch item or update that is longer
+     * than it may be, or null. Meal fields count only when they would be written.
+     */
+    private function scheduleTextLimitError(array $src, bool $canFeast): ?array
+    {
+        foreach (self::SCHEDULE_TEXT_LIMITS as $key => [$max, $name]) {
+            if (!array_key_exists($key, $src) || (!$canFeast && isset(self::SCHEDULE_MEAL_FIELDS[$key]))) {
+                continue;
+            }
+            if (mb_strlen($this->scheduleText($src[$key])) > $max) {
+                return InvalidParameter('The ' . $name . ' is longer than ' . $max . ' characters.');
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A refusal of a Cost the column (DECIMAL(8,2)) cannot hold: below zero or above
+     * SCHEDULE_COST_MAX once rounded as it is stored. Null otherwise, and when the
+     * cost would not be written (no feast rights) or is empty or not a number (stored as null).
+     * With $stored (an update), a cost equal to the stored one is not refused: the form
+     * re-sends every meal field, and a row saved before the range check may hold a value
+     * outside it.
+     *
+     * @param array{cost?: ?float}|null $stored
+     */
+    private function scheduleCostError(array $src, bool $canFeast, ?array $stored = null): ?array
+    {
+        if (!$canFeast || !array_key_exists('Cost', $src)) {
+            return null;
+        }
+        $cost = $this->normalizeMealField('Cost', $src['Cost']);
+        if ($cost !== null && ($cost < 0 || $cost > self::SCHEDULE_COST_MAX)) {
+            if ($stored !== null && ($stored['cost'] ?? null) !== null && abs((float) $stored['cost'] - $cost) < 0.005) {
+                return null;
+            }
+            return InvalidParameter('The cost must be between 0 and ' . number_format(self::SCHEDULE_COST_MAX, 2, '.', '') . '.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Batch path: validates a start/end pair of naive 'Y-m-d H:i:s' or 'Y-m-d H:i'
+     * strings (no time-zone conversion) and formats both as 'Y-m-d H:i:s'. The end may
+     * equal the start (an item with no length) but not come before it. With
+     * $checkWindow, the start must lie within SCHEDULE_WINDOW_DAYS of the occurrence's dates.
+     *
+     * @return array{0: ?string, 1: string, 2: string} [error message or null, start, end]
+     */
+    private function normalizeBatchScheduleTimes(string $start, string $end, int $detailId, bool $checkWindow): array
+    {
+        if ($start === '' || $end === '') {
+            return ['Start and end times are required.', '', ''];
+        }
+        $startFmt = $this->parseNaiveScheduleTime($start);
+        $endFmt = $this->parseNaiveScheduleTime($end);
+        if ($startFmt === null || $endFmt === null) {
+            return ['Invalid time format.', '', ''];
+        }
+        if ($endFmt < $startFmt) {
+            return ['End time cannot be before start time.', '', ''];
+        }
+        if ($checkWindow) {
+            $window = $this->scheduleWindow($detailId);
+            if ($window === null) {
+                return ['The occurrence dates could not be read.', '', ''];
+            }
+            if ($startFmt < $window[0] || $startFmt > $window[1]) {
+                return ['That time is outside the event.', '', ''];
+            }
+        }
+
+        return [null, $startFmt, $endFmt];
+    }
+
+    /** A naive 'Y-m-d H:i:s' or 'Y-m-d H:i' as 'Y-m-d H:i:s', or null when it is neither (or not a real time). */
+    private function parseNaiveScheduleTime(string $value): ?string
+    {
+        $utc = new \DateTimeZone('UTC');
+        foreach (['Y-m-d H:i:s', 'Y-m-d H:i'] as $format) {
+            $parsed = \DateTimeImmutable::createFromFormat('!' . $format, $value, $utc);
+            if ($parsed !== false && $parsed->format($format) === $value) {
+                return $parsed->format('Y-m-d H:i:s');
+            }
+        }
+
+        return null;
+    }
+
+    /** @var array<int, array{0: string, 1: string}|null> */
+    private array $scheduleWindowCache = [];
+
+    /**
+     * Earliest and latest start a batch item may have on the occurrence, as naive
+     * 'Y-m-d H:i:s': from 00:00 SCHEDULE_WINDOW_DAYS before its start date to 23:59:59
+     * SCHEDULE_WINDOW_DAYS after its end date. An end date that cannot be used (a
+     * zero date, or one before the start date, both common in old occurrences) is
+     * replaced by the start date. Null only when the start date cannot be read.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function scheduleWindow(int $detailId): ?array
+    {
+        if (array_key_exists($detailId, $this->scheduleWindowCache)) {
+            return $this->scheduleWindowCache[$detailId];
+        }
+        $this->db->Clear();
+        $row = $this->db->DataSet(
+            'SELECT event_start, event_end FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+        $window = null;
+        if ($row && $row->Next()) {
+            $first = $this->parseOccurrenceDate((string) $row->event_start);
+            if ($first !== null) {
+                $last = $this->parseOccurrenceDate((string) $row->event_end);
+                if ($last === null || $last < $first) {
+                    $last = $first;
+                }
+                $days = self::SCHEDULE_WINDOW_DAYS;
+                $window = [
+                    $first->modify('-' . $days . ' days')->format('Y-m-d') . ' 00:00:00',
+                    $last->modify('+' . $days . ' days')->format('Y-m-d') . ' 23:59:59',
+                ];
+            }
+        }
+
+        return $this->scheduleWindowCache[$detailId] = $window;
+    }
+
+    /**
+     * The date part of an occurrence's DATETIME, or null when it is not a usable date:
+     * createFromFormat reads '0000-00-00' as -0001-11-30 rather than failing, so a
+     * year before 1000 counts as unreadable.
+     */
+    private function parseOccurrenceDate(string $value): ?\DateTimeImmutable
+    {
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', substr($value, 0, 10), new \DateTimeZone('UTC'));
+
+        return ($date !== false && (int) $date->format('Y') >= 1000) ? $date : null;
+    }
+
+    /** Unknown categories become 'Other'. */
+    private function coerceScheduleCategory(string $category): string
+    {
+        return array_key_exists($category, self::SCHEDULE_CATEGORIES) ? $category : 'Other';
+    }
+
+    /** Unknown secondary categories become empty. */
+    private function coerceSecondaryCategory(string $category): string
+    {
+        return array_key_exists($category, self::SCHEDULE_CATEGORIES) ? $category : '';
+    }
+
+    /** A meal field as stored: trimmed text or null; Cost is a 2-place number or null. */
+    private function normalizeMealField(string $key, mixed $raw): string|float|null
+    {
+        $text = $this->scheduleText($raw);
+        if ($key === 'Cost') {
+            return ($text !== '' && is_numeric($text)) ? round((float) $text, 2) : null;
+        }
+
+        return $text !== '' ? $text : null;
+    }
+
+    /**
+     * A strictly positive integer id from request data, or 0. Digit strings are
+     * accepted; floats, exponents ("1e3"), decimals ("5.9") and signs are not.
+     */
+    private function strictId(mixed $value): int
+    {
+        if (is_int($value)) {
+            return valid_id($value) ? $value : 0;
+        }
+        if (is_string($value) && preg_match('/^[1-9][0-9]{0,9}$/', $value) && (int) $value <= 2147483647) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
+    /** Whether a lead entry from a request is marked auto-filled. */
+    private function leadIsAuto(mixed $lead): bool
+    {
+        return is_array($lead) && !empty($lead['Auto']) && $lead['Auto'] !== 'false';
+    }
+
+    /** Trimmed string for a scalar request value; '' for anything else. */
+    private function scheduleText(mixed $value): string
+    {
+        return is_scalar($value) ? trim((string) $value) : '';
     }
 
     private function staffHasFlag(int $mundaneId, int $eventId, int $detailId, string $flag): bool
@@ -1801,15 +3834,18 @@ class EventPlanning extends Ork3
         if (!$priorRs || !$priorRs->Next()) {
             return null;
         }
-
-        return [
-            'event_staff_id' => (int) $priorRs->event_staff_id,
+        $staffId = (int) $priorRs->event_staff_id;
+        $prior = [
+            'event_staff_id' => $staffId,
             'role_name' => (string) $priorRs->role_name,
             'can_manage' => (int) $priorRs->can_manage,
             'can_attendance' => (int) $priorRs->can_attendance,
             'can_schedule' => (int) $priorRs->can_schedule,
             'can_feast' => (int) $priorRs->can_feast,
         ];
+        $prior['lead_categories'] = $this->fetchStaffLeadCategories([$staffId])[$staffId] ?? [];
+
+        return $prior;
     }
 
     private function fetchStaffPriorStateById(int $staffId, int $detailId): ?array
@@ -1823,8 +3859,7 @@ class EventPlanning extends Ork3
         if (!$priorRs || !$priorRs->Next()) {
             return null;
         }
-
-        return [
+        $prior = [
             'event_staff_id' => (int) $priorRs->event_staff_id,
             'mundane_id' => (int) $priorRs->mundane_id,
             'role_name' => (string) $priorRs->role_name,
@@ -1833,6 +3868,9 @@ class EventPlanning extends Ork3
             'can_schedule' => (int) $priorRs->can_schedule,
             'can_feast' => (int) $priorRs->can_feast,
         ];
+        $prior['lead_categories'] = $this->fetchStaffLeadCategories([$staffId])[$staffId] ?? [];
+
+        return $prior;
     }
 
     private function copyDetailFeesAndLinks(int $srcDetailId, int $newDetailId): void
@@ -1882,94 +3920,197 @@ class EventPlanning extends Ork3
         }
     }
 
-    private function copyScheduleModules(int $srcDetailId, int $newDetailId, array $mod, int $deltaSeconds): void
-    {
+    /**
+     * Copies the source occurrence's schedule items (and their eligible leads, keeping
+     * is_auto) onto $newDetailId. $mod['schedule'] / $mod['feast'] pick which items;
+     * $mod['meals'] (default true) copies menu, cost, dietary and allergens.
+     * With $deltaSeconds null every time moves by $shiftDays calendar days with its
+     * clock time kept; otherwise by $deltaSeconds seconds (CreateEventWithCopy).
+     *
+     * $skippedFeast receives the number of feast items left out because $mod['feast'] is off.
+     * With $roomLeft, a copy that would add more items than that writes nothing and
+     * returns null.
+     *
+     * @return list<int>|null the new schedule ids, in source start order; null when over $roomLeft
+     * @throws \RuntimeException when a write fails
+     */
+    private function copyScheduleModules(
+        int $srcDetailId,
+        int $newDetailId,
+        array $mod,
+        int $shiftDays,
+        ?int $deltaSeconds = null,
+        ?int &$skippedFeast = null,
+        ?int $roomLeft = null
+    ): ?array {
+        $skippedFeast = 0;
+        $copyMeals = $mod['meals'] ?? true;
         $this->db->Clear();
         $schedRs = $this->db->DataSet(
             'SELECT * FROM ' . DB_PREFIX . 'event_schedule
-             WHERE event_calendardetail_id = ' . $srcDetailId . ' ORDER BY start_time ASC'
+             WHERE event_calendardetail_id = ' . $srcDetailId . ' ORDER BY start_time ASC, event_schedule_id ASC'
         );
-        $srcSchedIds = [];
-        if ($schedRs) {
-            while ($schedRs->Next()) {
-                $cat = (string) $schedRs->category;
-                $secCat = (string) $schedRs->secondary_category;
-                $isFeast = ($cat === 'Feast and Food' || $secCat === 'Feast and Food');
-                $want = $isFeast ? $mod['feast'] : $mod['schedule'];
-                if (!$want) {
-                    continue;
-                }
-
-                $st = strtotime((string) $schedRs->start_time);
-                $et = strtotime((string) $schedRs->end_time);
-                if (!$st || !$et) {
-                    continue;
-                }
-
-                $menuSql = ($schedRs->menu !== null) ? "'" . $this->sq((string) $schedRs->menu) . "'" : 'NULL';
-                $costSql = ($schedRs->cost !== null && is_numeric($schedRs->cost))
-                    ? (string) round((float) $schedRs->cost, 2) : 'NULL';
-                $dietSql = ($schedRs->dietary !== null) ? "'" . $this->sq((string) $schedRs->dietary) . "'" : 'NULL';
-                $alleSql = ($schedRs->allergens !== null) ? "'" . $this->sq((string) $schedRs->allergens) . "'" : 'NULL';
-
-                $srcSchedId = (int) $schedRs->event_schedule_id;
-                $this->db->Clear();
-                $this->db->Execute(
-                    'INSERT INTO ' . DB_PREFIX . "event_schedule
-                     (event_calendardetail_id, title, start_time, end_time, location, description,
-                      category, secondary_category, menu, cost, dietary, allergens)
-                     VALUES (" . $newDetailId . ", '" . $this->sq((string) $schedRs->title) . "', '"
-                    . date('Y-m-d H:i:s', $st + $deltaSeconds) . "', '" . date('Y-m-d H:i:s', $et + $deltaSeconds)
-                    . "', '" . $this->sq((string) $schedRs->location) . "', '" . $this->sq((string) $schedRs->description)
-                    . "', '" . $this->sq($cat) . "', '" . $this->sq($secCat) . "', "
-                    . $menuSql . ', ' . $costSql . ', ' . $dietSql . ', ' . $alleSql . ')'
-                );
-                $this->db->Clear();
-                $nsRow = $this->db->DataSet(
-                    'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule
-                     WHERE event_calendardetail_id = ' . $newDetailId . ' ORDER BY event_schedule_id DESC LIMIT 1'
-                );
-                $newSchedId = ($nsRow && $nsRow->Next()) ? (int) $nsRow->event_schedule_id : 0;
-                if ($newSchedId > 0) {
-                    $srcSchedIds[$srcSchedId] = $newSchedId;
-                }
-            }
+        $sourceRows = [];
+        while ($schedRs && $schedRs->Next()) {
+            $sourceRows[] = [
+                'id' => (int) $schedRs->event_schedule_id,
+                'title' => (string) $schedRs->title,
+                'start_time' => (string) $schedRs->start_time,
+                'end_time' => (string) $schedRs->end_time,
+                'location' => (string) $schedRs->location,
+                'description' => (string) $schedRs->description,
+                'category' => (string) $schedRs->category,
+                'secondary_category' => (string) $schedRs->secondary_category,
+                'menu' => $schedRs->menu,
+                'cost' => $schedRs->cost,
+                'dietary' => $schedRs->dietary,
+                'allergens' => $schedRs->allergens,
+            ];
         }
 
-        if (!empty($srcSchedIds)) {
+        // Every item to copy is worked out before any is written, so a copy over the
+        // ceiling writes nothing.
+        $planned = [];
+        foreach ($sourceRows as $row) {
+            $isFeast = $this->isFeastItem($row['category'], $row['secondary_category']);
+            if (!($isFeast ? !empty($mod['feast']) : !empty($mod['schedule']))) {
+                if ($isFeast) {
+                    $skippedFeast++;
+                }
+                continue;
+            }
+
+            if ($deltaSeconds === null) {
+                $start = $this->shiftNaiveDays($row['start_time'], $shiftDays);
+                $end = $this->shiftNaiveDays($row['end_time'], $shiftDays);
+            } else {
+                $st = strtotime($row['start_time']);
+                $et = strtotime($row['end_time']);
+                $start = $st ? date('Y-m-d H:i:s', $st + $deltaSeconds) : null;
+                $end = $et ? date('Y-m-d H:i:s', $et + $deltaSeconds) : null;
+            }
+            if ($start === null || $end === null) {
+                continue;
+            }
+
+            $values = [
+                'event_calendardetail_id' => $newDetailId,
+                'title' => $row['title'],
+                'start_time' => $start,
+                'end_time' => $end,
+                'location' => $row['location'],
+                'description' => $row['description'],
+                'category' => $row['category'],
+                'secondary_category' => $row['secondary_category'],
+            ];
+            if ($copyMeals) {
+                foreach (['menu', 'dietary', 'allergens'] as $column) {
+                    if ($row[$column] !== null) {
+                        $values[$column] = (string) $row[$column];
+                    }
+                }
+                if ($row['cost'] !== null && is_numeric($row['cost'])) {
+                    $values['cost'] = round((float) $row['cost'], 2);
+                }
+            }
+            $planned[] = [$row['id'], $values];
+        }
+        if ($roomLeft !== null && count($planned) > $roomLeft) {
+            return null;
+        }
+
+        $newIds = [];
+        $srcSchedIds = [];
+        foreach ($planned as [$srcId, $values]) {
+            $this->db->Clear();
+            foreach ($values as $column => $value) {
+                $this->db->$column = $value;
+            }
+            $columns = array_keys($values);
+            $ok = $this->db->ExecuteChecked(
+                'INSERT INTO ' . DB_PREFIX . 'event_schedule (' . implode(', ', $columns) . ')
+                 VALUES (:' . implode(', :', $columns) . ')'
+            );
+            $newSchedId = $ok ? (int) $this->db->GetLastInsertId() : 0;
+            if ($newSchedId <= 0) {
+                throw new \RuntimeException('Could not copy a schedule item.');
+            }
+            $newIds[] = $newSchedId;
+            $srcSchedIds[$srcId] = $newSchedId;
+        }
+
+        if ($srcSchedIds !== []) {
             $srcKeys = implode(',', array_map('intval', array_keys($srcSchedIds)));
             $this->db->Clear();
             $leadsRs = $this->db->DataSet(
-                'SELECT event_schedule_id, mundane_id FROM ' . DB_PREFIX . 'event_schedule_lead
+                'SELECT event_schedule_id, mundane_id, is_auto FROM ' . DB_PREFIX . 'event_schedule_lead
                  WHERE event_schedule_id IN (' . $srcKeys . ')'
             );
-            if ($leadsRs) {
-                while ($leadsRs->Next()) {
-                    $newSid = $srcSchedIds[(int) $leadsRs->event_schedule_id] ?? 0;
-                    $mid = (int) $leadsRs->mundane_id;
-                    if ($newSid <= 0 || !$this->isMundaneEligible($mid)) {
-                        continue;
-                    }
-                    $this->db->Clear();
-                    $this->db->Execute(
-                        'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id)
-                         VALUES (' . $newSid . ', ' . $mid . ')'
-                    );
+            $leads = [];
+            while ($leadsRs && $leadsRs->Next()) {
+                $leads[] = [
+                    $srcSchedIds[(int) $leadsRs->event_schedule_id] ?? 0,
+                    (int) $leadsRs->mundane_id,
+                    (int) $leadsRs->is_auto === 1 ? 1 : 0,
+                ];
+            }
+            // Eligibility read for every lead in one statement, the leads written in one.
+            $this->primeMundaneEligible(array_column($leads, 1));
+            $leadRows = [];
+            foreach ($leads as [$newSid, $mid, $isAuto]) {
+                if ($newSid > 0 && $this->isMundaneEligible($mid)) {
+                    $leadRows[] = [$newSid, $mid, $isAuto];
                 }
             }
+            if (!$this->insertScheduleLeadRows($leadRows, true)) {
+                throw new \RuntimeException('Could not copy a schedule lead.');
+            }
         }
+
+        return $newIds;
+    }
+
+    /**
+     * A naive 'Y-m-d H:i:s' moved by whole calendar days with the clock time kept,
+     * or null when it does not parse. Pure date arithmetic, so clock changes do not apply.
+     */
+    private function shiftNaiveDays(string $naive, int $days): ?string
+    {
+        if (!preg_match('/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/', $naive, $m)) {
+            return null;
+        }
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $m[1], new \DateTimeZone('UTC'));
+        if ($date === false) {
+            return null;
+        }
+
+        return $date->modify(sprintf('%+d days', $days))->format('Y-m-d') . ' ' . $m[2];
+    }
+
+    /** Whole calendar days from the date part of $from to the date part of $to (naive datetimes). */
+    private function calendarDaysBetween(string $from, string $to): ?int
+    {
+        $utc = new \DateTimeZone('UTC');
+        $a = \DateTimeImmutable::createFromFormat('!Y-m-d', substr($from, 0, 10), $utc);
+        $b = \DateTimeImmutable::createFromFormat('!Y-m-d', substr($to, 0, 10), $utc);
+        if ($a === false || $b === false) {
+            return null;
+        }
+
+        return (int) $a->diff($b)->format('%r%a');
     }
 
     private function copyStaffModule(int $srcDetailId, int $newDetailId): void
     {
         $this->db->Clear();
         $staffRs = $this->db->DataSet(
-            'SELECT mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast
+            'SELECT event_staff_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast
              FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $srcDetailId
         );
         if ($staffRs) {
             while ($staffRs->Next()) {
                 $mid = (int) $staffRs->mundane_id;
+                $srcStaffId = (int) $staffRs->event_staff_id;
                 if (!$this->isMundaneEligible($mid)) {
                     continue;
                 }
@@ -1984,6 +4125,21 @@ class EventPlanning extends Ork3
                      can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule),
                      can_feast = VALUES(can_feast)'
                 );
+                $this->db->Clear();
+                $newStaff = $this->db->DataSet(
+                    'SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff
+                     WHERE event_calendardetail_id = ' . $newDetailId . ' AND mundane_id = ' . $mid
+                    . ' ORDER BY event_staff_id DESC LIMIT 1'
+                );
+                $newStaffId = ($newStaff && $newStaff->Next()) ? (int) $newStaff->event_staff_id : 0;
+                if ($newStaffId > 0) {
+                    $this->db->Clear();
+                    $this->db->Execute(
+                        'INSERT IGNORE INTO ' . DB_PREFIX . 'event_staff_category (event_staff_id, category)
+                         SELECT ' . $newStaffId . ', category FROM ' . DB_PREFIX . 'event_staff_category
+                         WHERE event_staff_id = ' . $srcStaffId
+                    );
+                }
             }
         }
     }
@@ -2044,39 +4200,73 @@ class EventPlanning extends Ork3
             return $this->mundaneEligibleCache[$mundaneId];
         }
 
+        $this->primeMundaneEligible([$mundaneId]);
+
+        return $this->mundaneEligibleCache[$mundaneId] ?? false;
+    }
+
+    /**
+     * Reads, in one statement, whether each of these players may be a lead or be
+     * copied as staff (active, and not suspended or suspended only until a past
+     * day), for those not already known; isMundaneEligible() then answers from memory.
+     *
+     * @param list<int> $mundaneIds
+     */
+    private function primeMundaneEligible(array $mundaneIds): void
+    {
+        $ids = [];
+        foreach ($mundaneIds as $mundaneId) {
+            $mundaneId = (int) $mundaneId;
+            if ($mundaneId > 0 && !array_key_exists($mundaneId, $this->mundaneEligibleCache)) {
+                $ids[$mundaneId] = true;
+            }
+        }
+        if ($ids === []) {
+            return;
+        }
         $this->db->Clear();
-        $row = $this->db->DataSet(
-            'SELECT active, suspended, suspended_until FROM ' . DB_PREFIX . 'mundane
-             WHERE mundane_id = ' . $mundaneId . ' LIMIT 1'
+        $rows = $this->db->DataSet(
+            'SELECT mundane_id, active, suspended, suspended_until FROM ' . DB_PREFIX . 'mundane
+             WHERE mundane_id IN (' . implode(',', array_keys($ids)) . ')'
         );
-        $ok = false;
-        if ($row && $row->Next()) {
-            if ((int) $row->active === 1) {
-                if ((int) $row->suspended !== 1) {
+        $found = [];
+        while ($rows && $rows->Next()) {
+            $ok = false;
+            if ((int) $rows->active === 1) {
+                if ((int) $rows->suspended !== 1) {
                     $ok = true;
                 } else {
-                    $until = $row->suspended_until;
+                    $until = $rows->suspended_until;
                     if ($until && strtotime((string) $until) !== false && strtotime((string) $until) < strtotime(date('Y-m-d'))) {
                         $ok = true;
                     }
                 }
             }
+            $found[(int) $rows->mundane_id] = $ok;
         }
-        $this->mundaneEligibleCache[$mundaneId] = $ok;
-
-        return $ok;
+        foreach (array_keys($ids) as $mundaneId) {
+            $this->mundaneEligibleCache[$mundaneId] = $found[$mundaneId] ?? false;
+        }
     }
 
     private function bustEventScopeCaches(int $eventId): void
     {
         Ork3::$Lib->ghettocache->bust_event_search($eventId);
+        foreach ($this->eventScopeCacheKeys($eventId) as $k) {
+            Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', (string) $k);
+        }
+    }
 
+    /** The Event.GetActiveEventsAtScope keys an event's upcoming occurrences sit under. */
+    private function eventScopeCacheKeys(int $eventId): array
+    {
+        $keys = [];
         $this->db->Clear();
         $evRow = $this->db->DataSet(
             'SELECT park_id, kingdom_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId . ' LIMIT 1'
         );
         if (!$evRow || !$evRow->Next()) {
-            return;
+            return $keys;
         }
 
         $parkId = (int) $evRow->park_id;
@@ -2089,14 +4279,13 @@ class EventPlanning extends Ork3
         while ($dates && $dates->Next()) {
             $d = (string) $dates->d;
             if ($parkId > 0) {
-                $k = Ork3::$Lib->ghettocache->key(['Scope' => 'park', 'ScopeId' => $parkId, 'Date' => $d]);
-                Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $k);
+                $keys[] = Ork3::$Lib->ghettocache->key(['Scope' => 'park', 'ScopeId' => $parkId, 'Date' => $d]);
             }
             if ($kingdomId > 0) {
-                $k = Ork3::$Lib->ghettocache->key(['Scope' => 'kingdom', 'ScopeId' => $kingdomId, 'Date' => $d]);
-                Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $k);
+                $keys[] = Ork3::$Lib->ghettocache->key(['Scope' => 'kingdom', 'ScopeId' => $kingdomId, 'Date' => $d]);
             }
         }
+        return $keys;
     }
 
     private function sq(string $s): string

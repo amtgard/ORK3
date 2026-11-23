@@ -118,6 +118,137 @@ function ork_og_meta_tags($og = array())
 }
 
 /**
+ * How long an attendance sign-in link has left, as a sentence that stays true
+ * after it is read: chat apps fetch a link once, when it is posted, and show
+ * that card for days, so "3 more hours" would lie to a late reader where
+ * "3 hours from when this was posted" does not. Relative on purpose: links
+ * live ~3 hours and readers span time zones. $expires_at is the stored
+ * 'Y-m-d H:i:s' UTC value; $now is injectable for tests. '' when unknown.
+ */
+function ork_signin_link_time_left($expires_at, $now = null)
+{
+    $expires_at = trim((string)$expires_at);
+    $ts = $expires_at === '' ? false : strtotime($expires_at . ' UTC');
+    if ($ts === false) {
+        return '';
+    }
+    $secs = $ts - ($now === null ? time() : (int)$now);
+    if ($secs <= 0) {
+        return 'This link has expired.';
+    }
+    if ($secs < 3600) {
+        $n = (int)ceil($secs / 60);
+        $unit = 'minute';
+    } elseif ($secs < 36 * 3600) {
+        $n = max(1, (int)round($secs / 3600));
+        $unit = 'hour';
+    } else {
+        $n = (int)round($secs / 86400);
+        $unit = 'day';
+    }
+    return 'Good for about ' . $n . ' ' . $unit . ($n === 1 ? '' : 's') . ' from when this was posted.';
+}
+
+/**
+ * OpenGraph card for an attendance sign-in link (Route=SignIn/index/<token>).
+ * $card keys: valid (bool); scope_type park|event|kingdom; scope_name;
+ * kingdom_name (parks only); expires_at as stored, 'Y-m-d H:i:s' in UTC; url,
+ * the canonical sign-in URL; image, a heraldry URL or ''; error, the
+ * link-info failure text when not valid. $now is injectable for tests.
+ * Returns the array ork_og_meta_tags() takes.
+ */
+function ork_signin_link_og(array $card, $now = null)
+{
+    $url = (string)($card['url'] ?? '');
+    if (empty($card['valid'])) {
+        $error = trim((string)($card['error'] ?? ''));
+        return array(
+            'title'       => 'Sign-in link unavailable',
+            'url'         => $url,
+            'description' => ($error !== '' ? rtrim($error, '.') . '. ' : '')
+                . 'Ask whoever posted it for a fresh ORK sign-in link.',
+        );
+    }
+
+    $type    = (string)($card['scope_type'] ?? 'park');
+    $name    = trim((string)($card['scope_name'] ?? ''));
+    $name    = $name !== '' ? $name : 'your group';
+    $kingdom = trim((string)($card['kingdom_name'] ?? ''));
+    if ($type === 'event') {
+        $title = 'Sign in: ' . $name;
+        $what  = 'your attendance at ' . $name;
+    } else {
+        $title = 'Sign in at ' . $name;
+        $what  = "today's attendance at " . $name
+            . ($type === 'park' && $kingdom !== '' ? ' (' . $kingdom . ')' : '');
+    }
+    $desc = 'Record ' . $what . ' on the ORK. Tap the link and log in to sign yourself in.';
+    $left = ork_signin_link_time_left($card['expires_at'] ?? '', $now);
+    if ($left !== '') {
+        $desc .= ' ' . $left;
+    }
+
+    $og = array('title' => $title, 'url' => $url, 'description' => $desc);
+    if (!empty($card['image'])) {
+        // Heraldry over the site logo, as the park/event cards do. Blank the
+        // default dimensions: they describe the logo, not this image.
+        $og['image']        = (string)$card['image'];
+        $og['image:width']  = '';
+        $og['image:height'] = '';
+    }
+    return $og;
+}
+
+/**
+ * Online badge (wifi icon) for an attendance row signed in online (ork_attendance.online = 1).
+ * Same markup as ornOnlineBadge() in revised-frontend/script/revised.js; styled
+ * by .orn-online-badge in default/style/orkui.css (loaded on every page).
+ */
+function ork_online_badge(): string
+{
+    return '<span class="orn-online-badge" role="img" aria-label="Signed in online" data-tip="Signed in online">'
+        . '<i class="fa-solid fa-wifi" aria-hidden="true"></i></span>';
+}
+
+/**
+ * Segmented In-Person | Online | All attendance-type control. Server-rendered;
+ * bound by ornAttendanceTypeControl() in default/script/orkui.js and styled by
+ * .orn-type-control in default/style/orkui.css (both loaded on every page).
+ * $current is normalised via Attendance::NormalizeType (junk becomes 'all').
+ */
+function ork_attendance_type_control(string $current, string $name = 'AttendanceType'): string
+{
+    $current = Attendance::NormalizeType($current);
+    $options = array('in_person' => 'In-Person', 'online' => 'Online', 'all' => 'All');
+    $enc = function ($v) {
+        return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+    };
+    $html = '<div class="orn-type-control" role="group" aria-label="Attendance type" data-name="' . $enc($name) . '" data-value="' . $enc($current) . '">';
+    foreach ($options as $value => $label) {
+        $on = ($value === $current);
+        $html .= '<button type="button" class="orn-type-opt' . ($on ? ' orn-type-active' : '') . '" data-value="' . $enc($value)
+            . '" aria-pressed="' . ($on ? 'true' : 'false') . '">' . $enc($label) . '</button>';
+    }
+    return $html . '</div>';
+}
+
+/**
+ * One-line note for a report filtered by attendance type, shown beside the
+ * results when the control is not on All. Returns '' for All (and junk values).
+ */
+function ork_attendance_type_note($current): string
+{
+    switch (Attendance::NormalizeType($current)) {
+        case 'in_person':
+            return 'Showing in-person sign-ins only.';
+        case 'online':
+            return 'Showing online sign-ins only.';
+        default:
+            return '';
+    }
+}
+
+/**
  * Next occurrence dates for a park-day row, mirroring the recurrence
  * predicates in Weather::parks_playing_on(). $pd uses the GetParkDays keys:
  * Recurrence, WeekDay, WeekOfMonth, MonthDay, StartDate, WeekInterval.

@@ -193,6 +193,102 @@ final class ReportDomainCoverageTest extends TestCase
         $this->assertTrue($row['VotingEligible']);
     }
 
+    public function testVotingEligibleDuesHomeParkOnly(): void
+    {
+        // Freeholds' rule: dues must be paid at the player's own freehold. Dues paid
+        // at another park in the same "Kingdom" do not count.
+        $kid = $this->fixture->firstKingdomId();
+        $home = $this->fixture->parkIdInKingdom($kid);
+        $other = $this->fixture->secondParkIdInKingdom($kid, $home);
+        $this->assertGreaterThan(0, $other);
+        $player = $this->fixture->createPlayer($home, 'vote-dues-home');
+        $this->fixture->makeVotingReady($player['mundane_id']);
+        foreach (['2025-11-01', '2025-11-08', '2025-11-15', '2025-11-22', '2025-11-29', '2025-12-06'] as $date) {
+            $this->fixture->insertAttendance($player['mundane_id'], $home, $kid, $date);
+        }
+        $rules = ['KingdomId' => $kid, 'MundaneId' => $player['mundane_id'], 'AttendanceMode' => 'count',
+                  'AttendanceRequired' => 6, 'MonthsWindow' => 12, 'MinMembershipMonths' => 0,
+                  'StartDate' => '2025-10-01', 'ProvinceMode' => false, 'HomeParkOnly' => true,
+                  'DuesHomeParkOnly' => true];
+
+        // Dues paid at the other park: counted Kingdom-wide, not under the home-park rule.
+        $this->fixture->insertDues($player['mundane_id'], $other, $kid);
+        $result = $this->report->GetVotingEligible($rules);
+        $this->assertTrue($result['DuesHomeParkOnly']);
+        $row = $result['Players'][0];
+        $this->assertSame(6, $row['AttCount']);
+        $this->assertSame(0, $row['DuesPaid']);
+        $this->assertFalse($row['VotingEligible']);
+
+        $result = $this->report->GetVotingEligible(['DuesHomeParkOnly' => false] + $rules);
+        $this->assertFalse($result['DuesHomeParkOnly']);
+        $row = $result['Players'][0];
+        $this->assertSame(1, $row['DuesPaid']);
+        $this->assertTrue($row['VotingEligible']);
+
+        // Dues paid at the home park satisfy it.
+        $this->fixture->insertDues($player['mundane_id'], $home, $kid);
+        $row = $this->report->GetVotingEligible($rules)['Players'][0];
+        $this->assertSame(1, $row['DuesPaid']);
+        $this->assertTrue($row['VotingEligible']);
+    }
+
+    public function testVotingEligibleOfficeAsDuesAndKingdomEvent(): void
+    {
+        // Blackspire's rules: an office stands in for dues, and at least one of the
+        // six sign-ins must be at a Kingdom-sponsored event (which counts as one of the six).
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $player = $this->fixture->createPlayer($parkId, 'vote-office');
+        $this->fixture->makeVotingReady($player['mundane_id']);
+        foreach (['2025-11-01', '2025-11-08', '2025-11-15', '2025-11-22', '2025-11-29'] as $date) {
+            $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, $date);
+        }
+        $rules = ['KingdomId' => $kid, 'MundaneId' => $player['mundane_id'], 'AttendanceMode' => 'count',
+                  'AttendanceRequired' => 6, 'MonthsWindow' => 12, 'MinMembershipMonths' => 0,
+                  'StartDate' => '2025-10-01', 'ProvinceMode' => false,
+                  'OfficeCountsAsDues' => true, 'RequireKingdomEvent' => true];
+
+        // No dues, no office: fails on dues.
+        $result = $this->report->GetVotingEligible($rules);
+        $this->assertTrue($result['OfficeCountsAsDues']);
+        $this->assertTrue($result['RequireKingdomEvent']);
+        $row = $result['Players'][0];
+        $this->assertSame(0, $row['DuesPaid']);
+        $this->assertFalse($row['InOffice']);
+        $this->assertFalse($row['DuesOk']);
+        $this->assertSame(5, $row['AttCount']);
+        $this->assertSame(0, $row['KingdomEventCount']);
+        $this->assertFalse($row['VotingEligible']);
+
+        // A park office stands in for dues; still short a Kingdom event (and a sixth sign-in).
+        $this->fixture->insertOfficer($player['mundane_id'], $kid, $parkId, 'Champion');
+        $row = $this->report->GetVotingEligible($rules)['Players'][0];
+        $this->assertTrue($row['InOffice']);
+        $this->assertTrue($row['DuesOk']);
+        $this->assertFalse($row['KingdomEventOk']);
+        $this->assertFalse($row['VotingEligible']);
+
+        // The office does not help when the rule is off.
+        $row = $this->report->GetVotingEligible(['OfficeCountsAsDues' => false] + $rules)['Players'][0];
+        $this->assertFalse($row['InOffice']);
+        $this->assertFalse($row['DuesOk']);
+
+        // One sign-in at a Kingdom-sponsored event: it is the sixth sign-in and the Kingdom event.
+        $eventId = $this->fixture->insertKingdomEvent($kid, $player['mundane_id'], 'vote-office-campout');
+        $this->fixture->insertAttendance($player['mundane_id'], 0, $kid, '2025-12-06', $eventId);
+        $row = $this->report->GetVotingEligible($rules)['Players'][0];
+        $this->assertSame(6, $row['AttCount']);
+        $this->assertSame(1, $row['KingdomEventCount']);
+        $this->assertTrue($row['KingdomEventOk']);
+        $this->assertTrue($row['VotingEligible']);
+
+        // Without the Kingdom-event rule the column is absent and nothing else changes.
+        $row = $this->report->GetVotingEligible(['RequireKingdomEvent' => false] + $rules)['Players'][0];
+        $this->assertNull($row['KingdomEventCount']);
+        $this->assertTrue($row['VotingEligible']);
+    }
+
     public function testVotingEligibleCountModeWithFixturePlayer(): void
     {
         $kid = $this->fixture->firstKingdomId();

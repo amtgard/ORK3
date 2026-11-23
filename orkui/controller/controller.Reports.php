@@ -574,10 +574,30 @@ class Controller_Reports extends Controller
         }
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
         $this->data['page_title'] = "Player Roster";
-        $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
+    }
+
+    /**
+     * Whether the viewer may see the Mundane (real name) column on the roster
+     * family of reports: ORK admins, or anyone with edit authority over the
+     * kingdom or park being reported on. Shared by roster(), waivered(),
+     * unwaivered(), duespaid() and suspended(), which all render
+     * Reports_roster.tpl.
+     */
+    private function roster_can_view_mundane($type): bool
+    {
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        if ($_uid <= 0) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (!in_array($type, array('Kingdom', 'Park'), true) || !valid_id($this->request->id)) {
+            return false;
+        }
         $_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
-        $this->data['CanViewMundane'] = $_uid > 0 && valid_id($this->request->id)
-            && $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+        return (bool) $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
     }
 
     public function reeve($type = null)
@@ -681,6 +701,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_roster.tpl';
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 1);
         $this->data['page_title'] = "Waivered Player Roster";
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
     }
 
     public function unwaivered($type = null)
@@ -694,6 +715,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_roster.tpl';
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 0);
         $this->data['page_title'] = "Unwaivered Player Roster";
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
     }
 
     /* Old broken dues functionality */
@@ -706,6 +728,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_roster.tpl';
         $this->data['show_duespaid'] = 1;
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1, 0, 2);
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
     }
 
     /* New Cooler Dues functionality */
@@ -737,6 +760,7 @@ class Controller_Reports extends Controller
             $this->data['ScopeName'] = $this->Kingdom->get_kingdom_name($this->request->id);
         }
         $this->data['page_title'] = "Suspended Player Roster";
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
         $auth = $this->roster_suspension_remove_auth(
             $this->data['roster'],
             $this->data['ScopeType'],
@@ -785,6 +809,9 @@ class Controller_Reports extends Controller
         $this->data['DaysWindow']             = $result['DaysWindow']             ?? 0;
         $this->data['MinAge']                 = $result['MinAge']                 ?? 0;
         $this->data['MinDistinctMonths']  = $result['MinDistinctMonths']  ?? 0;
+        $this->data['DuesHomeParkOnly']   = $result['DuesHomeParkOnly']   ?? false;
+        $this->data['OfficeCountsAsDues'] = $result['OfficeCountsAsDues'] ?? false;
+        $this->data['RequireKingdomEvent'] = $result['RequireKingdomEvent'] ?? false;
         $this->data['StartDate']              = $result['StartDate']              ?? '';
         $this->data['DisplayStartDate']       = $result['DisplayStartDate']       ?? '';
         $this->data['AllKingdoms']            = $result['AllKingdoms']            ?? false;
@@ -928,12 +955,16 @@ class Controller_Reports extends Controller
         $end_date        = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
                             ? $this->request->EndDate : date('Y-m-d');
 
+        // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
+
         $form = array(
             'KingdomId'         => $kingdom_id,
             'ParkId'            => $park_id,
             'StartDate'         => $start_date,
             'EndDate'           => $end_date,
-            'ShowPlayerDetails' => $show_details ? 1 : 0
+            'ShowPlayerDetails' => $show_details ? 1 : 0,
+            'AttendanceType'    => $attendance_type
         );
         $this->data['form'] = $form;
 
@@ -942,7 +973,8 @@ class Controller_Reports extends Controller
             'ParkId'               => $park_id,
             'StartDate'            => $start_date,
             'EndDate'              => $end_date,
-            'IncludePlayerDetails' => $show_details
+            'IncludePlayerDetails' => $show_details,
+            'AttendanceType'       => $attendance_type
         ));
 
         if (is_array($result)) {
@@ -1002,7 +1034,9 @@ class Controller_Reports extends Controller
             'ParkId' => $park_id,
             'AvgByUniques' => isset($this->request->AvgByUniques) ? 1 : 0,
             'LocalPlayersOnly' => isset($this->request->LocalPlayersOnly) ? 1 : 0,
-            'GridView' => isset($this->request->GridView) ? 1 : 0
+            'GridView' => isset($this->request->GridView) ? 1 : 0,
+            // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+            'AttendanceType' => is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all'
         );
         $this->data['form'] = $form;
 
@@ -1015,7 +1049,8 @@ class Controller_Reports extends Controller
                 'EndDate' => $rounded_end,
                 'Period' => $period,
                 'MinimumSignIns' => $form['MinimumSignIns'],
-                'LocalPlayersOnly' => $form['LocalPlayersOnly']
+                'LocalPlayersOnly' => $form['LocalPlayersOnly'],
+                'AttendanceType' => $form['AttendanceType']
             ));
             $this->data['mode'] = 'single_park';
 
@@ -1055,7 +1090,8 @@ class Controller_Reports extends Controller
                 'StartDate' => $rounded_start,
                 'EndDate' => $rounded_end,
                 'Period' => $period,
-                'LocalPlayersOnly' => $form['LocalPlayersOnly']
+                'LocalPlayersOnly' => $form['LocalPlayersOnly'],
+                'AttendanceType' => $form['AttendanceType']
             ));
             $this->data['mode'] = 'all_parks';
             // Full ordered period list so the grid shows empty periods (as 0) in order.
@@ -1458,6 +1494,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         if ((int)($r['Status']['Status'] ?? 1) !== 0) {
             echo json_encode($this->_pe_json_error($r));
@@ -1504,6 +1542,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         $path = is_string($r['Path'] ?? null) ? $r['Path'] : '';
         if ($path !== '') {

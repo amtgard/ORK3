@@ -25335,3 +25335,81 @@ function _typeof(e) {
         e.stopPropagation();
     }, true);
 })(window, document);
+
+/* Attendance type control (In-Person | Online | All). Binds a server-rendered
+   ork_attendance_type_control() (or renders one into an empty container).
+   Without onChange, navigates to the current URL with AttendanceType replaced. */
+(function (w, d) {
+    var OPTS = [['in_person', 'In-Person'], ['online', 'Online'], ['all', 'All']];
+    function norm(v) { return (v === 'in_person' || v === 'online' || v === 'all') ? v : 'all'; }
+    w.ornAttendanceTypeControl = function (container, cfg) {
+        cfg = cfg || {};
+        if (!container) return null;
+        var root = container.classList && container.classList.contains('orn-type-control') ? container : container.querySelector('.orn-type-control');
+        if (!root) {
+            root = d.createElement('div');
+            root.className = 'orn-type-control';
+            root.setAttribute('role', 'group');
+            root.setAttribute('aria-label', 'Attendance type');
+            OPTS.forEach(function (o) {
+                var b = d.createElement('button');
+                b.type = 'button';
+                b.className = 'orn-type-opt';
+                b.setAttribute('data-value', o[0]);
+                b.textContent = o[1];
+                root.appendChild(b);
+            });
+            container.appendChild(root);
+        }
+        var name = root.getAttribute('data-name') || 'AttendanceType';
+        var cur = norm(cfg.value != null ? cfg.value : root.getAttribute('data-value'));
+        function paint() {
+            root.setAttribute('data-value', cur);
+            Array.prototype.forEach.call(root.querySelectorAll('.orn-type-opt'), function (b) {
+                var on = b.getAttribute('data-value') === cur;
+                b.classList.toggle('orn-type-active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+        }
+        paint();
+        root.addEventListener('click', function (e) {
+            var b = e.target.closest ? e.target.closest('.orn-type-opt') : null;
+            if (!b || !root.contains(b)) return;
+            var v = norm(b.getAttribute('data-value'));
+            if (v === cur) return;
+            cur = v;
+            paint();
+            if (typeof cfg.onChange === 'function') {
+                cfg.onChange(v);
+            } else {
+                var u = new URL(w.location.href);
+                u.searchParams.set(name, v);
+                w.location.href = u.toString();
+            }
+        });
+        return {
+            get: function () { return cur; },
+            set: function (v) { cur = norm(v); paint(); }
+        };
+    };
+    w.ornAttendanceTypeControl.normalize = norm;
+    w.ornAttendanceTypeControl.note = function (v) {
+        return { in_person: 'Showing in-person sign-ins only.', online: 'Showing online sign-ins only.' }[norm(v)] || '';
+    };
+    /* Report forms: keep the hidden AttendanceType field in step with the form's
+       control; when autoSubmit, re-run the report on change. */
+    w.ornBindAttendanceTypeForm = function (form, autoSubmit) {
+        if (!form) return null;
+        var input = form.querySelector('input[name="AttendanceType"]');
+        var ctl = w.ornAttendanceTypeControl(form.querySelector('.orn-type-control'), {
+            onChange: function (v) {
+                if (input) input.value = v;
+                if (!autoSubmit) return;
+                var btn = form.querySelector('button[type="submit"]');
+                if (form.requestSubmit) form.requestSubmit(btn); else if (btn) btn.click();
+            }
+        });
+        if (ctl && input) input.value = ctl.get();
+        return ctl;
+    };
+})(window, document);

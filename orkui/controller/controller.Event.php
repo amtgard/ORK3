@@ -611,6 +611,8 @@ class Controller_Event extends Controller
         $this->data['CalendarDetailCount'] = (int)($occurrencePage['CalendarDetailCount'] ?? 1);
         $this->data['StaffList'] = $occurrencePage['StaffList'] ?? [];
         $this->data['ScheduleList'] = $occurrencePage['ScheduleList'] ?? [];
+        $this->data['ScheduleCategories'] = $this->Event->schedule_categories();
+        $this->data['ScheduleBatchMax'] = $this->Event->schedule_batch_max();
         $this->data['EventFees'] = $occurrencePage['EventFees'] ?? [];
         $this->data['ExternalLinks'] = $occurrencePage['ExternalLinks'] ?? [];
 

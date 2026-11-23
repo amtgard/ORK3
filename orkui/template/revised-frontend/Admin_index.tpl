@@ -15,6 +15,13 @@ $totalAttendance = array_sum(array_column($kingdomList, 'Attendance'));
 $uir             = UIR;
 $prevWeekly  = is_array($PrevWeekly  ?? null) ? $PrevWeekly  : [];
 $prevMonthly = is_array($PrevMonthly ?? null) ? $PrevMonthly : [];
+// Kingdom Overview attendance type. Trend arrows compare against all-attendance
+// prior periods, so they are hidden when the overview is filtered.
+$typeNote = ork_attendance_type_note($AttendanceType ?? 'all');
+if ($typeNote !== '') {
+	$prevWeekly  = [];
+	$prevMonthly = [];
+}
 
 function cpTrend(int $cur, ?int $prev): string {
 	if ($prev === null) return '';
@@ -229,10 +236,14 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<i class="fas fa-table"></i> Kingdom Overview
 					<span class="adm-count"><?= count($kingdomList) ?></span>
 				</div>
+				<?= ork_attendance_type_control((string)($AttendanceType ?? 'all')) ?>
 				<div class="cp-overview-search">
 					<input type="text" id="cp-kd-search" placeholder="Filter kingdoms…" oninput="cpFilterTable(this.value)">
 				</div>
 			</div>
+			<?php if ($typeNote !== ''): ?>
+			<div class="cp-overview-note"><i class="fas fa-filter" aria-hidden="true"></i> <?= htmlspecialchars($typeNote) ?> Active Parks always counts all sign-ins. Trend arrows are hidden.</div>
+			<?php endif; ?>
 			<div style="overflow-x:auto">
 				<table class="cp-kd-table" id="cp-kd-table">
 					<thead>
@@ -293,11 +304,13 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Reports/class_masters"><i class="fas fa-graduation-cap"></i><span>Class Masters / Paragons<span class="cp-report-list-desc">Top players by class level</span></span></a></li>
 				<li><a href="<?= UIR ?>Unit/unitlist"><i class="fas fa-users"></i><span>Companies &amp; Households<span class="cp-report-list-desc">All registered units</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/topparks"><i class="fas fa-trophy"></i><span>Top Parks by Attendance<span class="cp-report-list-desc">Ranked attendance report</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/parkactivity"><i class="fas fa-chart-line"></i><span>Park Activity<span class="cp-report-list-desc">Last attendance &amp; sign-in totals per park</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/stateofamtgard"><i class="fas fa-globe"></i><span>State of Amtgard Report<span class="cp-report-list-desc">Annual recruitment, retention &amp; class data</span></span></a></li>
 				<li><a href="<?= UIR ?>Reports/release_utilization"><i class="fas fa-chart-line"></i><span>Release Feature Utilization<span class="cp-report-list-desc">Adoption metrics by release</span></span></a></li>
+				<li><a href="<?= UIR ?>Survey/index"><i class="fas fa-poll"></i><span>Surveys<span class="cp-report-list-desc">Build and analyse player surveys</span></span></a></li>
 			</ul>
 		</div>
 
@@ -1543,3 +1556,10 @@ window.OrkBcCfg = {
 };
 </script>
 <?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
+<script>
+/* Kingdom Overview In-Person / Online / All: reloads with &AttendanceType=<value>. */
+(function () {
+	var el = document.querySelector('.cp-overview-header .orn-type-control');
+	if (el && typeof window.ornAttendanceTypeControl === 'function') window.ornAttendanceTypeControl(el);
+})();
+</script>
