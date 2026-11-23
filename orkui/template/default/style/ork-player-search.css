@@ -57,7 +57,7 @@ html[data-theme="dark"] .ops-ac-foot{ border-top-color:#4a5568; }
 html[data-theme="dark"] .ops-ac-adv{ color:#63b3ed; border-left-color:#4a5568; }
 html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
 
-/* ===== Scope filter: icon + pill overlay. It hangs off a zero-size anchor placed right before the
+/* ===== Scope filter: icon + pill overlay. It hangs off a zero-size anchor placed right after the
    input (the anchor's box styles are set inline, !important, per formatting context), so it moves
    with the input; the component sizes it and pads the input, so host layouts never reflow. ===== */
 /* Unplaced (field not yet rendered) anchors take no part in layout. */
@@ -127,6 +127,9 @@ html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
 .ops-filter-b-apply:hover{ background:#2b6cb0; border-color:#2b6cb0; }
 .ops-filter-b-clear{ border-color:transparent; background:transparent; color:#c53030; padding:0 8px; }
 .ops-filter-b-clear:hover{ background:rgba(197,48,48,.08); }
+/* Apply waits for the lists it needs (kingdoms; parks once a kingdom is chosen). */
+.ops-filter-b:disabled, .ops-filter-b:disabled:hover{ opacity:.5; cursor:not-allowed; }
+.ops-filter-b-apply:disabled:hover{ background:#3182ce; border-color:#3182ce; }
 
 /* placement:'anchored' — popover under the input: no dim (the transparent backdrop still catches
    outside clicks, which close it as Cancel); the component sets the dialog's left/top/width. */
@@ -160,6 +163,8 @@ html[data-theme="dark"] .ops-filter-b-apply{ background:#3182ce; border-color:#3
 html[data-theme="dark"] .ops-filter-b-apply:hover{ background:#2b6cb0; border-color:#2b6cb0; }
 html[data-theme="dark"] .ops-filter-b-clear{ background:transparent; border-color:transparent; color:#fc8181; }
 html[data-theme="dark"] .ops-filter-b-clear:hover{ background:rgba(252,129,129,.12); }
+html[data-theme="dark"] .ops-filter-b:disabled{ opacity:.45; cursor:not-allowed; }
+html[data-theme="dark"] .ops-filter-b-apply:disabled:hover{ background:#3182ce; border-color:#3182ce; }
 
 @media (max-width:480px){
   .ops-filter-btn{ width:34px; max-height:none; }

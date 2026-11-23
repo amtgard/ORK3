@@ -125,21 +125,22 @@ window.OrkPlayerSearch = (function () {
       parkAbbr: m.parkId ? (m.parkAbbr || '') : '' };
   }
 
-  // Layout sync. Each overlay hangs off a zero-size in-flow anchor placed right before its input,
+  // Layout sync. Each overlay hangs off a zero-size in-flow anchor placed right after its input,
   // so it moves with the input on its own; syncs only re-measure SIZE (and the anchor→input
   // offset). Triggers: ResizeObserver on each input, window resize, transitions on an input or its
   // ancestors (the header search fades visibility without resizing), and — only for the rare
   // out-of-flow fallback anchor (grid / space-* flex parents) — scroll.
-  var syncQueued = false, syncAbsOnly = true, syncReprobe = false;
+  var syncQueued = false, syncAbsOnly = true;
   function queueSync(absOnly, reprobe){
     if (!absOnly) syncAbsOnly = false;
-    if (reprobe) syncReprobe = true;
+    // Per field: a hidden/collapsed field keeps the flag until it is next shown and re-measured.
+    if (reprobe) filterFields.forEach(function(f){ f.needsReprobe = true; });
     if (syncQueued) return;
     syncQueued = true;
     (window.requestAnimationFrame || setTimeout)(function(){
-      var only = syncAbsOnly, rp = syncReprobe;
-      syncQueued = false; syncAbsOnly = true; syncReprobe = false;
-      filterFields.forEach(function(f){ if (!only || f.absAnchor()) f.sync(rp); });
+      var only = syncAbsOnly;
+      syncQueued = false; syncAbsOnly = true;
+      filterFields.forEach(function(f){ if (!only || f.absAnchor()) f.sync(); });
     });
   }
   var ro = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(function(){ queueSync(false); }) : null;
@@ -326,7 +327,8 @@ window.OrkPlayerSearch = (function () {
     var scope = scopeFrom(cfg.scope), current = null, emptyScope = false, checkedKey = null;
     var rTimer = null, rCtrl = null, rvSeq = 0, destroyed = false, prefetchQueued = false;
 
-    // Zero-size anchor immediately before the input; the overlay is positioned from it.
+    // Zero-size anchor immediately AFTER the input (tab order: input → pill × → filter icon); the
+    // overlay is positioned from it at a measured offset (≈ -input width inline, -height in block).
     var anchor = document.createElement('span');
     anchor.className = 'ops-filter-anchor';
     var root = document.createElement('span');
@@ -349,7 +351,7 @@ window.OrkPlayerSearch = (function () {
     btn.innerHTML = '<i class="fas fa-filter" aria-hidden="true"></i>';
     root.appendChild(pill); root.appendChild(btn);
     anchor.appendChild(root);
-    input.parentNode.insertBefore(anchor, input);
+    input.parentNode.insertBefore(anchor, input.nextSibling);
 
     // How the anchor joins the input's formatting context without moving anything:
     //  inline  – zero-size inline-block (input is inline-level; the default)
@@ -376,7 +378,8 @@ window.OrkPlayerSearch = (function () {
         setImp('flex', 'none'); setImp('align-self', 'flex-start'); setImp('order', ics.order);
         var dir = pcs.flexDirection, col = /column/.test(dir);
         var gap = parseFloat(col ? pcs.rowGap : pcs.columnGap) || 0;
-        if (gap) setImp('margin-' + (col ? (/reverse/.test(dir) ? 'top' : 'bottom') : (/reverse/.test(dir) ? 'left' : 'right')), (-gap) + 'px');
+        // The anchor follows the input, so the gap it adds sits on its leading side.
+        if (gap) setImp('margin-' + (col ? (/reverse/.test(dir) ? 'bottom' : 'top') : (/reverse/.test(dir) ? 'right' : 'left')), (-gap) + 'px');
       }
       mode = m;
     }
@@ -427,19 +430,24 @@ window.OrkPlayerSearch = (function () {
     }
     var field;
     function hideOverlay(){ root.style.display = 'none'; }
-    function sync(reprobe){
+    function sync(){
       if (destroyed) return;
       if (!enabled()) { hideOverlay(); restorePadding(); return; }
       if (!shown()) { hideOverlay(); return; }
       // A visibility:hidden input (e.g. the collapsed header search) gets no overlay and no extra
       // padding, which would otherwise hold a collapsed max-width:0 field open.
       if (getComputedStyle(input).visibility === 'hidden') { hideOverlay(); restorePadding(); return; }
-      if (reprobe || mode === null) { placeAnchor(); if (contentBox && reprobe) probeSpecWidth(); }
+      if (field.needsReprobe || mode === null) {
+        var rp = field.needsReprobe;
+        field.needsReprobe = false;   // cleared only once the field is actually re-measured
+        placeAnchor();
+        if (contentBox && rp) probeSpecWidth();
+      }
       if (!prefetchQueued) { prefetchQueued = true; whenIdle(checkScope); }
       root.style.display = '';
       btn.classList.toggle('ops-filter-on', !!current);
       applyPadding();
-      // Offset from the anchor (≈0 in a row/block context) — constant while both move together.
+      // Offset from the anchor (≈ -input width inline/row, -height block) — fixed while both move together.
       var ra = anchor.getBoundingClientRect(), ri = input.getBoundingClientRect();
       root.style.left = (ri.left - ra.left) + 'px';
       root.style.top  = (ri.top - ra.top) + 'px';
@@ -547,6 +555,7 @@ window.OrkPlayerSearch = (function () {
     field = {
       input: input,
       sync: sync,
+      needsReprobe: false,
       absAnchor: function(){ return mode === 'abs'; },
       placement: function(){ return cfg.placement === 'anchored' ? 'anchored' : 'modal'; },
       uir: function(){ return cfg.uir || window.UIR || ''; },
@@ -555,7 +564,7 @@ window.OrkPlayerSearch = (function () {
       get: function(){ return current; },
       apply: function(f){ set(f); },     // from the modal (Apply / Clear)
       markEmpty: function(){ emptyScope = true; if (current) set(null); else sync(); },
-      configure: function(c){ if (c.uir) cfg.uir = c.uir; if (c.placement) cfg.placement = c.placement; if (c.onChange) cfg.onChange = c.onChange; if (c.scope) handle.setScope(c.scope); }
+      configure: function(c){ if (c.uir) cfg.uir = c.uir; if ('placement' in c) cfg.placement = c.placement; /* null/'' → default modal */ if (c.onChange) cfg.onChange = c.onChange; if (c.scope) handle.setScope(c.scope); }
     };
     var handle = {
       get: function(){ return current ? Object.assign({}, current) : null; },
