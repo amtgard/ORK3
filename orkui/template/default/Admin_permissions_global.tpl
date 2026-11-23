@@ -152,7 +152,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 				<tr>
 					<th>Person</th>
 					<th data-sorter="false">Role</th>
-					<th>Last Login</th>
+					<th title="Last activity on the ORK (any signed-in page or app request), to the day">Last Seen</th>
 					<th>Last Credit</th>
 					<th>Last Modified</th>
 					<th data-sorter="false"></th>
@@ -297,7 +297,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 				if ($empty.length) {
 					$empty.replaceWith(
 						'<table class="ap-table" id="ap-admin-table">'
-						+ '<thead><tr><th>Person</th><th>Role</th><th>Last Login</th><th>Last Credit</th><th>Last Modified</th><th></th></tr></thead>'
+						+ '<thead><tr><th>Person</th><th>Role</th><th title="Last activity on the ORK (any signed-in page or app request), to the day">Last Seen</th><th>Last Credit</th><th>Last Modified</th><th></th></tr></thead>'
 						+ '<tbody id="ap-admin-tbody"></tbody></table>'
 					);
 				}

@@ -54,6 +54,14 @@ final class AdminPermissionsTest extends TestCase
         $this->assertArrayHasKey('LastLogin', $row);
         $this->assertArrayHasKey('LastCredit', $row);
         $this->assertSame($player['mundane_id'], $row['MundaneId']);
+
+        // LastLogin is derived from the token expiry (expiry - LOGIN_TIMEOUT) and
+        // capped at the database's now: a freshly issued token must never show a
+        // future "last seen" date (the page used to subtract a fixed 72 hours).
+        $this->assertNotEmpty($row['LastLogin']);
+        $stmt = $this->fixture->pdo()->prepare('SELECT TIMESTAMPDIFF(SECOND, ?, NOW())');
+        $stmt->execute([$row['LastLogin']]);
+        $this->assertGreaterThanOrEqual(0, (int) $stmt->fetchColumn(), 'LastLogin ' . $row['LastLogin'] . ' is in the future');
     }
 
     public function testEventInheritedPermissions(): void
