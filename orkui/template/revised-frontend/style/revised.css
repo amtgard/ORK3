@@ -6721,6 +6721,12 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
     font-size: 26px; font-weight: 700; color: #fff; margin: 0 0 4px;
     background: transparent; border: none; padding: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
+/* orkui.css gives every dark-mode h1 a grey box; the hero title sits on the
+   navy gradient and stays bare, as the reports header title does. */
+html[data-theme="dark"] .cp-hero-title {
+    background: transparent !important; border: none !important; color: #fff !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
 .cp-hero-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 10px; }
 .cp-hero-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .cp-hero-badge {
