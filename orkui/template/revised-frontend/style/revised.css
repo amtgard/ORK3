@@ -6754,6 +6754,14 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
     animation: cp-guide-pulse 1.6s ease-out 0.8s 3;
 }
 .cp-hero-badge-guide:hover { background: #fbd38d; border-color: #fbd38d; color: #1a202c; animation: none; }
+/* The global dark-mode `html[data-theme="dark"] a` link tint (orkui.css) wins
+   over these in the cascade; the project pattern is to answer it with
+   !important (see .pn-crumb): dark text on the gold chip, plain text on the
+   callout row. */
+html[data-theme="dark"] .cp-hero-badge-guide,
+html[data-theme="dark"] .cp-hero-badge-guide:hover { color: #1a202c !important; }
+html[data-theme="dark"] .cp-guide-callout,
+html[data-theme="dark"] .cp-guide-callout:hover { color: inherit !important; }
 @keyframes cp-guide-pulse { 0% { box-shadow: 0 0 0 0 rgba(246,173,85,0.6); } 70% { box-shadow: 0 0 0 10px rgba(246,173,85,0); } 100% { box-shadow: 0 0 0 0 rgba(246,173,85,0); } }
 @media (prefers-reduced-motion: reduce) { .cp-hero-badge-guide { animation: none; } }
 

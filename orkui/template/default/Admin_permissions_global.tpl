@@ -36,9 +36,10 @@
 .ap-guide-link:hover { background:#22543d; color:#fff; text-decoration:none; animation:none; }
 .ap-guide-link:focus-visible { outline:2px solid #276749; outline-offset:2px; }
 .ap-guide-note { font-size:13px; color:var(--rp-text-body); }
-html[data-theme="dark"] .ap-guide-link { background:#38a169; color:#0b1f14; box-shadow:0 0 0 0 rgba(154,230,180,0.5); }
+/* !important answers orkui.css's global dark link tint, as .pn-crumb does (project pattern). */
+html[data-theme="dark"] .ap-guide-link { background:#38a169; color:#0b1f14 !important; box-shadow:0 0 0 0 rgba(154,230,180,0.5); }
 html[data-theme="dark"] .ap-guide-link strong { color:#0b1f14; }
-html[data-theme="dark"] .ap-guide-link:hover { background:#48bb78; }
+html[data-theme="dark"] .ap-guide-link:hover { background:#48bb78; color:#0b1f14 !important; }
 html[data-theme="dark"] .ap-guide-note { color:var(--ork-text-secondary); }
 @keyframes ap-guide-pulse { 0% { box-shadow:0 0 0 0 rgba(39,103,73,0.45); } 70% { box-shadow:0 0 0 12px rgba(39,103,73,0); } 100% { box-shadow:0 0 0 0 rgba(39,103,73,0); } }
 @media (prefers-reduced-motion: reduce) { .ap-guide-link { animation:none; } }
