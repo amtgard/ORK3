@@ -107,6 +107,24 @@ final class SearchFixture
         )->fetchColumn();
     }
 
+    /**
+     * An active parent kingdom and one of its active principalities that has an active park, or null.
+     *
+     * @return array{parent: int, child: int}|null
+     */
+    public function principalityPair(): ?array
+    {
+        $row = $this->pdo->query(
+            'SELECT c.kingdom_id AS child, c.parent_kingdom_id AS parent FROM ' . DB_PREFIX . 'kingdom c'
+            . ' JOIN ' . DB_PREFIX . "kingdom k ON k.kingdom_id = c.parent_kingdom_id AND k.active = 'Active'"
+            . ' JOIN ' . DB_PREFIX . "park p ON p.kingdom_id = c.kingdom_id AND p.active = 'Active'"
+            . " WHERE c.active = 'Active' AND c.parent_kingdom_id > 0 AND c.kingdom_id != 15 AND k.kingdom_id != 15"
+            . ' ORDER BY c.kingdom_id ASC LIMIT 1'
+        )->fetch(PDO::FETCH_ASSOC);
+
+        return $row ? ['parent' => (int) $row['parent'], 'child' => (int) $row['child']] : null;
+    }
+
     public function parkName(int $parkId): string
     {
         $stmt = $this->pdo->prepare('SELECT name FROM ' . DB_PREFIX . 'park WHERE park_id = ?');

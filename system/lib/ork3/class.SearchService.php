@@ -791,6 +791,13 @@ class SearchService extends Ork3
         return ['id' => (int)$rs->park_id, 'name' => (string)$rs->name, 'abbr' => (string)$rs->abbreviation, 'active' => $rs->active === 'Active'];
     }
 
+    /** $kingdomId plus its active child principalities (never empty for a positive id). */
+    private function familyKingdomIds(int $kingdomId): array
+    {
+        $fam = array_values(array_filter(array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdomId)), fn ($v) => $v > 0));
+        return $fam ?: [(int)$kingdomId];
+    }
+
     /** Kingdom id of a park, or 0 when the park is unknown. */
     private function parkKingdomId(int $parkId): int
     {
@@ -1142,9 +1149,10 @@ class SearchService extends Ork3
             $filterPid = max($opt_filter_pid, 0);
         }
         if ($filterPid > 0) {
-            // A park filter implies its kingdom; a park outside the filtered kingdom (or unknown) matches nothing.
+            // A park filter implies its kingdom; an unknown park, or one outside the filtered kingdom's
+            // family (kingdom + principalities), matches nothing.
             $filter_park_kid = $this->parkKingdomId($filterPid);
-            if ($filter_park_kid <= 0 || ($filterKid > 0 && $filterKid !== $filter_park_kid)) {
+            if ($filter_park_kid <= 0 || ($filterKid > 0 && !in_array($filter_park_kid, $this->familyKingdomIds($filterKid), true))) {
                 return [];
             }
             $filterKid = $filter_park_kid;
@@ -1218,11 +1226,11 @@ class SearchService extends Ork3
             $where[] = "m.kingdom_id IN (" . implode(',', $fam ?: [$kingdom_id]) . ")";
         }
         // ...and the filter / prefix is ANDed on top, so it can only narrow (an out-of-scope
-        // filter yields no rows).
+        // filter yields no rows). A kingdom filter rolls down to its principalities.
         if ($filterPid > 0) {
             $where[] = "m.park_id = {$filterPid}";
         } elseif ($filterKid > 0) {
-            $where[] = "m.kingdom_id = {$filterKid}";
+            $where[] = "m.kingdom_id IN (" . implode(',', $this->familyKingdomIds($filterKid)) . ")";
         }
         if ($exclude_kingdom_id > 0) {
             $where[] = "m.kingdom_id != {$exclude_kingdom_id}";
@@ -1654,7 +1662,7 @@ class SearchService extends Ork3
         if ($filterPid > 0) {
             $parkWhere .= " AND p.park_id = {$filterPid}";
         } elseif ($filterKid > 0) {
-            $parkWhere .= " AND p.kingdom_id = {$filterKid}";
+            $parkWhere .= " AND p.kingdom_id IN (" . implode(',', $this->familyKingdomIds($filterKid)) . ")";
         }
         $parkOrder = valid_id($pid)
             ? "CASE WHEN p.park_id = {$pid} THEN 0 WHEN p.kingdom_id = {$kid} THEN 1 ELSE 2 END, p.name"

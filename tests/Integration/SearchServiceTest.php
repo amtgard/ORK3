@@ -318,6 +318,64 @@ final class SearchServiceTest extends TestCase
         $this->assertSame([], $results);
     }
 
+    public function testKingdomFilterIncludesPrincipalityMembers(): void
+    {
+        $pair = $this->fixture->principalityPair();
+        if ($pair === null) {
+            $this->markTestSkipped('Need an active kingdom/principality pair with a park.');
+        }
+        $stem = 'Scope' . bin2hex(random_bytes(3));
+        $childPark = $this->fixture->parkIdInKingdom($pair['child']);
+        $member = $this->fixture->createPlayer($childPark, 'scopepr', 'T11SRC ' . $stem . ' Principal');
+        $family = array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($pair['parent']));
+
+        // Explicit filter.
+        $results = $this->searchService->RankedPlayers(['q' => $stem, 'filterKingdomId' => $pair['parent'], 'limit' => 50]);
+        $this->assertContains($member['mundane_id'], array_column($results, 'MundaneId'));
+        foreach ($results as $row) {
+            $this->assertContains((int) $row['KingdomId'], $family);
+        }
+
+        // Typed "KD:" prefix shares the path.
+        $kAbbr = $this->fixture->kingdomAbbreviation($pair['parent']);
+        if (preg_match('/^[a-z0-9]{2,3}$/i', $kAbbr)) {
+            $typed = $this->searchService->RankedPlayers(['q' => "{$kAbbr}: {$stem}", 'limit' => 50]);
+            $this->assertContains($member['mundane_id'], array_column($typed, 'MundaneId'));
+        }
+    }
+
+    public function testParkFilterInPrincipalityAcceptsParentKingdomFilter(): void
+    {
+        $pair = $this->fixture->principalityPair();
+        if ($pair === null) {
+            $this->markTestSkipped('Need an active kingdom/principality pair with a park.');
+        }
+        $stem = 'Scope' . bin2hex(random_bytes(3));
+        $childPark = $this->fixture->parkIdInKingdom($pair['child']);
+        $member = $this->fixture->createPlayer($childPark, 'scopepp', 'T11SRC ' . $stem . ' Pparked');
+
+        $results = $this->searchService->RankedPlayers([
+            'q'               => $stem,
+            'filterKingdomId' => $pair['parent'],
+            'filterParkId'    => $childPark,
+            'limit'           => 50,
+        ]);
+        $this->assertContains($member['mundane_id'], array_column($results, 'MundaneId'));
+        foreach ($results as $row) {
+            $this->assertSame($childPark, (int) $row['ParkId']);
+        }
+
+        // The reverse does not hold: a parent-kingdom park is outside the principality's family.
+        $parentPark = $this->fixture->parkIdInKingdom($pair['parent']);
+        if ($parentPark > 0) {
+            $this->assertSame([], $this->searchService->RankedPlayers([
+                'q'               => $stem,
+                'filterKingdomId' => $pair['child'],
+                'filterParkId'    => $parentPark,
+            ]));
+        }
+    }
+
     public function testExplicitFilterNarrowsWithinKingdomScope(): void
     {
         $f = $this->twoParkScopeFixture();
