@@ -20,7 +20,6 @@
 
     var PX_PER_MIN = 1.2;    // 18px per 15 minutes
     var MIN_BLOCK_MIN = 15;  // shorter items still draw this tall
-    var TALL_MIN = 90;       // blocks this long show location and leads
     var LANE_MIN_PX = 110;   // narrowest a lane may get before the board scrolls
     var RAIL_PX = 22;        // an ongoing item's rail (EvBoardCore.isOngoing) at the left of its day
     var RAIL_GAP = 2;        // between rails, and between the last rail and the lanes
@@ -106,14 +105,21 @@
         var sec = item.SecondaryCategory && item.SecondaryCategory !== cat &&
             Object.prototype.hasOwnProperty.call(catsByName, item.SecondaryCategory) ? item.SecondaryCategory : '';
         var dur = seg.endMin - seg.startMin;
-        var tall = dur >= TALL_MIN;
         var top = (seg.startMin - (axisStart || 0)) * PX_PER_MIN;
         var height = Math.max(dur, MIN_BLOCK_MIN) * PX_PER_MIN;
         var time = (seg.isFirst ? '' : '→ ') + C.fmtRange(seg.startMin, seg.endMin) + (seg.isLast ? '' : ' →');
         var hasMenu = (cat === 'Feast and Food' || item.SecondaryCategory === 'Feast and Food') &&
             String(item.Menu || '').trim() !== '';
-        // Title lines that fit above the time line (6px padding, 13px meta line, 15px per title line).
-        var lines = Math.max(1, Math.floor((height - 6 - 13) / 15));
+        // Location and leads show wherever they fit under a one-line title and the
+        // time (6px padding, 15px per title line, 13px per meta line): both from an
+        // hour up, one (the location first) at 45 minutes, neither on shorter blocks.
+        var room = height - 6 - 15 - 13;
+        var showLoc = !!item.Location && room >= 13;
+        if (showLoc) room -= 13;
+        var showLeads = !!(item.Leads && item.Leads.length) && room >= 13;
+        if (showLeads) room -= 13;
+        // The title takes the lines left over.
+        var lines = 1 + Math.floor(room / 15);
 
         var rail = typeof seg.rail === 'number' && seg.rail >= 0;
         var cls = 'evb-block';
@@ -150,10 +156,10 @@
         h += '<div class="evb-block-title">' + esc(item.Title || '') +
             (hasMenu ? ' <i class="fas fa-scroll evb-block-menu" data-tip="Has menu"></i>' : '') + '</div>';
         h += '<div class="evb-block-meta">' + esc(time) + '</div>';
-        if (tall && item.Location) {
+        if (showLoc) {
             h += '<div class="evb-block-meta evb-block-loc"><i class="fas fa-map-marker-alt"></i> ' + esc(item.Location) + '</div>';
         }
-        if (tall && item.Leads && item.Leads.length) {
+        if (showLeads) {
             h += '<div class="evb-block-meta evb-block-leads">' +
                 esc(item.Leads.map(function (l) { return l.Persona; }).join(', ')) + '</div>';
         }

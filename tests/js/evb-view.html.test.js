@@ -23,12 +23,20 @@ test('unknown and missing categories render as Other', () => {
   assert.match(h, /data-category="Other"/);
   assert.ok(h.includes('#616161'));
 });
-test('location and leads show only on tall blocks; a secondary category adds a stripe', () => {
+test('location and leads show where they fit; a secondary category adds a stripe', () => {
   const item = { EventScheduleId: 9, Title: 'Feast', Category: 'Feast and Food', SecondaryCategory: 'Class', Location: 'Hall', Leads: [{ MundaneId: 1, Persona: 'Luna' }] };
-  const short = V.blockHtml(seg(item), cats);
+  const short = V.blockHtml(seg(item, { endMin: 600 }), cats);
+  const mid = V.blockHtml(seg(item), cats);
+  const hour = V.blockHtml(seg(item, { endMin: 630 }), cats);
   const tall = V.blockHtml(seg(item, { endMin: 690 }), cats);
-  // (The label names them on every block; the visible lines are for tall blocks only.)
+  // (The label names them on every block; the visible lines need the room.)
   assert.ok(!short.includes('evb-block-loc') && !short.includes('evb-block-leads'));
+  // 45 minutes holds one of them: the location, or the leads when there is none.
+  assert.ok(mid.includes('Hall</div>') && !mid.includes('evb-block-leads'));
+  assert.ok(V.blockHtml(seg(Object.assign({}, item, { Location: '' })), cats).includes('Luna</div>'));
+  // An hour holds both under a one-line title; with only leads the title keeps two lines.
+  assert.ok(hour.includes('Hall</div>') && hour.includes('Luna</div>') && hour.includes('--evb-lines:1;'));
+  assert.ok(V.blockHtml(seg(Object.assign({}, item, { Location: '' }), { endMin: 630 }), cats).includes('--evb-lines:2;'));
   assert.ok(tall.includes('Hall</div>') && tall.includes('Luna</div>'));
   assert.ok(tall.includes('#1565c0'));
   assert.ok(!tall.includes('evb-block-menu'));
