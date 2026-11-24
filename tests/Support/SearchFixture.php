@@ -70,6 +70,14 @@ final class SearchFixture
         return (string) $stmt->fetchColumn();
     }
 
+    public function kingdomName(int $kingdomId): string
+    {
+        $stmt = $this->pdo->prepare('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ?');
+        $stmt->execute([$kingdomId]);
+
+        return (string) $stmt->fetchColumn();
+    }
+
     public function parkIdInKingdom(int $kingdomId): int
     {
         $stmt = $this->pdo->prepare(

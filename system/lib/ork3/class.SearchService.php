@@ -1198,6 +1198,10 @@ class SearchService extends Ork3
 
         // The client may only NARROW the banned cap: bannedScope 'kingdom', or a plain park
         // surface (no hard restriction), intersects it with the surface kingdom's family.
+        // An explicit filter (the pill, or a typed "KD:PK" prefix) lifts this park-surface narrowing:
+        // the viewer asked for that kingdom/park on purpose. It never widens past the viewer's
+        // grants — $banned_cap above already came from viewerCaps(), and lifting the narrowing
+        // only stops intersecting it further; the filter WHERE below then narrows rows again.
         $narrow_to_family = ($banned_scope_req === 'kingdom')
             || ($banned_scope_req === '' && $park_id > 0 && empty($restrict_kids) && $restrict_to === '' && $filterPid === 0 && $filterKid === 0);
         if ($narrow_to_family && $kingdom_id > 0 && ($banned_cap === 'all' || !empty($banned_cap))) {
@@ -1671,6 +1675,24 @@ class SearchService extends Ork3
         // Same memoised resolver RankedPlayers uses, so the prefix is looked up once per request.
         list($filterKid, $filterPid, $searchQ) = $this->resolveAbbrevPrefix($q);
 
+        // The header filter pill strips its prefix from the query, so an explicit FilterKid/FilterPid
+        // must narrow the parks/kingdoms sections exactly as a typed prefix did (players get the
+        // same ids via RankedPlayers below). Explicit wins over a typed prefix, as in RankedPlayers.
+        $optFilterKid = max((int)($request['FilterKid'] ?? 0), 0);
+        $optFilterPid = max((int)($request['FilterPid'] ?? 0), 0);
+        if ($optFilterKid > 0 || $optFilterPid > 0) {
+            $filterKid = $optFilterKid;
+            $filterPid = $optFilterPid;
+        }
+        // A park outside the filtered kingdom's family (or an unknown park) matches no park.
+        $parkFilterVoid = false;
+        if ($filterPid > 0) {
+            $filterParkKid = $this->parkKingdomId($filterPid);
+            if ($filterParkKid <= 0 || ($filterKid > 0 && !in_array($filterParkKid, $this->familyKingdomIds($filterKid), true))) {
+                $parkFilterVoid = true;
+            }
+        }
+
         $searchQ = $this->FoldPunctText($searchQ);
         $term    = self::EscapeLike($searchQ);
         $fold    = fn (string $col): string => $this->SqlFoldColumn($col);
@@ -1682,8 +1704,11 @@ class SearchService extends Ork3
         $unitBudget    = $budgets['unit'];
 
         $parkWhere = "p.active = 'Active' AND (" . $fold('p.name') . " LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')";
-        if ($filterPid > 0) {
-            $parkWhere .= " AND p.park_id = {$filterPid}";
+        // A filter narrows parks like it narrows players: that park only, or the kingdom's family.
+        if ($parkFilterVoid) {
+            $parkWhere .= " AND 0";
+        } elseif ($filterPid > 0) {
+            $parkWhere .= " AND p.park_id = " . (int)$filterPid;
         } elseif ($filterKid > 0) {
             $parkWhere .= " AND p.kingdom_id IN (" . implode(',', $this->familyKingdomIds($filterKid)) . ")";
         }
@@ -1721,7 +1746,8 @@ class SearchService extends Ork3
         }
 
         $kingdoms = [];
-        if ($filterKid === 0 && $kingdomBudget > 0) {
+        // Any kingdom/park filter hides the kingdoms section (the typed-prefix behaviour).
+        if ($filterKid === 0 && $filterPid === 0 && $kingdomBudget > 0) {
             $kingdomWhere = $fold('k.name') . " LIKE '%{$term}%' OR k.abbreviation LIKE '%{$term}%'";
             $this->db->clear();
             $rs = $this->db->query("
@@ -1782,9 +1808,10 @@ class SearchService extends Ork3
                 'q'               => $q,
                 'parkId'          => ($pid > 0 ? $pid : null),
                 'kingdomId'       => ($kid > 0 ? $kid : null),
-                // Explicit header filter pill (player section only); wins over a typed prefix.
-                'filterKingdomId' => (int)($request['FilterKid'] ?? 0),
-                'filterParkId'    => (int)($request['FilterPid'] ?? 0),
+                // Explicit header filter pill; wins over a typed prefix (the prefix still resolves
+                // from the memo when no pill is set).
+                'filterKingdomId' => $optFilterKid,
+                'filterParkId'    => $optFilterPid,
                 'limit'           => $playerBudget,
                 'bannedScope'     => 'all',
                 'token'           => $token,

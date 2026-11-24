@@ -344,6 +344,36 @@ final class SearchServiceTest extends TestCase
         }
     }
 
+    // Security regression: a field hard-scoped to a principality must not be widened to the parent
+    // kingdom by a parent-kingdom filter (the filter only narrows; the family roll-down is ANDed).
+    public function testParentKingdomFilterCannotWidenPrincipalityRestriction(): void
+    {
+        $pair = $this->fixture->principalityPair();
+        if ($pair === null) {
+            $this->markTestSkipped('Need an active kingdom/principality pair with a park.');
+        }
+        $parentPark = $this->fixture->parkIdInKingdom($pair['parent']);
+        if ($parentPark <= 0) {
+            $this->markTestSkipped('Need a park in the parent kingdom.');
+        }
+        $stem = 'Scope' . bin2hex(random_bytes(3));
+        $childMember = $this->fixture->createPlayer($this->fixture->parkIdInKingdom($pair['child']), 'scopepc', 'T11SRC ' . $stem . ' Child');
+        $parentMember = $this->fixture->createPlayer($parentPark, 'scopepk', 'T11SRC ' . $stem . ' Parent');
+
+        $results = $this->searchService->RankedPlayers([
+            'q'                  => $stem,
+            'restrictKingdomIds' => [$pair['child']],
+            'filterKingdomId'    => $pair['parent'],
+            'limit'              => 50,
+        ]);
+        $ids = array_column($results, 'MundaneId');
+        $this->assertContains($childMember['mundane_id'], $ids);
+        $this->assertNotContains($parentMember['mundane_id'], $ids);
+        foreach ($results as $row) {
+            $this->assertSame($pair['child'], (int) $row['KingdomId']);
+        }
+    }
+
     public function testParkFilterInPrincipalityAcceptsParentKingdomFilter(): void
     {
         $pair = $this->fixture->principalityPair();
@@ -696,6 +726,48 @@ final class SearchServiceTest extends TestCase
         foreach ($results['players'] as $row) {
             $this->assertSame($parkBName, $row['park']);
         }
+    }
+
+    // The header pill strips its prefix, so FilterKid/FilterPid must narrow parks and hide kingdoms
+    // exactly as a typed "KD:PK" prefix does.
+    public function testUniversalSearchFilterNarrowsParksAndHidesKingdoms(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $otherKid = $this->fixture->kingdomIdNotIn($this->familyOf($kid));
+        if ($kid <= 0 || $otherKid <= 0) {
+            $this->markTestSkipped('Need two unrelated kingdoms.');
+        }
+        $stem = 'Scope' . bin2hex(random_bytes(3));
+        $own = $this->fixture->createPark($kid, $this->fixture->unusedParkAbbreviation($kid), $stem . ' Own');
+        $own2 = $this->fixture->createPark($kid, $this->fixture->unusedParkAbbreviation($kid), $stem . ' Own2');
+        $far = $this->fixture->createPark($otherKid, $this->fixture->unusedParkAbbreviation($otherKid), $stem . ' Far');
+        $parks = fn (array $r): array => array_column($r['parks'], 'id');
+
+        $none = $this->searchService->UniversalSearch(['Query' => $stem, 'Focus' => 'park']);
+        $this->assertEqualsCanonicalizing([$own, $own2, $far], $parks($none));
+
+        $byKingdom = $this->searchService->UniversalSearch(['Query' => $stem, 'FilterKid' => $kid, 'Focus' => 'park']);
+        $this->assertEqualsCanonicalizing([$own, $own2], $parks($byKingdom));
+
+        $byPark = $this->searchService->UniversalSearch(['Query' => $stem, 'FilterKid' => $kid, 'FilterPid' => $own2, 'Focus' => 'park']);
+        $this->assertSame([$own2], $parks($byPark));
+
+        // A park outside the filtered kingdom's family matches no park.
+        $mismatch = $this->searchService->UniversalSearch(['Query' => $stem, 'FilterKid' => $kid, 'FilterPid' => $far, 'Focus' => 'park']);
+        $this->assertSame([], $mismatch['parks']);
+
+        // Kingdoms section: shown without a filter, hidden by a kingdom or park filter.
+        $kName = $this->fixture->kingdomName($kid);
+        $plain = $this->searchService->UniversalSearch(['Query' => $kName, 'Focus' => 'kingdom']);
+        $this->assertContains($kid, array_column($plain['kingdoms'], 'id'));
+        $this->assertSame([], $this->searchService->UniversalSearch(['Query' => $kName, 'FilterKid' => $kid, 'Focus' => 'kingdom'])['kingdoms']);
+        $this->assertSame([], $this->searchService->UniversalSearch(['Query' => $kName, 'FilterPid' => $own, 'Focus' => 'kingdom'])['kingdoms']);
+    }
+
+    /** @return list<int> */
+    private function familyOf(int $kid): array
+    {
+        return array_map('intval', (array) Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid));
     }
 
     public function testGlobalSearchRespectsLimit(): void
