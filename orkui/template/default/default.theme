@@ -655,8 +655,10 @@ document.addEventListener('keydown', function (e) {
 			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
 			if (nsXhr) nsXhr.abort();
 			var f = nsFilter ? nsFilter.get() : null;
+			var t = nsFilter ? nsFilter.getTiers() : null;   // status toggles: send only the ones turned off
 			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid
-				+ (f ? '&fk=' + f.kingdomId + '&fp=' + f.parkId : ''),
+				+ (f ? '&fk=' + f.kingdomId + '&fp=' + f.parkId : '')
+				+ (t ? (t.active ? '' : '&ia=0') + (t.inactive ? '' : '&ii=0') + (t.banned ? '' : '&ib=0') : ''),
 				function(res) { nsRender(res || {}); }
 			).fail(function(xhr) {
 				if (xhr.statusText !== 'abort')

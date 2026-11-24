@@ -127,6 +127,21 @@ html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
 .ops-filter-b-apply:hover{ background:#2b6cb0; border-color:#2b6cb0; }
 .ops-filter-b-clear{ border-color:transparent; background:transparent; color:#c53030; padding:0 8px; }
 .ops-filter-b-clear:hover{ background:rgba(197,48,48,.08); }
+/* Status toggles (Active / Inactive / Banned): switch-styled checkboxes, wrapping on narrow screens. */
+.ops-filter-tiers{ display:flex; flex-wrap:wrap; gap:6px 14px; margin:12px 0 0; padding:10px 0 0; border-top:1px solid #e2e8f0; }
+.ops-filter-tiers[hidden], .ops-filter-tier[hidden]{ display:none; }
+.ops-filter-tier{ position:relative; display:inline-flex; align-items:center; gap:7px; min-height:28px; margin:0; padding:0;
+  float:none; width:auto; font-size:13px; font-weight:600; line-height:1.2; color:#4a5568; cursor:pointer; user-select:none; }
+/* The real checkbox stays focusable/operable; it overlays the switch invisibly. */
+.ops-filter-tier-cb{ position:absolute; left:0; top:50%; width:30px; height:18px; margin:-9px 0 0; padding:0;
+  opacity:0; cursor:pointer; z-index:1; }
+.ops-filter-tier-sw{ position:relative; flex:none; width:30px; height:18px; border-radius:999px; background:#cbd5e0;
+  transition:background-color .15s; box-sizing:border-box; }
+.ops-filter-tier-sw::after{ content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:transform .15s; }
+.ops-filter-tier-cb:checked + .ops-filter-tier-sw{ background:#3182ce; }
+.ops-filter-tier-cb:checked + .ops-filter-tier-sw::after{ transform:translateX(12px); }
+.ops-filter-tier-cb:focus-visible + .ops-filter-tier-sw{ outline:2px solid #3182ce; outline-offset:2px; }
 /* Apply waits for the lists it needs (kingdoms; parks once a kingdom is chosen). */
 .ops-filter-b:disabled, .ops-filter-b:disabled:hover{ opacity:.5; cursor:not-allowed; }
 .ops-filter-b-apply:disabled:hover{ background:#3182ce; border-color:#3182ce; }
@@ -163,6 +178,13 @@ html[data-theme="dark"] .ops-filter-b-apply{ background:#3182ce; border-color:#3
 html[data-theme="dark"] .ops-filter-b-apply:hover{ background:#2b6cb0; border-color:#2b6cb0; }
 html[data-theme="dark"] .ops-filter-b-clear{ background:transparent; border-color:transparent; color:#fc8181; }
 html[data-theme="dark"] .ops-filter-b-clear:hover{ background:rgba(252,129,129,.12); }
+html[data-theme="dark"] .ops-filter-tiers{ border-top-color:#4a5568; }
+html[data-theme="dark"] .ops-filter-tier{ color:#cbd5e0; }
+html[data-theme="dark"] .ops-filter-tier-sw{ background:#4a5568; }
+html[data-theme="dark"] .ops-filter-tier-sw::after{ background:#e2e8f0; }
+html[data-theme="dark"] .ops-filter-tier-cb:checked + .ops-filter-tier-sw{ background:#3182ce; }
+html[data-theme="dark"] .ops-filter-tier-cb:checked + .ops-filter-tier-sw::after{ background:#fff; }
+html[data-theme="dark"] .ops-filter-tier-cb:focus-visible + .ops-filter-tier-sw{ outline-color:#63b3ed; }
 html[data-theme="dark"] .ops-filter-b:disabled{ opacity:.45; cursor:not-allowed; }
 html[data-theme="dark"] .ops-filter-b-apply:disabled:hover{ background:#3182ce; border-color:#3182ce; }
 
@@ -180,4 +202,7 @@ html[data-theme="dark"] .ops-filter-b-apply:disabled:hover{ background:#3182ce; 
   .ops-filter-dialog{ width:100%; }
   .ops-filter-modal.ops-filter-anchored{ padding:0; }
   .ops-filter-sel, .ops-filter-b{ min-height:40px; height:40px; font-size:16px; }
+  .ops-filter-tier{ min-height:40px; font-size:14px; }
+  /* The whole label is the tap target (≥40px tall); the invisible checkbox covers the switch too. */
+  .ops-filter-tier-cb{ top:0; height:100%; margin:0; }
 }

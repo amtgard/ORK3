@@ -30,8 +30,9 @@
    OrkPlayerSearch.reattach(inputEl, newOpts) — setOpts on existing or attach fresh (a new scope
      re-validates the filter pill and clears it when it no longer resolves).
    OrkPlayerSearch.filterField(inputEl, {uir, scope, onChange(filter|null, info), placement})
-     → {get, set, setScope, destroy} — the filter UI alone, for searches that render their own
-     results (header Universal Search). scope uses the attach() scope keys.
+     → {get, set, getTiers, setScope, destroy} — the filter UI alone, for searches that render their
+     own results (header Universal Search). scope uses the attach() scope keys. getTiers() returns
+     {active, inactive, banned} (status toggles in the filter modal; all true = default, no narrowing).
 */
 window.OrkPlayerSearch = (function () {
   var DEBOUNCE = 220, MINLEN = 2, uidSeq = 0;
@@ -85,6 +86,27 @@ window.OrkPlayerSearch = (function () {
   var filterFields = [];      // registry → one set of layout listeners for all fields
   var kingdomCache = {};      // scope key → Promise<[{id,name,abbr}]>, page lifetime
   var parkCache = {};         // scope key + kingdom → Promise<[{id,name,abbr,kingdomId?,kingdomAbbr?}]>
+  // Viewer capabilities reported with every kingdom list (they don't depend on scope): which status
+  // toggles to offer. null until the first kingdom list loads → no toggles shown yet.
+  var viewerCaps = null;
+  // Status tiers: Active / Inactive / Banned include toggles. All on = default = no narrowing.
+  var TIERS = [['active', 'Active Players'], ['inactive', 'Inactive Players'], ['banned', 'Banned Players']];
+  function defaultTiers(){ return { active: true, inactive: true, banned: true }; }
+  function normTiers(t){
+    t = t || {};
+    return { active: t.active !== false, inactive: t.inactive !== false, banned: t.banned !== false };
+  }
+  function sameTiers(a, b){ return a.active === b.active && a.inactive === b.inactive && a.banned === b.banned; }
+  function tiersDefault(t){ return sameTiers(t, defaultTiers()); }
+  // Query params for non-default tiers only (absent = included server-side).
+  function tiersQS(t, names){
+    return (t.active ? '' : '&' + names[0] + '=0') + (t.inactive ? '' : '&' + names[1] + '=0')
+      + (t.banned ? '' : '&' + names[2] + '=0');
+  }
+  function tierVisible(key){
+    if (!viewerCaps || !viewerCaps.signedIn) return false;
+    return key === 'banned' ? viewerCaps.canSeeBanned : true;
+  }
 
   // The filter endpoints only read kingdomId/parkId for restrictTo:'kingdom' without
   // restrictKingdomIds (SearchService::filterScopeKingdomIds), so they are zeroed everywhere else:
@@ -119,7 +141,16 @@ window.OrkPlayerSearch = (function () {
   }
   function loadKingdoms(uir, scope){
     var k = scopeQS(scope);
-    return cached(kingdomCache, k, uir + 'SearchAjax/filteroptions' + k, 'kingdoms');
+    if (!kingdomCache[k]) {
+      kingdomCache[k] = getJSON(uir + 'SearchAjax/filteroptions' + k).then(function(d){
+        if (d && 'signedIn' in d) {
+          viewerCaps = { signedIn: parseInt(d.signedIn, 10) === 1, canSeeBanned: parseInt(d.canSeeBanned, 10) === 1 };
+        }
+        return (d && d.kingdoms) || [];
+      });
+      kingdomCache[k].catch(function(){ delete kingdomCache[k]; });   // a failed load may be retried
+    }
+    return kingdomCache[k];
   }
   function loadParks(uir, scope, kid){
     var k = scopeQS(scope) + '&forKingdom=' + (parseInt(kid, 10) || 0);
@@ -193,6 +224,14 @@ window.OrkPlayerSearch = (function () {
       +   '<select class="ops-filter-sel" id="ops-filter-k"><option value="">All kingdoms</option></select>'
       +   '<label class="ops-filter-lbl" for="ops-filter-p">Park</label>'
       +   '<select class="ops-filter-sel" id="ops-filter-p" disabled><option value="">All parks</option></select>'
+      +   '<div class="ops-filter-tiers" role="group" aria-label="Include players" hidden>'
+      +     TIERS.map(function(t){
+                return '<label class="ops-filter-tier" data-tier="' + t[0] + '" hidden>'
+                  + '<input type="checkbox" role="switch" class="ops-filter-tier-cb" value="' + t[0] + '">'
+                  + '<span class="ops-filter-tier-sw" aria-hidden="true"></span>'
+                  + '<span class="ops-filter-tier-txt">' + t[1] + '</span></label>';
+              }).join('')
+      +   '</div>'
       +   '<div class="ops-filter-msg" aria-live="polite"></div>'
       +   '<div class="ops-filter-foot">'
       +     '<button type="button" class="ops-filter-b ops-filter-b-clear">Clear</button>'
@@ -205,7 +244,16 @@ window.OrkPlayerSearch = (function () {
     var m = { root: root, dialog: root.querySelector('.ops-filter-dialog'),
       kSel: root.querySelector('#ops-filter-k'), pSel: root.querySelector('#ops-filter-p'),
       msg: root.querySelector('.ops-filter-msg'), apply: root.querySelector('.ops-filter-b-apply'),
+      tierRow: root.querySelector('.ops-filter-tiers'), tierCbs: {},
       kingdoms: [], parks: [], kLoaded: false, pLoaded: false };
+    Array.prototype.forEach.call(root.querySelectorAll('.ops-filter-tier-cb'), function(cb){
+      m.tierCbs[cb.value] = cb;
+      cb.addEventListener('change', updateApply);
+      // Enter toggles too (Space is native for checkboxes); never submits a host form.
+      cb.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') { e.preventDefault(); cb.checked = !cb.checked; updateApply(); }
+      });
+    });
     // Keep the modal's events from reaching host-page "outside click"/Escape handlers
     // (host modals, the header search collapse, the dropdown close listener).
     ['click', 'mousedown', 'pointerdown', 'touchstart', 'keydown', 'focusin'].forEach(function(ev){
@@ -214,7 +262,7 @@ window.OrkPlayerSearch = (function () {
     root.querySelector('.ops-filter-backdrop').addEventListener('click', function(){ closeModal(); });
     root.querySelector('.ops-filter-b-cancel').addEventListener('click', function(){ closeModal(); });
     root.querySelector('.ops-filter-b-clear').addEventListener('click', function(){
-      var f = modalField; closeModal(); if (f) f.apply(null);
+      var f = modalField; closeModal(); if (f) f.apply(null, defaultTiers());   // pill AND tiers
     });
     root.querySelector('.ops-filter-b-apply').addEventListener('click', function(){
       if (!applyReady()) return;   // a list it needs is still loading (or failed): never downgrade the pill
@@ -222,18 +270,19 @@ window.OrkPlayerSearch = (function () {
       var k = null, p = null, i;
       for (i = 0; i < m.kingdoms.length; i++) if (parseInt(m.kingdoms[i].id, 10) === kid) k = m.kingdoms[i];
       for (i = 0; i < m.parks.length; i++) if (parseInt(m.parks[i].id, 10) === pid) p = m.parks[i];
+      var tiers = modalTiers();
       closeModal();
       if (!f) return;
       f.apply(k ? { kingdomId: kid, kingdomName: k.name, kingdomAbbr: k.abbr,
-        parkId: p ? pid : 0, parkName: p ? p.name : '', parkAbbr: p ? p.abbr : '' } : null);
+        parkId: p ? pid : 0, parkName: p ? p.name : '', parkAbbr: p ? p.abbr : '' } : null, tiers);
     });
     m.kSel.addEventListener('change', function(){ fillParks(parseInt(m.kSel.value, 10) || 0, 0); });
     root.addEventListener('keydown', function(e){
       if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
       if (e.key !== 'Tab') return;
       // Focus trap: cycle through the dialog's enabled controls.
-      var els = Array.prototype.filter.call(m.dialog.querySelectorAll('select, button'),
-        function(el){ return !el.disabled; });
+      var els = Array.prototype.filter.call(m.dialog.querySelectorAll('select, button, input'),
+        function(el){ return !el.disabled && el.getClientRects().length > 0; });   // skips hidden toggles
       if (!els.length) return;
       var first = els[0], last = els[els.length - 1];
       if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
@@ -251,10 +300,30 @@ window.OrkPlayerSearch = (function () {
       sel.appendChild(op);
     });
   }
-  // Apply needs the kingdom list, and the park list too once a kingdom is chosen.
+  // Toggle state as shown in the modal; a hidden toggle always counts as on (it can't narrow).
+  function modalTiers(){
+    var t = defaultTiers();
+    TIERS.forEach(function(x){ if (tierVisible(x[0])) t[x[0]] = modal.tierCbs[x[0]].checked; });
+    return t;
+  }
+  // Show the toggles the viewer may use (none → no row); check them from the field's tiers.
+  function renderTiers(tiers, keep){
+    var m = modal, any = false;
+    TIERS.forEach(function(x){
+      var vis = tierVisible(x[0]), cb = m.tierCbs[x[0]], lbl = cb.parentNode;
+      if (!(keep && !lbl.hidden)) cb.checked = tiers[x[0]];
+      lbl.hidden = !vis;
+      if (vis) any = true;
+    });
+    m.tierRow.hidden = !any;
+  }
+  // Apply needs the kingdom list, and the park list too once a kingdom is chosen, and at least
+  // one visible status toggle on.
   function applyReady(){
     var m = modal;
-    return !!m && m.kLoaded && (!m.kSel.value || m.pLoaded);
+    if (!m || !m.kLoaded || (m.kSel.value && !m.pLoaded)) return false;
+    var t = modalTiers();
+    return t.active || t.inactive || t.banned;
   }
   function updateApply(){ if (modal) modal.apply.disabled = !applyReady(); }
   function fillParks(kid, presetPid){
@@ -284,8 +353,9 @@ window.OrkPlayerSearch = (function () {
   }
   function openModal(field){
     if (!modal) modal = buildModal();
-    var m = modal, seq = ++modalSeq, cur = field.get();
+    var m = modal, seq = ++modalSeq, cur = field.get(), curTiers = field.getTiers();
     modalField = field;
+    renderTiers(curTiers);   // caps already known from an earlier load; refreshed below
     m.msg.textContent = 'Loading kingdoms…';
     m.kingdoms = []; m.parks = []; m.kLoaded = false; m.pLoaded = false;
     setOptions(m.kSel, 'All kingdoms', [], null); m.kSel.disabled = true;
@@ -302,6 +372,7 @@ window.OrkPlayerSearch = (function () {
       if (!ks.length) { closeModal(); field.markEmpty(); return; }
       m.kingdoms = ks; m.kLoaded = true;
       m.msg.textContent = '';
+      renderTiers(curTiers, true);   // caps arrive with the list; keep any toggles already flipped
       setOptions(m.kSel, 'All kingdoms', ks, function(k){ return k.name; });
       m.kSel.disabled = false;
       if (cur) m.kSel.value = String(cur.kingdomId);
@@ -340,15 +411,17 @@ window.OrkPlayerSearch = (function () {
     if (f) f.focusInput();
   }
 
-  /* filterField(input, {uir, scope, onChange(filter|null, info)}) → {get, set, setScope, destroy}
+  /* filterField(input, {uir, scope, onChange(filter|null, info)}) → {get, set, getTiers, setScope, destroy}
      info.textChanged is true when the visible text changed (pill broken back into text / prefix
      absorbed), so a host can drop a stale selection; info.broken is true when Backspace broke the
-     pill back into text — the text is mid-edit, so hosts should not re-search until the next input. */
+     pill back into text — the text is mid-edit, so hosts should not re-search until the next input;
+     info.tiersChanged is true when the status toggles changed (re-run the search, read getTiers()). */
   function filterField(input, cfg){
     if (!input || !input.parentNode) return null;
     if (input._opsFilter) { input._opsFilter.configure(cfg || {}); return input._opsFilter; }
     cfg = cfg || {};
     var scope = scopeFrom(cfg.scope), current = null, emptyScope = false, checkedKey = null;
+    var tiers = defaultTiers();   // status toggles; per field, kept across setScope/reattach
     var rTimer = null, rCtrl = null, rvSeq = 0, destroyed = false, prefetchQueued = false;
 
     // Zero-size anchor immediately AFTER the input (tab order: input → pill × → filter icon); the
@@ -474,7 +547,7 @@ window.OrkPlayerSearch = (function () {
       }
       if (!prefetchQueued) { prefetchQueued = true; whenIdle(checkScope); }
       root.style.display = '';
-      btn.classList.toggle('ops-filter-on', !!current);
+      btn.classList.toggle('ops-filter-on', !!current || !tiersDefault(tiers));
       applyPadding();
       // Offset from the anchor (≈ -input width inline/row, -height block) — fixed while both move together.
       var ra = anchor.getBoundingClientRect(), ri = input.getBoundingClientRect();
@@ -484,6 +557,13 @@ window.OrkPlayerSearch = (function () {
       root.style.height = input.offsetHeight + 'px';
     }
     function render(){
+      var tip = 'Filter by kingdom or park';
+      if (!tiersDefault(tiers)) {
+        tip += ' — showing ' + TIERS.filter(function(x){ return tiers[x[0]]; })
+          .map(function(x){ return x[1].replace(' Players', '').toLowerCase(); }).join(', ') + ' players';
+      }
+      btn.setAttribute('data-tip', tip);
+      btn.setAttribute('aria-label', tip);
       pill.hidden = !current;
       if (current) {
         pillTxt.textContent = filterLabel(current);
@@ -493,12 +573,20 @@ window.OrkPlayerSearch = (function () {
       }
       sync();
     }
-    function set(f, info){
+    // nextTiers undefined = leave the tiers alone; a disabled filter (park-locked / empty scope)
+    // has no toggles, so its tiers fall back to the defaults.
+    function set(f, info, nextTiers){
       var next = enabled() ? normFilter(f) : null;
       var same = (!next && !current) || (next && current && next.kingdomId === current.kingdomId && next.parkId === current.parkId);
-      current = next;
+      var t = enabled() ? (nextTiers === undefined ? tiers : normTiers(nextTiers)) : defaultTiers();
+      var tiersChanged = !sameTiers(t, tiers);
+      current = next; tiers = t;
       render();
-      if (!same && cfg.onChange) cfg.onChange(current ? Object.assign({}, current) : null, info || {});
+      if ((!same || tiersChanged) && cfg.onChange) {
+        info = Object.assign({}, info || {});
+        if (tiersChanged) info.tiersChanged = true;
+        cfg.onChange(current ? Object.assign({}, current) : null, info);
+      }
     }
     // Does this scope offer any kingdoms? Prefetched at idle once the field is first visible (one
     // shared, cached request per distinct scope), so empty-scope icons vanish before they're used.
@@ -609,21 +697,23 @@ window.OrkPlayerSearch = (function () {
       scope: function(){ return scope; },
       focusInput: function(){ try { input.focus(); } catch (e) {} },
       get: function(){ return current; },
-      apply: function(f){ set(f); },     // from the modal (Apply / Clear)
-      markEmpty: function(){ emptyScope = true; if (current) set(null); else sync(); },
+      getTiers: function(){ return Object.assign({}, tiers); },
+      apply: function(f, t){ set(f, {}, t); },     // from the modal (Apply / Clear)
+      markEmpty: function(){ emptyScope = true; if (current || !tiersDefault(tiers)) set(null); else sync(); },
       configure: function(c){ if (c.uir) cfg.uir = c.uir; if ('placement' in c) cfg.placement = c.placement; /* null/'' → default modal */ if (c.onChange) cfg.onChange = c.onChange; if (c.scope) handle.setScope(c.scope); }
     };
     var handle = {
       get: function(){ return current ? Object.assign({}, current) : null; },
       set: function(f){ set(f); },
+      getTiers: function(){ return Object.assign({}, tiers); },
       // New hard scope: re-validate the pill against it (clears it when it no longer fits).
       setScope: function(s){
         var next = scopeFrom(s);
         if (scopeQS(next) === scopeQS(scope)) return;
         scope = next; emptyScope = false; checkedKey = null; prefetchQueued = false;
         if (modalField === field) closeModal();
+        if (!enabled()) { if (current || !tiersDefault(tiers)) set(null); else sync(); return; }
         if (!current) { sync(); return; }
-        if (!enabled()) { set(null); return; }
         revalidate();
         sync();
       },
@@ -827,6 +917,7 @@ window.OrkPlayerSearch = (function () {
         + (ex                    ? '&excludeIds='       + encodeURIComponent(ex)                    : '')
         + (opts.bannedScope      ? '&bannedScope='      + encodeURIComponent(opts.bannedScope)      : '')
         + (f ? '&filterKingdomId=' + f.kingdomId + '&filterParkId=' + (f.parkId || 0) : '')
+        + tiersQS(currentTiers(), ['includeActive', 'includeInactive', 'includeBanned'])
         + '&limit='  + (opts.limit || 15)
         + '&offset=' + (offset || 0)
         + '&q=' + encodeURIComponent(term);
@@ -914,7 +1005,12 @@ window.OrkPlayerSearch = (function () {
     // (no ids, or a different kingdom that might be one of the filter's principalities) are left
     // out rather than shown unfiltered; typing still runs the real, server-filtered search.
     function preloadRows(){
-      var f = currentFilter(), rows = opts.preload.slice();
+      var f = currentFilter(), t = currentTiers(), rows = opts.preload.slice();
+      // Status toggles: drop rows known to be in an excluded tier.
+      if (!tiersDefault(t)) rows = rows.filter(function(p){
+        if (p.Banned || p.PenaltyBox || p.Suspended) return t.banned;
+        return (p.Active === 0 || p.Active === '0') ? t.inactive : t.active;
+      });
       if (!f) return rows;
       return rows.filter(function(p){
         return f.parkId ? parseInt(p.ParkId, 10) === f.parkId : parseInt(p.KingdomId, 10) === f.kingdomId;
@@ -942,6 +1038,7 @@ window.OrkPlayerSearch = (function () {
     // ---- Scope filter (pill + icon + modal) ----
     var filt = null;
     function currentFilter(){ return filt ? filt.get() : null; }
+    function currentTiers(){ return filt ? filt.getTiers() : defaultTiers(); }
     function onFilterChange(f, info){
       if (info && info.textChanged && opts.onClear) opts.onClear();
       clearTimeout(timer);
@@ -964,7 +1061,7 @@ window.OrkPlayerSearch = (function () {
         filt = filterField(input, { uir: opts.uir, scope: scopeFrom(opts), onChange: onFilterChange,
           placement: opts.filterPlacement });
       } else if (!want && filt) {
-        var had = !!filt.get();
+        var had = !!filt.get() || !tiersDefault(filt.getTiers());
         filt.destroy(); filt = null;
         if (had) onFilterChange(null, {});
       } else if (filt) {
