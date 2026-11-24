@@ -313,12 +313,12 @@ window.OrkPlayerSearch = (function () {
     m.tierRow.hidden = !any;
   }
   // Apply needs the kingdom list, and the park list too once a kingdom is chosen, and at least
-  // one visible status toggle on.
+  // one VISIBLE status toggle on (hidden tiers count as on but can't be the only one left).
   function applyReady(){
     var m = modal;
     if (!m || !m.kLoaded || (m.kSel.value && !m.pLoaded)) return false;
-    var t = modalTiers();
-    return t.active || t.inactive || t.banned;
+    var vis = TIERS.filter(function(x){ return tierVisible(x[0]); });
+    return !vis.length || vis.some(function(x){ return m.tierCbs[x[0]].checked; });
   }
   function updateApply(){ if (modal) modal.apply.disabled = !applyReady(); }
   function fillParks(kid, presetPid){
@@ -554,8 +554,9 @@ window.OrkPlayerSearch = (function () {
     function render(){
       var tip = 'Filter players';
       if (!tiersDefault(tiers)) {
-        tip += ' — showing ' + TIERS.filter(function(x){ return tiers[x[0]] && tierVisible(x[0]); })
-          .map(function(x){ return x[1].replace(' Players', '').toLowerCase(); }).join(', ') + ' players';
+        var on = TIERS.filter(function(x){ return tiers[x[0]] && tierVisible(x[0]); })
+          .map(function(x){ return x[1].replace(' Players', '').toLowerCase(); });
+        tip += on.length ? ' — showing ' + on.join(', ') + ' players' : ' — status filter on';
       }
       btn.setAttribute('data-tip', tip);
       btn.setAttribute('aria-label', tip);

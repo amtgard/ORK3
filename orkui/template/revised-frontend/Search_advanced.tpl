@@ -702,11 +702,10 @@ html[data-theme="dark"] .as-btn-search { color: #1a202c; }
 	// Status hand-off from the inline player search (includeActive/includeInactive/includeBanned=0
 	// for toggles turned off there; absent = on). Only ever unchecks, so it can't widen anything.
 	(function() {
-		var qs = new URLSearchParams(window.location.search), handed = false;
+		var qs = new URLSearchParams(window.location.search);
 		[['includeActive', elActive], ['includeInactive', elInactive], ['includeBanned', elBanned]].forEach(function(x) {
-			if (qs.get(x[0]) === '0' && x[1] && !x[1].disabled) { x[1].checked = false; handed = true; }
+			if (qs.get(x[0]) === '0' && x[1] && !x[1].disabled) x[1].checked = false;
 		});
-		if (handed && !AUTO_RUN && elQ.value.trim() !== '') AUTO_RUN = 1;
 	})();
 	loadKingdoms(function() {
 		if (PREFILL_K) {
