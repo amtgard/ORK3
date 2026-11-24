@@ -23,6 +23,9 @@ class Report extends Ork3
      */
     public const REC_CACHE_VERSION = 5;
 
+    /** Lifetime of the Admin panel's hero/trend figures (also the home page's kingdom summary): 12 hours. */
+    public const DASHBOARD_CACHE_SECONDS = 43200;
+
     /**
      * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
      *
@@ -2811,8 +2814,11 @@ class Report extends Ork3
     public function GetActiveKingdomsSummary($request = null)
     {
         $type = $this->_takeAttendanceType($request);
+        // Shared by the home page and the Admin panel (the 'all' type keys to ''),
+        // so the home page keeps this warm. Rolling 26-week / 12-month figures
+        // tolerate a long lifetime; Admin > Refresh stats busts it on demand.
         $key = Ork3::$Lib->ghettocache->key($request);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 3600)) !== false) {
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, self::DASHBOARD_CACHE_SECONDS)) !== false) {
             return $cache;
         }
 
@@ -8957,6 +8963,13 @@ class Report extends Ork3
             return $auth;
         }
 
+        // Three full scans of a year or two of attendance (~4s on prod) for a page
+        // opened a handful of times a day: cache the result, stamp it, and let
+        // Admin > Refresh stats bust it (see BustAdminDashboardCache).
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, '', self::DASHBOARD_CACHE_SECONDS)) !== false) {
+            return $cache;
+        }
+
         $thisYearStart = date('Y') . '-01-01';
         $lastYearStart = (date('Y') - 1) . '-01-01';
         $lastYearEnd = date('Y-m-d', strtotime('-1 year'));
@@ -9026,11 +9039,35 @@ class Report extends Ork3
             }
         }
 
-        return [
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, '', [
             'TrendStats' => $trendStats,
             'PrevWeekly' => $prevWeekly,
             'PrevMonthly' => $prevMonthly,
-        ];
+            'AsOf' => time(),
+        ]);
+    }
+
+    /**
+     * Drop every cached figure the Admin panel's hero and trend rows read, so the
+     * next load recomputes them. Global-admin only (same gate as the stats).
+     *
+     * @return array<string, mixed>
+     */
+    public function BustAdminDashboardCache($Token = null): array
+    {
+        $auth = $this->_authorizeGlobalAdmin($Token);
+        if ($auth !== null) {
+            return $auth;
+        }
+        Ork3::$Lib->ghettocache->bust(__CLASS__ . '.GetAdminDashboardStats', '');
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $req = ['AttendanceType' => $type];
+            $this->_takeAttendanceType($req);
+            Ork3::$Lib->ghettocache->bust(__CLASS__ . '.GetActiveKingdomsSummary', Ork3::$Lib->ghettocache->key($req));
+        }
+        Ork3::$Lib->ghettocache->bust(__CLASS__ . '.GetDistinctActivePlayerCount', Ork3::$Lib->ghettocache->key(['weeks' => 26]));
+
+        return ['Status' => Success()];
     }
 
     /**

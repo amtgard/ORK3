@@ -111,6 +111,12 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	return '<span class="cp-ts-val">' . $val . '</span>' . $arrow;
 }
 ?>
+<?php $_asOf = (int) ($StatsAsOf ?? 0); ?>
+<div class="cp-ts-meta">
+	<i class="fas fa-clock"></i>
+	<?= $_asOf > 0 ? 'Figures as of ' . date('M j, g:i A', $_asOf) : 'Figures just computed' ?>
+	&middot; <a href="<?= $uir ?>Admin&amp;refresh=1" title="Recompute the hero and trend figures now (takes a few seconds)">Refresh stats</a>
+</div>
 <div class="cp-ts-row">
 	<div class="cp-ts-card">
 		<div class="cp-ts-icon"><i class="fas fa-medal"></i></div>
