@@ -1314,6 +1314,9 @@ class EventPlanning extends Ork3
         if (!valid_id($targetMundane)) {
             return InvalidParameter('A player must be selected.');
         }
+        if (Legend::isLegend($targetMundane)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         if ($roleName === '') {
             return InvalidParameter('A role is required.');
         }
@@ -3323,6 +3326,10 @@ class EventPlanning extends Ork3
         $categoryLeads = null;
         $out = [];
         foreach ($wanted as $leadId => $askedAuto) {
+            // A Legend can't be newly made a lead; one already on the item stays.
+            if (!in_array($leadId, $existingIds, true) && Legend::isLegend($leadId)) {
+                return [NoAuthorization(Legend::REFUSED), []];
+            }
             if (!in_array($leadId, $existingIds, true) && !$this->isMundaneEligible($leadId)) {
                 // A category lead of the item's category was chosen through staff
                 // management, and the server's own fills add them unchecked: the

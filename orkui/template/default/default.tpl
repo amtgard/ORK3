@@ -700,6 +700,11 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 				<i class="fas fa-trophy"></i> Top Parks by Attendance
 			</a>
 <?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Legend">
+				<i class="fas fa-feather-alt"></i> Hall of Legends
+			</a>
+<?php endif; ?>
 		</div>
 	</div>
 

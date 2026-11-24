@@ -178,7 +178,7 @@ if (($report_type ?? null) === 'Park' && !empty($report_id)) {
 					<td><a href='<?=UIR.'Kingdom/profile/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
 <?php 		endif; ?>
 					<td><a href='<?=UIR.'Park/profile/'.$award['ParkId']?>'><?=htmlspecialchars($award['ParkName'])?></a></td>
-					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a> <?php if (!empty($award['IsLegend'])): ?><span class="legend-pill">Legend</span><?php endif; ?></td>
 					<td><?=htmlspecialchars($award['CustomAwardName'])?></td>
 					<td><?=htmlspecialchars($award['Date'] ?? '')?></td>
 					<td><?php if (valid_id($award['GivenById'])) : ?><a href='<?=UIR.'Player/profile/'.$award['GivenById']?>'><?=htmlspecialchars($award['GivenBy'])?></a><?php else : ?><?=htmlspecialchars($award['GivenBy'] ?? '')?><?php endif; ?></td>

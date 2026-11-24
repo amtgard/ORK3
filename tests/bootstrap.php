@@ -83,6 +83,7 @@ require_once __DIR__ . '/Support/PlayerProfileFixture.php';
 require_once __DIR__ . '/Support/ReportsFixture.php';
 require_once __DIR__ . '/Support/SearchFixture.php';
 require_once __DIR__ . '/Support/AttendanceFixture.php';
+require_once __DIR__ . '/Support/LegendFixture.php';
 require_once __DIR__ . '/Support/InfrastructureFixture.php';
 require_once __DIR__ . '/Support/SurveyOrgFixture.php';
 require_once __DIR__ . '/Support/CourtFixture.php';

@@ -1,0 +1,72 @@
+<style>
+  .mw{background:#fff;border:1px solid #d3dae3;border-radius:8px;color:#2d3748;font:14px/1.55 system-ui,sans-serif;text-align:left}
+  .mw-tabs{display:flex;gap:2px;padding:0 10px;border-bottom:1px solid #d3dae3;background:#f7f9fb;border-radius:8px 8px 0 0;font-size:12.5px;color:#718096;overflow:hidden}
+  .mw-tabs span{padding:10px 11px;white-space:nowrap}
+  .mw-tabs .on{color:#8a6a33;font-weight:700;border-bottom:2px solid #8a6a33}
+  .mw-body{padding:16px}
+  .mw-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .mw-top p{margin:0;color:#718096;font-size:13px}
+  .mw-add{flex:none;font:600 12.5px system-ui,sans-serif;color:#fff;background:#8a6a33;border:0;border-radius:6px;padding:8px 12px}
+  .mw-item{position:relative;border:1px solid #e6dcc8;background:#fdfaf3;border-radius:8px;padding:13px 15px}
+  .mw-item p{margin:0 0 9px;font:16px/1.55 Georgia,'Times New Roman',serif;color:#3f3423}
+  .mw-by{font-size:12px;color:#7a6a50}
+  .mw-by b{color:#6b4a1f}
+  .mw-x{position:absolute;top:9px;right:10px;font-size:11px;color:#b83232}
+  .mw-list{display:grid;gap:11px}
+  .mw-wall{columns:2;column-gap:11px}
+  .mw-wall .mw-item{break-inside:avoid;margin-bottom:11px}
+  .mw-form{margin-top:4px;border:1px solid #dcc9a4;background:#f7efe0;border-radius:8px;padding:14px 15px;color:#5a4220;text-align:left;font:13.5px/1.5 system-ui,sans-serif}
+  .mw-form h4{margin:0 0 5px;background:none;border:0;padding:0;font:700 15px Georgia,serif;color:#5a4220}
+  .mw-form p{margin:0 0 9px}
+  .mw-ta{height:74px;background:#fff;border:1px solid #d3c7ad;border-radius:6px;padding:9px;color:#a0aec0}
+  .mw-foot{display:flex;align-items:center;justify-content:space-between;margin-top:9px;font-size:12px}
+</style>
+
+<h2>How should the Memory Wall feel?</h2>
+<p class="subtitle">Both show the same memories. Click the one that fits, then check the form at the bottom. The red Remove link is only visible to kingdom officers and ORK admins.</p>
+
+<div class="cards" style="grid-template-columns:1fr;gap:20px">
+
+  <div class="card" data-choice="timeline" onclick="toggleSelect(this)">
+    <div class="card-image" style="display:block;height:auto;padding:16px;background:#eef1f5;aspect-ratio:auto">
+      <div class="mw">
+        <div class="mw-tabs"><span class="on">Memory Wall (3)</span><span>About</span><span>Awards</span><span>Titles</span><span>Attendance</span><span>Class Levels</span></div>
+        <div class="mw-body">
+          <div class="mw-top"><p>Newest memories first.</p><span class="mw-add">Share a Memory</span></div>
+          <div class="mw-list">
+            <div class="mw-item"><span class="mw-x">Remove</span><p>Aldric taught me to throw a proper off-hand on my first day, then stayed an hour after the battlegame so I could keep practicing.</p><div class="mw-by">Remembered by <b>Lady Wren of Ashford</b> &middot; October 12, 2026</div></div>
+            <div class="mw-item"><span class="mw-x">Remove</span><p>Best feast cook in the kingdom. I still make the stew.</p><div class="mw-by">Remembered by <b>Bram Oakhollow</b> &middot; October 9, 2026</div></div>
+            <div class="mw-item"><span class="mw-x">Remove</span><p>Twenty years of Crown Quals, and never once missed helping set up the field.</p><div class="mw-by">Remembered by <b>Sir Tamsin Vale</b> &middot; October 2, 2026</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A. One column of memories</h3><p>Each memory gets a full row. It's the easiest to read and handles long stories and phones well.</p></div>
+  </div>
+
+  <div class="card" data-choice="wall" onclick="toggleSelect(this)">
+    <div class="card-image" style="display:block;height:auto;padding:16px;background:#eef1f5;aspect-ratio:auto">
+      <div class="mw">
+        <div class="mw-tabs"><span class="on">Memory Wall (3)</span><span>About</span><span>Awards</span><span>Titles</span><span>Attendance</span><span>Class Levels</span></div>
+        <div class="mw-body">
+          <div class="mw-top"><p>Newest memories first.</p><span class="mw-add">Share a Memory</span></div>
+          <div class="mw-wall">
+            <div class="mw-item"><span class="mw-x">Remove</span><p>Aldric taught me to throw a proper off-hand on my first day, then stayed an hour after the battlegame so I could keep practicing.</p><div class="mw-by">Remembered by <b>Lady Wren of Ashford</b><br>October 12, 2026</div></div>
+            <div class="mw-item"><span class="mw-x">Remove</span><p>Best feast cook in the kingdom. I still make the stew.</p><div class="mw-by">Remembered by <b>Bram Oakhollow</b><br>October 9, 2026</div></div>
+            <div class="mw-item"><span class="mw-x">Remove</span><p>Twenty years of Crown Quals, and never once missed helping set up the field.</p><div class="mw-by">Remembered by <b>Sir Tamsin Vale</b><br>October 2, 2026</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B. A wall of notes</h3><p>Memories sit in two columns like notes on a wall. It feels more like a tribute board and fits more on screen, and it collapses to one column on phones.</p></div>
+  </div>
+
+</div>
+
+<h3 style="margin-top:24px">Share a Memory form, used with either layout</h3>
+<div class="mw-form">
+  <h4>Share a memory of Aldric Thornwood</h4>
+  <p>Please remain respectful. This wall honors a member of our community and is read by friends and family. Inappropriate content is subject to removal.</p>
+  <div class="mw-ta">Your memory&hellip;</div>
+  <div class="mw-foot"><span>Remembered by <b>Your Persona</b></span><span class="mw-add">Post Memory</span></div>
+</div>

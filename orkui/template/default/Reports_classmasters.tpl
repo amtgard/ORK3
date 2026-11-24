@@ -208,7 +208,7 @@ html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active {
 <?php 		if (($report_type ?? null) !== 'Park') : ?>
 					<td><a href='<?=UIR.'Park/profile/'.$award['ParkId']?>'><?=htmlspecialchars($award['ParkName'])?></a></td>
 <?php 		endif; ?>
-					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a> <?php if (!empty($award['IsLegend'])): ?><span class="legend-pill">Legend</span><?php endif; ?></td>
 					<td><?=htmlspecialchars($award['AwardName'])?></td>
 					<td><?=htmlspecialchars($award['Date'] ?? '')?></td>
 					<td><?=htmlspecialchars($award['LastAttended'] ?? '')?></td>

@@ -727,6 +727,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 						<a class="lg-player-link" href="<?= UIR . 'Player/profile/' . (int)$row['MundaneId'] ?>">
 							<?= htmlspecialchars($row['Persona']) ?>
 						</a>
+						<?php if (!empty($row['IsLegend'])): ?><span class="legend-pill">Legend</span><?php endif; ?>
 						<span class="lg-name-flags"></span>
 					</td>
 <?php if ($isKingdom) : ?>
