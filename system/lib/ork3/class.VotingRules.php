@@ -66,7 +66,7 @@ class VotingRules
                 'MinMembershipMonths' => 0,
                 'AttendanceMode' => 'days',
                 'ProvinceMode' => false,
-                'ExcludeOnline' => true,
+                // Online exclusion is the kingdom's CountOnlineAttendance setting (seeded "0").
                 'WeekSnap' => true,
             ],
             40 => [
@@ -81,6 +81,36 @@ class VotingRules
                 'AttendanceMode' => 'count',
                 'MinDistinctMonths' => 2,
                 'ProvinceMode' => false,
+                'MinAge' => 14,
+            ],
+            16 => [
+                // Blackspire bylaws 2.4.3 "Statutory Member" (2026-10): waiver; dues
+                // paid OR currently holding any Kingdom or park office; at least one
+                // sign-in at a Kingdom-sponsored event in the past six months; six
+                // sign-ins in total in the Kingdom in the past six months, any kind,
+                // the Kingdom event counting as one of them.
+                'AttendanceRequired' => 6,
+                'MonthsWindow' => 6,
+                'MinMembershipMonths' => 0,
+                'AttendanceMode' => 'count',
+                'ProvinceMode' => false,
+                'OfficeCountsAsDues' => true,
+                'RequireKingdomEvent' => true,
+            ],
+            8 => [
+                // Freeholds of Amtgard (2026-10): each freehold is its own electorate.
+                // A "Contributing Member" has six sign-ins at their own freehold in the
+                // past six months, dues paid at that freehold (dues at another freehold
+                // do not count), is 14 or older (caveat only: no birth dates in the ORK),
+                // and is a standard member, which the waiver + home-park requirement
+                // already covers. Run from a freehold's Park page for that freehold.
+                'AttendanceRequired' => 6,
+                'MonthsWindow' => 6,
+                'MinMembershipMonths' => 0,
+                'AttendanceMode' => 'count',
+                'ProvinceMode' => false,
+                'HomeParkOnly' => true,
+                'DuesHomeParkOnly' => true,
                 'MinAge' => 14,
             ],
             36 => [

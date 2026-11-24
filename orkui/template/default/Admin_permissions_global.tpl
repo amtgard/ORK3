@@ -28,6 +28,22 @@
 
 .ap-explainer { background:#f0faf4; border:1px solid #c6e8d4; border-radius:8px; padding:14px 16px; margin-bottom:14px; font-size:13px; color:var(--rp-text-body); }
 .ap-explainer-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#276749; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+/* Guide pointer inside the notice: a button in the box's own green, with a
+   three-beat ring pulse on load so the eye lands on it, then still. */
+.ap-guide-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; margin-top:12px; }
+.ap-guide-link { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:8px; background:#276749; color:#fff; font-size:13px; font-weight:600; text-decoration:none; box-shadow:0 0 0 0 rgba(39,103,73,0.45); animation:ap-guide-pulse 1.6s ease-out 0.6s 3; }
+.ap-guide-link strong { font-weight:800; color:#fff; }
+.ap-guide-link:hover { background:#22543d; color:#fff; text-decoration:none; animation:none; }
+.ap-guide-link:focus-visible { outline:2px solid #276749; outline-offset:2px; }
+.ap-guide-note { font-size:13px; color:var(--rp-text-body); }
+/* !important answers orkui.css's global dark link tint, as .pn-crumb does (project pattern). */
+html[data-theme="dark"] .ap-guide-link { background:#38a169; color:#0b1f14 !important; box-shadow:0 0 0 0 rgba(154,230,180,0.5); }
+html[data-theme="dark"] .ap-guide-link strong { color:#0b1f14; }
+html[data-theme="dark"] .ap-guide-link:hover { background:#48bb78; color:#0b1f14 !important; }
+html[data-theme="dark"] .ap-guide-note { color:var(--ork-text-secondary); }
+@keyframes ap-guide-pulse { 0% { box-shadow:0 0 0 0 rgba(39,103,73,0.45); } 70% { box-shadow:0 0 0 12px rgba(39,103,73,0); } 100% { box-shadow:0 0 0 0 rgba(39,103,73,0); } }
+@media (prefers-reduced-motion: reduce) { .ap-guide-link { animation:none; } }
+@media (max-width:600px) { .ap-guide-link { width:100%; justify-content:center; min-height:44px; } }
 
 .ap-table { width:100%; border-collapse:collapse; font-size:13px; }
 .ap-table th { background:var(--rp-bg-light); border-bottom:2px solid var(--rp-divider); padding:8px 10px; text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--rp-text-muted); white-space:nowrap; }
@@ -104,6 +120,9 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 			</div>
 		</div>
 		<div class="rp-header-actions">
+			<a class="rp-btn-ghost" href="<?= UIR ?>Admin/guide#granting-and-reviewing-access" data-tip="The Administrator Guide: when to grant global admin, and the twice-yearly review">
+				<i class="fas fa-book-open"></i> Granting guide
+			</a>
 			<a class="rp-btn-ghost" href="<?= UIR ?>Admin">
 				<i class="fas fa-arrow-left"></i> Back to Admin
 			</a>
@@ -120,6 +139,12 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 			<div class="ap-explainer">
 				<div class="ap-explainer-title"><i class="fas fa-exclamation-triangle"></i> Use sparingly</div>
 				System Administrator access satisfies <strong>all</strong> authorization checks across every kingdom, park, and event — regardless of scope. Prefer granting Kingdom-level <em>Create</em> access to local admins instead.
+				<div class="ap-guide-row">
+					<a class="ap-guide-link" href="<?= UIR ?>Admin/guide#granting-and-reviewing-access">
+						<i class="fas fa-book-open" aria-hidden="true"></i> Before granting: read <strong>Granting and reviewing access</strong>
+					</a>
+					<span class="ap-guide-note">and run the request by the other admins in #ork-administrative-chat.</span>
+				</div>
 			</div>
 			<div class="ap-row">
 				<div class="ap-field" style="flex:2">
@@ -152,7 +177,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 				<tr>
 					<th>Person</th>
 					<th data-sorter="false">Role</th>
-					<th>Last Login</th>
+					<th title="Last activity on the ORK (any signed-in page or app request), to the day">Last Seen</th>
 					<th>Last Credit</th>
 					<th>Last Modified</th>
 					<th data-sorter="false"></th>
@@ -297,7 +322,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 				if ($empty.length) {
 					$empty.replaceWith(
 						'<table class="ap-table" id="ap-admin-table">'
-						+ '<thead><tr><th>Person</th><th>Role</th><th>Last Login</th><th>Last Credit</th><th>Last Modified</th><th></th></tr></thead>'
+						+ '<thead><tr><th>Person</th><th>Role</th><th title="Last activity on the ORK (any signed-in page or app request), to the day">Last Seen</th><th>Last Credit</th><th>Last Modified</th><th></th></tr></thead>'
 						+ '<tbody id="ap-admin-tbody"></tbody></table>'
 					);
 				}

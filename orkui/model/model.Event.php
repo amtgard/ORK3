@@ -315,6 +315,23 @@ class Model_Event extends Model
     }
 
     /**
+     * Schedule item categories: ordered map of name to
+     * key/icon/color/bg/colorDark/bgDark/bold.
+     */
+    public function schedule_categories()
+    {
+        $r = $this->_planning()->GetScheduleCategories();
+        return $this->_eventApiOk($r) ? ($r['Categories'] ?? []) : [];
+    }
+
+    /** Most changes one schedule batch may carry. */
+    public function schedule_batch_max(): int
+    {
+        $r = $this->_planning()->GetScheduleBatchMax();
+        return $this->_eventApiOk($r) ? (int) ($r['BatchMaxOps'] ?? 0) : 0;
+    }
+
+    /**
      * Public schedule embed: published event + occurrence + schedule list (RB-N).
      * On failure returns ['ok' => false, 'error' => string, 'http' => int].
      */

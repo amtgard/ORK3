@@ -87,8 +87,10 @@ class Controller_Kingdom extends Controller
         $kid     = (int)$kingdom_id;
         $uid     = (int)($this->session->user_id ?? 0);
         $isAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT);
+        // In-Person / Online / All (default All): informational only, never the kingdom setting.
+        $type    = isset($_GET['AttendanceType']) && is_string($_GET['AttendanceType']) ? $_GET['AttendanceType'] : 'all';
         $this->load_model('KingdomProfile');
-        $result = $this->KingdomProfile->extended_park_averages($kid, $isAdmin);
+        $result = $this->KingdomProfile->extended_park_averages($kid, $isAdmin, $type);
         header('Content-Type: application/json');
         echo json_encode($result);
         exit();
@@ -373,6 +375,7 @@ class Controller_Kingdom extends Controller
 
         $uid = $kn_uid;
         $this->data['IsLoggedIn']       = $uid > 0;
+        $this->data['CurrentUserId']    = $uid;
 
         // Pin the logged-in user's home park to the first slot in the parks list
         $this->data['UserParkId'] = $uid > 0 ? $this->KingdomProfile->user_home_park_id($uid) : 0;
@@ -494,6 +497,10 @@ class Controller_Kingdom extends Controller
                 }
                 // Only surface the principality-stats toggle for kingdoms that have principalities.
                 if (($cfg['Key'] ?? '') === 'IncludePrincipalityInStatistics' && !$hasChildPrinz) {
+                    continue;
+                }
+                // CountOnlineAttendance only affects Voting Eligibility — hide it where there are no voting rules.
+                if (($cfg['Key'] ?? '') === 'CountOnlineAttendance' && empty($this->data['ShowVotingEligibleLink'])) {
                     continue;
                 }
                 $adminConfig[] = $cfg;

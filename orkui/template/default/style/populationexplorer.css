@@ -513,6 +513,32 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     border-top : 1px solid var(--ork-divider);
 }
 
+/* ── Sign-ins counted (In-Person / Online / All) ─────────────
+   Page-level, above Filters; the switch itself is the shared .orn-type-control (orkui.css). */
+.pe-type-bar {
+    display      : flex;
+    flex-wrap    : wrap;
+    align-items  : center;
+    gap          : 8px 12px;
+    min-width    : 0;
+    padding      : 10px 14px;
+    background   : var(--rp-card-bg, var(--ork-card-bg));
+    border       : 1px solid var(--rp-border);
+    border-radius: 8px;
+    box-shadow   : var(--ork-shadow-card);
+}
+.pe-type-label {
+    display    : inline-flex;
+    align-items: center;
+    gap        : 6px;
+    font-size  : 13px;
+    font-weight: 600;
+    color      : var(--rp-text-body);
+}
+.pe-type-label i { color: var(--rp-text-muted); }
+.pe-type-note { font-size: 12px; font-weight: 600; color: var(--pe-accent-text); text-align: left; }
+.pe-type-note:empty { display: none; }
+
 /* ── Action bar: Run, dirty hint, Copy link, Export ────────
    Outside the folding cards (spec §5), so it is always visible. */
 .pe-action-bar {
@@ -717,6 +743,8 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     .pe-group-actions .pe-btn-add { flex: 1 1 0; justify-content: center; }
     .pe-connector { padding-left: 4px; }
     .pe-action-bar { flex-direction: column; align-items: stretch; padding: 10px 12px; }
+    .pe-type-bar { flex-direction: column; align-items: stretch; padding: 10px 12px; }
+    .pe-type-bar .orn-type-control { width: 100%; }
     .pe-btn-run { min-height: 44px; }
     .pe-root .dt-buttons .dt-button.pe-dt-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; }
     .pe-btn-link { min-height: 44px; }
@@ -798,7 +826,7 @@ html[data-theme="dark"] .pe-btn-link { color: #a5b4fc; }
 html[data-theme="dark"] .pe-btn-run { background: #4f46e5; }
 html[data-theme="dark"] .pe-btn-run:hover { background: #6366f1; }
 html[data-theme="dark"] .pe-action-bar { background: #2d3748; border-color: #4a5568; }
-html[data-theme="dark"] .pe-btn-action { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .pe-btn-action { background: var(--ork-bg-tertiary); border-color: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .pe-btn-action:hover:not(.is-disabled) { background: rgba(99,102,241,0.15); border-color: #818cf8; color: #c7d2fe; }
 html[data-theme="dark"] .pe-btn-action:focus-visible { outline-color: #818cf8; }
 html[data-theme="dark"] .pe-btn-remove:hover { border-color: #9b2c2c; }
@@ -815,7 +843,7 @@ html[data-theme="dark"] .pe-card-summary { color: #e2e8f0; }
 html[data-theme="dark"] .pe-card-toggle:hover .pe-card-title { color: #a5b4fc; }
 html[data-theme="dark"] .pe-stale-note { color: #a0aec0; }
 html[data-theme="dark"] .pe-yes { color: #68d391; }
-html[data-theme="dark"] .pe-root .dt-buttons .dt-button.pe-dt-btn { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .pe-root .dt-buttons .dt-button.pe-dt-btn { background: var(--ork-bg-tertiary); border-color: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .pe-root .dataTables_wrapper .dataTables_info,
 html[data-theme="dark"] .pe-root .dataTables_wrapper .dataTables_paginate { color: #cbd5e0; }
 
@@ -1117,7 +1145,7 @@ html[data-theme="dark"] .pe-help-close:hover { background: #4a5568; color: #f7fa
 html[data-theme="dark"] .pe-help-toc { background: #1f2937; }
 html[data-theme="dark"] .pe-help-toc a { color: #a5b4fc; }
 html[data-theme="dark"] .pe-help-body em { color: #c7d2fe; }
-html[data-theme="dark"] .pe-help-rule { background: #374151; border-color: #4a5568; }
+html[data-theme="dark"] .pe-help-rule { background: var(--ork-bg-tertiary); border-color: #4a5568; }
 html[data-theme="dark"] .pe-help-chip { background: #312e81; border-color: #4338ca; color: #e0e7ff; }
 html[data-theme="dark"] .pe-help-btn { border-color: #4a5568; color: #a5b4fc; }
 html[data-theme="dark"] .pe-help-group { border-color: #4a5568; border-left-color: var(--pe-accent); }

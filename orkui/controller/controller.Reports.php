@@ -27,6 +27,8 @@ class Controller_Reports extends Controller
             // The PAGE (award_explorer) is NOT listed, so it redirects to Login like
             // every other gated report -- which is the whole point of gating it.
             'award_explorer_json',
+            // Same fetch() reason: answers status:5 itself when logged out.
+            'ladder_new_players',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -572,10 +574,30 @@ class Controller_Reports extends Controller
         }
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
         $this->data['page_title'] = "Player Roster";
-        $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
+    }
+
+    /**
+     * Whether the viewer may see the Mundane (real name) column on the roster
+     * family of reports: ORK admins, or anyone with edit authority over the
+     * kingdom or park being reported on. Shared by roster(), waivered(),
+     * unwaivered(), duespaid() and suspended(), which all render
+     * Reports_roster.tpl.
+     */
+    private function roster_can_view_mundane($type): bool
+    {
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        if ($_uid <= 0) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (!in_array($type, array('Kingdom', 'Park'), true) || !valid_id($this->request->id)) {
+            return false;
+        }
         $_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
-        $this->data['CanViewMundane'] = $_uid > 0 && valid_id($this->request->id)
-            && $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+        return (bool) $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
     }
 
     public function reeve($type = null)
@@ -679,6 +701,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_roster.tpl';
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 1);
         $this->data['page_title'] = "Waivered Player Roster";
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
     }
 
     public function unwaivered($type = null)
@@ -692,6 +715,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_roster.tpl';
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 0);
         $this->data['page_title'] = "Unwaivered Player Roster";
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
     }
 
     /* Old broken dues functionality */
@@ -704,6 +728,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_roster.tpl';
         $this->data['show_duespaid'] = 1;
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1, 0, 2);
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
     }
 
     /* New Cooler Dues functionality */
@@ -735,6 +760,7 @@ class Controller_Reports extends Controller
             $this->data['ScopeName'] = $this->Kingdom->get_kingdom_name($this->request->id);
         }
         $this->data['page_title'] = "Suspended Player Roster";
+        $this->data['CanViewMundane'] = $this->roster_can_view_mundane($type);
         $auth = $this->roster_suspension_remove_auth(
             $this->data['roster'],
             $this->data['ScopeType'],
@@ -783,6 +809,9 @@ class Controller_Reports extends Controller
         $this->data['DaysWindow']             = $result['DaysWindow']             ?? 0;
         $this->data['MinAge']                 = $result['MinAge']                 ?? 0;
         $this->data['MinDistinctMonths']  = $result['MinDistinctMonths']  ?? 0;
+        $this->data['DuesHomeParkOnly']   = $result['DuesHomeParkOnly']   ?? false;
+        $this->data['OfficeCountsAsDues'] = $result['OfficeCountsAsDues'] ?? false;
+        $this->data['RequireKingdomEvent'] = $result['RequireKingdomEvent'] ?? false;
         $this->data['StartDate']              = $result['StartDate']              ?? '';
         $this->data['DisplayStartDate']       = $result['DisplayStartDate']       ?? '';
         $this->data['AllKingdoms']            = $result['AllKingdoms']            ?? false;
@@ -926,12 +955,16 @@ class Controller_Reports extends Controller
         $end_date        = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
                             ? $this->request->EndDate : date('Y-m-d');
 
+        // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
+
         $form = array(
             'KingdomId'         => $kingdom_id,
             'ParkId'            => $park_id,
             'StartDate'         => $start_date,
             'EndDate'           => $end_date,
-            'ShowPlayerDetails' => $show_details ? 1 : 0
+            'ShowPlayerDetails' => $show_details ? 1 : 0,
+            'AttendanceType'    => $attendance_type
         );
         $this->data['form'] = $form;
 
@@ -940,7 +973,8 @@ class Controller_Reports extends Controller
             'ParkId'               => $park_id,
             'StartDate'            => $start_date,
             'EndDate'              => $end_date,
-            'IncludePlayerDetails' => $show_details
+            'IncludePlayerDetails' => $show_details,
+            'AttendanceType'       => $attendance_type
         ));
 
         if (is_array($result)) {
@@ -1000,7 +1034,9 @@ class Controller_Reports extends Controller
             'ParkId' => $park_id,
             'AvgByUniques' => isset($this->request->AvgByUniques) ? 1 : 0,
             'LocalPlayersOnly' => isset($this->request->LocalPlayersOnly) ? 1 : 0,
-            'GridView' => isset($this->request->GridView) ? 1 : 0
+            'GridView' => isset($this->request->GridView) ? 1 : 0,
+            // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+            'AttendanceType' => is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all'
         );
         $this->data['form'] = $form;
 
@@ -1013,7 +1049,8 @@ class Controller_Reports extends Controller
                 'EndDate' => $rounded_end,
                 'Period' => $period,
                 'MinimumSignIns' => $form['MinimumSignIns'],
-                'LocalPlayersOnly' => $form['LocalPlayersOnly']
+                'LocalPlayersOnly' => $form['LocalPlayersOnly'],
+                'AttendanceType' => $form['AttendanceType']
             ));
             $this->data['mode'] = 'single_park';
 
@@ -1053,7 +1090,8 @@ class Controller_Reports extends Controller
                 'StartDate' => $rounded_start,
                 'EndDate' => $rounded_end,
                 'Period' => $period,
-                'LocalPlayersOnly' => $form['LocalPlayersOnly']
+                'LocalPlayersOnly' => $form['LocalPlayersOnly'],
+                'AttendanceType' => $form['AttendanceType']
             ));
             $this->data['mode'] = 'all_parks';
             // Full ordered period list so the grid shows empty periods (as 0) in order.
@@ -1456,6 +1494,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         if ((int)($r['Status']['Status'] ?? 1) !== 0) {
             echo json_encode($this->_pe_json_error($r));
@@ -1502,6 +1542,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         $path = is_string($r['Path'] ?? null) ? $r['Path'] : '';
         if ($path !== '') {
@@ -1661,6 +1703,9 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_laddergrid.tpl';
         $this->data['report_type'] = $type;
         $this->data['report_id']   = $id;
+        // As the URL gave them: New Players must ask with the grid's own request shape.
+        $this->data['grid_kingdom_id'] = $kingdom_id;
+        $this->data['grid_park_id']    = $park_id;
 
         $assembly = $this->Reports->ladder_award_grid($type, $kingdom_id, $park_id);
         $scopeName = $assembly['ScopeName'] ?? '';
@@ -1672,9 +1717,81 @@ class Controller_Reports extends Controller
         } elseif ($type === 'Kingdom') {
             $this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . $kingdom_id . '&tab=reports';
         }
+        // Kingdom and park crumbs follow the grid's scope, not the session's. A park
+        // grid's ScopeName is "Kingdom — Park", so the park crumb takes the bare name.
+        $this->load_model('Park');
+        $this->_pe_scope_breadcrumb($type, $id, $type === 'Park' ? (string)$this->Park->get_park_name($park_id) : $scopeName);
 
         $this->data['LadderAwards'] = $assembly['LadderAwards'] ?? [];
         $this->data['GridRows'] = $assembly['GridRows'] ?? [];
+        $this->data['SmartCourt'] = $this->smart_court_config($_uid, $park_id, $assembly);
+    }
+
+    /**
+     * Smart Court config for the page's scope, or null for a viewer without court
+     * authority there. Nothing here holds recommendations: those load through
+     * CourtAjax/smart_grid_state. A park's kingdom comes from the park, because the
+     * URL may carry any KingdomId beside a ParkId.
+     */
+    private function smart_court_config(int $uid, int $park_id, array $assembly): ?array
+    {
+        $kingdom_id = (int)($assembly['KingdomId'] ?? 0);
+        if ($uid <= 0 || $kingdom_id <= 0) {
+            return null;
+        }
+        $this->load_model('Court');
+        if ($park_id > 0) {
+            $kingdom_id = (int)$this->Court->get_park_kingdom_id($park_id);
+        }
+        if (!$this->Court->can_manage($uid, $kingdom_id, $park_id)) {
+            return null;
+        }
+
+        $courts = [];
+        foreach ($this->Court->get_court_list($kingdom_id, $park_id, false) as $court) {
+            if ($court['Status'] !== 'complete') {
+                $courts[] = [
+                    'CourtId'    => $court['CourtId'],
+                    'Name'       => $court['Name'],
+                    'CourtDate'  => $court['CourtDate'],
+                    'Status'     => $court['Status'],
+                    'AwardCount' => $court['AwardCount'],
+                ];
+            }
+        }
+        $columns = $this->Court->get_smart_grid_columns($kingdom_id, $assembly['LadderAwards'] ?? []);
+
+        return [
+            'KingdomId'    => $kingdom_id,
+            'ParkId'       => $park_id,
+            'Uid'          => $uid,
+            'ColumnAwards' => $columns['ColumnAwards'],
+            'KaToColumn'   => $columns['KaToColumn'],
+            'Courts'       => $courts,
+            'Events'       => $this->Court->get_upcoming_events($kingdom_id),
+        ];
+    }
+
+    /**
+     * New Players box data for the Smart Planning Grid: JSON, status 0 + players,
+     * or status 5 when logged out.
+     */
+    public function ladder_new_players()
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id) || !isset($this->session->token)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $kingdom_id = (int)$this->request->KingdomId;
+        $park_id    = (int)$this->request->ParkId;
+        if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
+            exit;
+        }
+        $players = $this->Reports->ladder_grid_new_players($kingdom_id, $park_id);
+        echo json_encode(['status' => 0, 'players' => $players]);
+        exit;
     }
 
     public function park_distance_matrix($type = null)

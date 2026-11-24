@@ -696,6 +696,41 @@ html[data-theme="dark"] .pn-ladder-name { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ladder-rank { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-ladder-rank strong { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
+/* Tile click filters the awards table to that ladder's rows */
+.pn-ladder-item[role="button"] { cursor: pointer; }
+.pn-ladder-item[role="button"]:hover { border-color: var(--ork-link-bright); }
+.pn-ladder-item[role="button"]:focus-visible { outline: 2px solid var(--ork-link-bright); outline-offset: 1px; }
+.pn-ladder-item[aria-pressed="true"],
+html[data-theme="dark"] .pn-ladder-item[aria-pressed="true"] {
+    border-color: var(--ork-link);
+    box-shadow: inset 0 0 0 1px var(--ork-link);
+}
+.pn-award-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: var(--ork-text-muted);
+}
+.pn-award-filter[hidden] { display: none; }
+.pn-award-filter strong { color: var(--ork-text); }
+.pn-award-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ork-link);
+    background: var(--ork-bg-inset);
+    border: 1px solid var(--ork-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+.pn-award-filter-clear:hover { border-color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-award-filter-clear { background: var(--ork-bg-secondary); }
 .pn-ladder-bar-track {
     height: 6px;
     background: #e2e8f0;
@@ -979,7 +1014,7 @@ html[data-theme="dark"] .pn-rec-field label { color: var(--ork-text); }
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
 }
-.pn-confirm-message { margin: 0; font-size: 14px; color: var(--ork-text-secondary); }
+.pn-confirm-message { margin: 0; font-size: 14px; color: var(--ork-text-secondary); white-space: pre-line; }
 .pn-modal-footer {
     padding: 14px 20px;
     border-top: 1px solid var(--ork-divider);
@@ -1059,6 +1094,33 @@ html[data-theme="dark"] .pn-form-error.pn-rec-suggest .pn-rec-suggest-link:hover
     margin-top: 1px;
 }
 .pn-card-edit-btn:hover { color: #4299e1; }
+
+/* Awards Planned on Future Courts: collapsed-by-default card (native <details>) on the
+   Awards and Recommendations tabs, plus the clipboard marker in the Recommendations table. */
+.pn-planned-courts { padding: 0; }
+.pn-planned-summary {
+    cursor: pointer; list-style: none; padding: 12px 18px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--ork-text-secondary);
+}
+.pn-planned-summary::-webkit-details-marker { display: none; }
+.pn-planned-summary::after { content: '\f078'; font-family: 'Font Awesome 7 Free', 'Font Awesome 6 Free', 'Font Awesome 5 Free'; font-weight: 900; float: right; font-size: 10px; transition: transform .15s; }
+.pn-planned-courts[open] > .pn-planned-summary::after { transform: rotate(180deg); }
+.pn-planned-summary i { color: var(--pn-accent, #4299e1); margin-right: 4px; }
+.pn-planned-list { list-style: none; margin: 0; padding: 0 18px 8px; }
+.pn-planned-court {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+    padding: 8px 0; border-top: 1px solid var(--ork-divider);
+}
+.pn-planned-court-name { font-weight: 600; color: var(--pn-accent, #2b6cb0); overflow-wrap: anywhere; }
+.pn-planned-meta { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ork-text-secondary); }
+.pn-planned-awards { flex: 1 1 100%; font-size: 13px; color: var(--ork-text); overflow-wrap: anywhere; }
+html[data-theme="dark"] .pn-planned-summary i { color: var(--ork-link-bright, #63b3ed); }
+html[data-theme="dark"] .pn-planned-court-name { color: var(--ork-link-bright, #63b3ed); }
+.pn-rec-planned { display: inline-block; margin-left: 2px; color: var(--pn-accent, #4299e1); cursor: help; }
+.pn-rec-planned:focus-visible { outline: 2px solid var(--pn-accent, #4299e1); outline-offset: 2px; border-radius: 2px; }
+html[data-theme="dark"] .pn-rec-planned { color: var(--ork-link-bright, #63b3ed); }
+html[data-theme="dark"] .pn-rec-planned:focus-visible { outline-color: var(--ork-link-bright, #63b3ed); }
 
 /* ---- Account modal fields ---- */
 .pn-acct-field {
@@ -2094,6 +2156,12 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
     margin-bottom: 14px;
     flex-wrap: wrap;
 }
+/* Kingdom Parks tab toolbar: note shown while the hero Avg / Week + Avg / Month filter
+   (orkui.css .orn-avgf-*) is on In-Person or Online; it also pushes the view buttons right. */
+.kn-avg-type { display: flex; align-items: center; min-width: 0; margin-right: auto; }
+.kn-avg-type-note { font-size: 13px; color: var(--ork-text-secondary); }
+.kn-avg-type-note:empty { display: none; }
+.kn-avg-loading .kn-park-tile-stats, .kn-avg-loading td.kn-col-numeric, .pk-avg-loading { opacity: .45; transition: opacity .15s; }
 .kn-view-btn {
     width: 30px;
     height: 30px;
@@ -3005,7 +3073,9 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.5);
-    z-index: 1200;
+    /* Above every modal (--z-modal 10100): a confirm raised from inside one, e.g.
+       the schedule form's Delete, was opening behind it at the old 1200. */
+    z-index: var(--z-modal-top, 10200);
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -5698,6 +5768,11 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 .pk-att-inline-select { font-size:12px; padding:2px 4px; border:1px solid var(--ork-input-border); border-radius:4px; max-width:120px; }
 .pk-att-inline-credits { font-size:12px; padding:2px 4px; border:1px solid var(--ork-input-border); border-radius:4px; width:52px; }
 .pk-att-editing td { background:#fffbeb !important; }
+/* Narrow screens: stack the Online? control under the credits input so the edit row fits. */
+@media (max-width: 600px) {
+    .pk-att-credits-cell .orn-online-check { display:flex; white-space:normal; font-size:12px; }
+    .pk-att-editing .pk-att-inline-select { max-width:90px; }
+}
 .pk-att-entered-count { font-size:11px; font-weight:400; color:#a0aec0; margin-left:6px; text-transform:none; letter-spacing:0; }
 /* Search scope buttons */
 .pk-att-scope-btns { display:flex; margin-bottom:10px; border:1px solid #cbd5e0; border-radius:6px; overflow:hidden; }
@@ -6583,7 +6658,8 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Card */
 .adm-card { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; box-shadow: var(--ork-shadow-card); overflow: hidden; margin-bottom: 24px; }
 .adm-card-header,
-.cp-overview-header { padding: 14px 20px; border-bottom: 1px solid var(--ork-divider); background: var(--ork-bg-secondary); display: flex; align-items: center; justify-content: space-between; }
+.cp-overview-header { padding: 14px 20px; border-bottom: 1px solid var(--ork-divider); background: var(--ork-bg-secondary); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.cp-overview-note { padding: 8px 20px; border-bottom: 1px solid var(--ork-divider); font-size: 13px; color: var(--ork-text-secondary); }
 .adm-card-title,
 .cp-overview-title { font-size: 14px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 8px; }
 .adm-count { background: #e2e8f0; color: #4a5568; border-radius: 10px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
@@ -6626,6 +6702,8 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 .adm-btn-danger { background: #e53e3e; color: #fff; }
 
 /* --- Admin Dashboard Hero (cp-) --- */
+.cp-ts-meta { font-size: 11px; color: #a0aec0; text-align: right; margin: -6px 0 6px; }
+.cp-ts-meta a { color: inherit; text-decoration: underline; }
 .cp-ts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
 .cp-ts-card { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 14px; }
 .cp-ts-icon { width: 38px; height: 38px; border-radius: 8px; background: #ebf4ff; color: #3182ce; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -6672,6 +6750,12 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
     font-size: 26px; font-weight: 700; color: #fff; margin: 0 0 4px;
     background: transparent; border: none; padding: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
+/* orkui.css gives every dark-mode h1 a grey box; the hero title sits on the
+   navy gradient and stays bare, as the reports header title does. */
+html[data-theme="dark"] .cp-hero-title {
+    background: transparent !important; border: none !important; color: #fff !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
 .cp-hero-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 10px; }
 .cp-hero-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .cp-hero-badge {
@@ -6695,6 +6779,56 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 }
 .cp-hero-stat-div {
     width: 1px; height: 40px; background: rgba(255,255,255,0.2);
+}
+
+/* Administrator Guide badge in the hero: filled gold so it reads as the one
+   action among the status chips, with a three-beat ring pulse on load, then still. */
+.cp-hero-badge-guide {
+    background: #f6ad55; border-color: #f6ad55; color: #1a202c;
+    box-shadow: 0 0 0 0 rgba(246,173,85,0.6);
+    animation: cp-guide-pulse 1.6s ease-out 0.8s 3;
+}
+.cp-hero-badge-guide:hover { background: #fbd38d; border-color: #fbd38d; color: #1a202c; animation: none; }
+/* The global dark-mode `html[data-theme="dark"] a` link tint (orkui.css) wins
+   over these in the cascade; the project pattern is to answer it with
+   !important (see .pn-crumb): dark text on the gold chip, plain text on the
+   callout row. */
+html[data-theme="dark"] .cp-hero-badge-guide,
+html[data-theme="dark"] .cp-hero-badge-guide:hover { color: #1a202c !important; }
+html[data-theme="dark"] .cp-guide-callout,
+html[data-theme="dark"] .cp-guide-callout:hover { color: inherit !important; }
+@keyframes cp-guide-pulse { 0% { box-shadow: 0 0 0 0 rgba(246,173,85,0.6); } 70% { box-shadow: 0 0 0 10px rgba(246,173,85,0); } 100% { box-shadow: 0 0 0 0 rgba(246,173,85,0); } }
+@media (prefers-reduced-motion: reduce) { .cp-hero-badge-guide { animation: none; } }
+
+/* Administrator Guide callout (Admin panel, under the hero): one wide, clickable row. */
+.cp-guide-callout {
+    display: flex; align-items: center; gap: 16px;
+    margin: 0 0 20px; padding: 14px 18px;
+    background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-left: 4px solid #2b6cb0;
+    border-radius: 10px; box-shadow: var(--ork-shadow-card);
+    color: inherit; text-decoration: none;
+    transition: box-shadow .15s, border-color .15s;
+}
+.cp-guide-callout:hover { text-decoration: none; color: inherit; border-color: #2b6cb0; box-shadow: var(--ork-shadow-card-hover, var(--ork-shadow-card)); }
+.cp-guide-callout-icon {
+    width: 44px; height: 44px; flex-shrink: 0; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    background: #ebf4ff; color: #2b6cb0; font-size: 18px;
+}
+html[data-theme="dark"] .cp-guide-callout-icon { background: rgba(66,153,225,0.18); color: var(--ork-link-bright); }
+.cp-guide-callout-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-guide-callout-text strong { font-size: 15px; color: var(--ork-text); }
+.cp-guide-callout-text span { font-size: 13px; color: var(--ork-text-secondary); line-height: 1.45; }
+.cp-guide-callout-btn {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    background: #2b6cb0; color: #fff; white-space: nowrap;
+}
+.cp-guide-callout:hover .cp-guide-callout-btn { background: #2c5282; }
+@media (max-width: 600px) {
+    .cp-guide-callout { flex-wrap: wrap; padding: 14px; }
+    .cp-guide-callout-text { flex-basis: calc(100% - 60px); }
+    .cp-guide-callout-btn { width: 100%; justify-content: center; min-height: 44px; }
 }
 
 /* Dashboard layout */
@@ -6750,6 +6884,9 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Kingdom overview table */
 .cp-overview-wrap { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
 .cp-overview-search input { padding: 5px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; width: 180px; background: var(--ork-card-bg); }
+/* Phone: type control takes its own full-width line under the heading. The Admin layout is wider than the
+   viewport at this width (pre-existing), so cap at the viewport rather than the header's width. */
+@media (max-width: 600px) { .cp-overview-header .orn-type-control { flex: 0 0 auto; width: min(100%, calc(100vw - 56px)); } }
 .cp-kd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .cp-kd-table thead th { padding: 9px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ork-text-muted); background: var(--ork-bg-secondary); border-bottom: 1px solid var(--ork-divider); white-space: nowrap; cursor: pointer; user-select: none; }
 .cp-kd-table thead th:hover { color: #4a5568; }
@@ -9069,6 +9206,7 @@ html[data-theme="dark"] .cp-ts-card { background: var(--ork-card-bg); border-col
 html[data-theme="dark"] .cp-ts-val { color: var(--ork-text); }
 html[data-theme="dark"] .cp-ts-lbl { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .cp-ts-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .cp-ts-meta { color: var(--ork-text-muted); }
 html[data-theme="dark"] .cp-ts-icon,
 html[data-theme="dark"] .cp-action-icon-blue { background: rgba(49,130,206,0.15); color: #90cdf4; }
 html[data-theme="dark"] .cp-ts-up,
@@ -9097,6 +9235,7 @@ html[data-theme="dark"] .cp-report-list-desc { color: var(--ork-text-muted); }
 html[data-theme="dark"] .cp-overview-wrap { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .cp-overview-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .cp-overview-title { color: var(--ork-text); }
+html[data-theme="dark"] .cp-overview-note { border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .cp-overview-search input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .cp-kd-table thead th { background: var(--ork-bg-secondary); color: var(--ork-text-muted); border-bottom-color: var(--ork-border); text-shadow: none; }
 html[data-theme="dark"] .cp-kd-table thead th:hover { color: var(--ork-text); }
@@ -11269,4 +11408,113 @@ html[data-theme="dark"] .pn-legend-warnings { color: #f6c37a; }
     .pn-lg-removed summary { padding: 12px 0; }
     #pn-legend-overlay .pn-btn { min-height: 44px; }
     #pn-legend-overlay .pn-modal-close-btn { min-width: 44px; min-height: 44px; }
+}
+
+/* =====================================================
+   Online attendance — "Online?" switch (ornOnlineSwitch)
+   ===================================================== */
+.orn-online-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ork-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.orn-online-switch:focus-visible {
+  outline: 2px solid var(--ork-link);
+  outline-offset: 2px;
+}
+.orn-online-switch-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #a0aec0;
+  transition: background-color 0.15s ease;
+}
+.orn-online-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+.orn-online-switch[aria-checked="true"] .orn-online-switch-track { background: var(--ork-link); }
+.orn-online-switch[aria-checked="true"] .orn-online-switch-thumb { transform: translateX(16px); }
+.orn-online-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--ork-text-secondary);
+  line-height: 1.3;
+}
+/* Park Enter Attendance modal: switch sits beside the date picker, hint below */
+.pk-att-date-row { flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.pk-att-date-row .orn-online-hint { flex: 1 0 100%; text-align: center; }
+html[data-theme="dark"] .orn-online-switch-track { background: #4a5568; }
+html[data-theme="dark"] .orn-online-switch-thumb { background: #e2e8f0; }
+
+/* Sign-in link panels: switch on its own row under the inputs */
+.pk-att-link-online-row,
+.ev-signin-link-online-row { margin-top: 8px; margin-left: -8px; }
+
+/* Switch tooltip: left-anchored and wrapping so it stays inside narrow modals.
+   .is-flashing (ornFlashTip) forces it visible for a few seconds with a subtle
+   pulse. !important beats the generic [data-tip]:not(...)x5:hover::after rule. */
+.orn-online-switch[data-tip]:hover::after,
+.orn-online-switch[data-tip].is-flashing::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 4px) !important;
+  left: 8px !important;
+  transform: none !important;
+  width: max-content;
+  min-width: 0 !important;
+  max-width: min(240px, calc(100vw - 48px)) !important;
+  white-space: normal !important;
+  background: #1a202c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 6px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: var(--z-tooltip);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  /* Parknew/Kingdomnew inline "instant tooltip" CSS hides [data-tip]::after
+     with opacity:0 and adds a centered ::before arrow; neither fits here. */
+  opacity: 1 !important;
+}
+.orn-online-switch[data-tip]::before { content: none !important; }
+.orn-online-switch[data-tip].is-flashing::after {
+  animation: orn-tip-pulse 1.3s ease-in-out 3;
+}
+@keyframes orn-tip-pulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18), 0 0 0 0 rgba(43, 108, 176, 0.55); }
+  50%      { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18), 0 0 0 5px rgba(43, 108, 176, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orn-online-switch[data-tip].is-flashing::after { animation: none; }
+}
+html[data-theme="dark"] .orn-online-switch[data-tip]:hover::after,
+html[data-theme="dark"] .orn-online-switch[data-tip].is-flashing::after {
+  background: #f7fafc;
+  color: #1a202c;
 }

@@ -91,7 +91,7 @@
 
     // Criteria that differ only in their label (the ladders) share one entry.
     function signature(def) {
-        return JSON.stringify([def.type, def.operands, def.param, def.min, def.max, def.set, def.peerage, def.note, def.neg_note, !!def.restricted]);
+        return JSON.stringify([def.type, def.operands, def.param, def.min, def.max, def.set, def.peerage, def.note, def.neg_note, !!def.restricted, !!def.signins]);
     }
 
     function buildItem(defs) {
@@ -106,6 +106,8 @@
         head.appendChild(tag(valueText(def)));
         if (def.param) { head.appendChild(tag('+ N months, 1 to 60')); }
         if (def.restricted) { head.appendChild(tag('Officers only', 'pe-help-tag-officer')); }
+        // Read from sign-ins, so the page's In-Person / Online / All switch applies (see "Sign-ins counted").
+        if (def.signins) { head.appendChild(tag('Follows Sign-ins counted')); }
         item.appendChild(head);
         if (defs.length > 1) {
             var names = el('div', 'pe-help-ref-names');

@@ -15,6 +15,13 @@ $totalAttendance = array_sum(array_column($kingdomList, 'Attendance'));
 $uir             = UIR;
 $prevWeekly  = is_array($PrevWeekly  ?? null) ? $PrevWeekly  : [];
 $prevMonthly = is_array($PrevMonthly ?? null) ? $PrevMonthly : [];
+// Kingdom Overview attendance type. Trend arrows compare against all-attendance
+// prior periods, so they are hidden when the overview is filtered.
+$typeNote = ork_attendance_type_note($AttendanceType ?? 'all');
+if ($typeNote !== '') {
+	$prevWeekly  = [];
+	$prevMonthly = [];
+}
 
 function cpTrend(int $cur, ?int $prev): string {
 	if ($prev === null) return '';
@@ -42,6 +49,9 @@ function cpTrend(int $cur, ?int $prev): string {
 				<span class="cp-hero-badge"><i class="fas fa-database"></i> ORK v3</span>
 				<a class="cp-hero-badge" href="https://github.com/amtgard/ORK3" target="_blank" style="text-decoration:none">
 					<i class="fab fa-github"></i> Source
+				</a>
+				<a class="cp-hero-badge cp-hero-badge-guide" href="<?= UIR ?>Admin/guide" style="text-decoration:none">
+					<i class="fas fa-book-open"></i> Admin Guide
 				</a>
 			</div>
 		</div>
@@ -71,6 +81,18 @@ function cpTrend(int $cur, ?int $prev): string {
 </div>
 
 <!-- =============================================
+     ADMINISTRATOR GUIDE CALLOUT
+     ============================================= -->
+<a class="cp-guide-callout" href="<?= UIR ?>Admin/guide">
+	<span class="cp-guide-callout-icon"><i class="fas fa-book-open"></i></span>
+	<span class="cp-guide-callout-text">
+		<strong>ORK Administrator Guide</strong>
+		<span>What global admin is for, what to check before a merge, transfer or suspension, and where to log what you did. Read it before acting in another Kingdom.</span>
+	</span>
+	<span class="cp-guide-callout-btn"><i class="fas fa-arrow-right"></i> Read the guide</span>
+</a>
+
+<!-- =============================================
      TREND STATS ROW
      ============================================= -->
 <?php
@@ -89,6 +111,12 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	return '<span class="cp-ts-val">' . $val . '</span>' . $arrow;
 }
 ?>
+<?php $_asOf = (int) ($StatsAsOf ?? 0); ?>
+<div class="cp-ts-meta">
+	<i class="fas fa-clock"></i>
+	<?= $_asOf > 0 ? 'Figures as of ' . date('M j, g:i A', $_asOf) : 'Figures just computed' ?>
+	&middot; <a href="<?= $uir ?>Admin&amp;refresh=1" title="Recompute the hero and trend figures now (takes a few seconds)">Refresh stats</a>
+</div>
 <div class="cp-ts-row">
 	<div class="cp-ts-card">
 		<div class="cp-ts-icon"><i class="fas fa-medal"></i></div>
@@ -229,10 +257,14 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<i class="fas fa-table"></i> Kingdom Overview
 					<span class="adm-count"><?= count($kingdomList) ?></span>
 				</div>
+				<?= ork_attendance_type_control((string)($AttendanceType ?? 'all')) ?>
 				<div class="cp-overview-search">
 					<input type="text" id="cp-kd-search" placeholder="Filter kingdoms…" oninput="cpFilterTable(this.value)">
 				</div>
 			</div>
+			<?php if ($typeNote !== ''): ?>
+			<div class="cp-overview-note"><i class="fas fa-filter" aria-hidden="true"></i> <?= htmlspecialchars($typeNote) ?> Active Parks always counts all sign-ins. Trend arrows are hidden.</div>
+			<?php endif; ?>
 			<div style="overflow-x:auto">
 				<table class="cp-kd-table" id="cp-kd-table">
 					<thead>
@@ -293,11 +325,13 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Reports/class_masters"><i class="fas fa-graduation-cap"></i><span>Class Masters / Paragons<span class="cp-report-list-desc">Top players by class level</span></span></a></li>
 				<li><a href="<?= UIR ?>Unit/unitlist"><i class="fas fa-users"></i><span>Companies &amp; Households<span class="cp-report-list-desc">All registered units</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/topparks"><i class="fas fa-trophy"></i><span>Top Parks by Attendance<span class="cp-report-list-desc">Ranked attendance report</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/parkactivity"><i class="fas fa-chart-line"></i><span>Park Activity<span class="cp-report-list-desc">Last attendance &amp; sign-in totals per park</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/stateofamtgard"><i class="fas fa-globe"></i><span>State of Amtgard Report<span class="cp-report-list-desc">Annual recruitment, retention &amp; class data</span></span></a></li>
 				<li><a href="<?= UIR ?>Reports/release_utilization"><i class="fas fa-chart-line"></i><span>Release Feature Utilization<span class="cp-report-list-desc">Adoption metrics by release</span></span></a></li>
+				<li><a href="<?= UIR ?>Survey/index"><i class="fas fa-poll"></i><span>Surveys<span class="cp-report-list-desc">Build and analyse player surveys</span></span></a></li>
 			</ul>
 		</div>
 
@@ -308,6 +342,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			<ul class="cp-report-list">
 				<li><a href="https://github.com/amtgard/ORK3" target="_blank"><i class="fab fa-github"></i><span>Source Code<span class="cp-report-list-desc">ORK3 on GitHub</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/permissions"><i class="fas fa-shield-alt"></i><span>Global Permissions<span class="cp-report-list-desc">System admins &amp; kingdom access</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/guide"><i class="fas fa-book-open"></i><span>Administrator Guide<span class="cp-report-list-desc">How to use global admin, and when not to</span></span></a></li>
 			</ul>
 		</div>
 
@@ -1544,3 +1579,10 @@ window.OrkBcCfg = {
 };
 </script>
 <?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
+<script>
+/* Kingdom Overview In-Person / Online / All: reloads with &AttendanceType=<value>. */
+(function () {
+	var el = document.querySelector('.cp-overview-header .orn-type-control');
+	if (el && typeof window.ornAttendanceTypeControl === 'function') window.ornAttendanceTypeControl(el);
+})();
+</script>

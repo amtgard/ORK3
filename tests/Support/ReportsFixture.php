@@ -25,10 +25,16 @@ final class ReportsFixture
     private array $officerIds = [];
 
     /** @var list<int> */
+    private array $eventIds = [];
+
+    /** @var list<int> */
     private array $authIds = [];
 
     /** @var list<int> */
     private array $kingdomAwardIds = [];
+
+    /** @var array<string, array{0: int, 1: string, 2: string|null}> kingdom|key => [kingdomId, key, original value or null when absent] */
+    private array $configRestores = [];
 
     public function __construct(
         private readonly PDO $pdo,
@@ -149,7 +155,7 @@ final class ReportsFixture
         return $id;
     }
 
-    public function insertAttendance(int $mundaneId, int $parkId, int $kingdomId, string $date): int
+    public function insertAttendance(int $mundaneId, int $parkId, int $kingdomId, string $date, int $eventId = 0, int $online = 0): int
     {
         $classId = (int) $this->pdo->query(
             'SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id ASC LIMIT 1'
@@ -162,8 +168,8 @@ final class ReportsFixture
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'attendance
              (park_id, kingdom_id, mundane_id, persona, class_id, date, credits, note, flavor, by_whom_id,
-              entered_at, entry_method, event_id, event_calendardetail_id, date_year, date_month, date_week3, date_week6)
-             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', 0, 0, ?, ?, ?, 0)'
+              entered_at, entry_method, event_id, event_calendardetail_id, date_year, date_month, date_week3, date_week6, online)
+             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', ?, 0, ?, ?, ?, 0, ?)'
         );
         $stmt->execute([
             $parkId,
@@ -173,12 +179,43 @@ final class ReportsFixture
             $classId,
             $date,
             $mundaneId,
+            $eventId,
             (int) date('Y', $timestamp),
             (int) date('n', $timestamp),
             (int) date('W', $timestamp),
+            $online ? 1 : 0,
         ]);
         $id = (int) $this->pdo->lastInsertId();
         $this->attendanceIds[] = $id;
+
+        return $id;
+    }
+
+    /**
+     * A Kingdom-sponsored event: filed under the kingdom with no park.
+     */
+    public function insertKingdomEvent(int $kingdomId, int $ownerMundaneId, string $suffix = 'event'): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'event (kingdom_id, park_id, mundane_id, unit_id, name, status)
+             VALUES (?, 0, ?, 1, ?, \'published\')'
+        );
+        $stmt->execute([$kingdomId, $ownerMundaneId, self::MARKER . ' ' . $suffix]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->eventIds[] = $id;
+
+        return $id;
+    }
+
+    public function insertOfficer(int $mundaneId, int $kingdomId, int $parkId, string $role = 'Regent'): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'officer (kingdom_id, park_id, mundane_id, role, system, authorization_id)
+             VALUES (?, ?, ?, ?, 0, 0)'
+        );
+        $stmt->execute([$kingdomId, $parkId, $mundaneId, $role]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->officerIds[] = $id;
 
         return $id;
     }
@@ -288,6 +325,33 @@ final class ReportsFixture
     }
 
     /**
+     * An awards row with an explicit date / revoked flag / custom name, for the
+     * recency tests. Returns the awards_id; cleaned up.
+     */
+    public function insertAwardOn(int $mundaneId, int $parkId, int $kingdomId, int $kingdomAwardId, int $awardId, int $rank, string $date, int $revoked = 0, string $customName = ''): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'awards
+             (kingdomaward_id, mundane_id, stripped_from, unit_id, park_id, kingdom_id, team_id, rank, date,
+              given_by_id, note, at_park_id, at_kingdom_id, at_event_id, custom_name, alias_award_id,
+              award_id, by_whom_id, entered_at, revoked)
+             VALUES (?, ?, 0, 0, ?, ?, 0, ?, ?, ?, \'\', 0, 0, 0, ?, 0, ?, ?, NOW(), ?)'
+        );
+        $stmt->execute([$kingdomAwardId, $mundaneId, $parkId, $kingdomId, $rank, $date, $mundaneId, $customName, $awardId, $mundaneId, $revoked]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->awardIds[] = $id;
+
+        return $id;
+    }
+
+    /** Force a fixture player's active / suspended flags (the clone inherits a template row's). */
+    public function setPlayerState(int $mundaneId, int $active, int $suspended): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET active = ?, suspended = ? WHERE mundane_id = ?')
+            ->execute([$active, $suspended, $mundaneId]);
+    }
+
+    /**
      * A kingdom-specific order with no ork_award row (ork_kingdomaward.award_id = 0),
      * like the Order of the Raider. Returns the kingdomaward id; cleaned up.
      */
@@ -372,8 +436,71 @@ final class ReportsFixture
         return (string) $stmt->fetchColumn();
     }
 
+    /**
+     * Set (or create) a kingdom ork_configuration row; the original is restored in cleanup().
+     * $jsonValue is stored verbatim, e.g. '"0"'.
+     */
+    public function setKingdomConfig(int $kingdomId, string $key, string $jsonValue): void
+    {
+        $slot = $kingdomId . '|' . $key;
+        $current = $this->kingdomConfigValue($kingdomId, $key);
+        if (!array_key_exists($slot, $this->configRestores)) {
+            $this->configRestores[$slot] = [$kingdomId, $key, $current];
+        }
+        if ($current === null) {
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO ' . DB_PREFIX . "configuration (type, id, `key`, value, user_setting, allowed_values, var_type)
+                 VALUES ('Kingdom', ?, ?, ?, 1, 'null', 'fixed')"
+            );
+            $stmt->execute([$kingdomId, $key, $jsonValue]);
+        } else {
+            $stmt = $this->pdo->prepare(
+                'UPDATE ' . DB_PREFIX . "configuration SET value = ? WHERE type = 'Kingdom' AND id = ? AND `key` = ?"
+            );
+            $stmt->execute([$jsonValue, $kingdomId, $key]);
+        }
+    }
+
+    /**
+     * Remove a kingdom ork_configuration row; the original is restored in cleanup().
+     */
+    public function deleteKingdomConfig(int $kingdomId, string $key): void
+    {
+        $slot = $kingdomId . '|' . $key;
+        if (!array_key_exists($slot, $this->configRestores)) {
+            $this->configRestores[$slot] = [$kingdomId, $key, $this->kingdomConfigValue($kingdomId, $key)];
+        }
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM ' . DB_PREFIX . "configuration WHERE type = 'Kingdom' AND id = ? AND `key` = ?"
+        );
+        $stmt->execute([$kingdomId, $key]);
+    }
+
+    private function kingdomConfigValue(int $kingdomId, string $key): ?string
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT value FROM ' . DB_PREFIX . "configuration WHERE type = 'Kingdom' AND id = ? AND `key` = ? LIMIT 1"
+        );
+        $stmt->execute([$kingdomId, $key]);
+        $value = $stmt->fetchColumn();
+
+        return $value === false ? null : (string) $value;
+    }
+
     public function cleanup(): void
     {
+        foreach ($this->configRestores as [$kingdomId, $key, $original]) {
+            if ($original === null) {
+                $stmt = $this->pdo->prepare(
+                    'DELETE FROM ' . DB_PREFIX . "configuration WHERE type = 'Kingdom' AND id = ? AND `key` = ?"
+                );
+                $stmt->execute([$kingdomId, $key]);
+            } else {
+                $this->setKingdomConfig($kingdomId, $key, $original);
+            }
+        }
+        $this->configRestores = [];
+
         if ($this->authIds !== []) {
             $in = implode(',', array_map('intval', $this->authIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "authorization WHERE authorization_id IN ({$in})");
@@ -409,6 +536,12 @@ final class ReportsFixture
             $in = implode(',', array_map('intval', $this->attendanceIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "attendance WHERE attendance_id IN ({$in})");
             $this->attendanceIds = [];
+        }
+
+        if ($this->eventIds !== []) {
+            $in = implode(',', array_map('intval', $this->eventIds));
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "event WHERE event_id IN ({$in})");
+            $this->eventIds = [];
         }
 
         if ($this->mundaneIds !== []) {

@@ -46,6 +46,12 @@ final class AdminDashboardFixture
         return new self($pdo);
     }
 
+    /** The fixture's own connection, for assertions that need the database clock. */
+    public function pdo(): PDO
+    {
+        return $this->pdo;
+    }
+
     public function firstKingdomId(): int
     {
         return (int) $this->pdo->query(

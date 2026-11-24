@@ -1,7 +1,28 @@
 <?php
 
+/**
+ * In-Person / Online / All (AttendanceType): every attendance-based section takes
+ * an optional $attendanceType ('all' default; anything unknown is 'all'). Online
+ * sign-ins are real participation, so who a player IS — first-ever sign-in, new /
+ * returning / churned / one-time status, normal-player and real-joiner status,
+ * longevity and tenure, park founding / retirement / at-risk trend — always comes
+ * from ALL attendance. The type filters only the sign-ins a section counts and
+ * displays, and narrows a section's population to players with at least one
+ * sign-in of that type. Each method documents its own split. Award grants are
+ * award-based and never filtered. All reproduces the pre-change result and shares
+ * its cache entry (see sectionCacheKey).
+ */
 class StateOfAmtgard
 {
+    /**
+     * Cache key for one section. All hashes exactly the pre-change string, so it
+     * reuses the pre-change cache entry; In-Person / Online get their own keys.
+     */
+    private static function sectionCacheKey(string $raw, string $type): string
+    {
+        return md5($type === 'all' ? $raw : $raw . '|type=' . $type);
+    }
+
     /**
      * Returns sign-in counts per kingdom for the given date range.
      *
@@ -9,16 +30,19 @@ class StateOfAmtgard
      * @param string $end         End date (YYYY-MM-DD)
      * @param array  $kingdom_ids Optional list of integer kingdom IDs to filter by.
      *                             Pass an empty array to include all active kingdoms.
+     * @param string $attendanceType all | in_person | online. Filters both the period
+     *                             and the prior-period counts, so YoY compares like with like.
      * @return array Array of kingdoms, each with keys:
      *               kingdom_id, kingdom_name, sign_in_count, percentage, rank
      */
-    public function getKingdomSignIns(string $start, string $end, array $kingdom_ids): array
+    public function getKingdomSignIns(string $start, string $end, array $kingdom_ids, string $attendanceType = 'all'): array
     {
         global $DB;
 
-        // 30-min cache: deterministic on (start, end, kingdom_ids)
+        $type = Attendance::NormalizeType($attendanceType);
+        // 30-min cache: deterministic on (start, end, kingdom_ids, type)
         sort($kingdom_ids);
-        $cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+        $cacheKey = self::sectionCacheKey($start . '|' . $end . '|' . implode(',', $kingdom_ids), $type);
         $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getKingdomSignIns', $cacheKey, 1800);
         if ($cached !== false && $cached !== null) {
             return $cached;
@@ -64,6 +88,7 @@ class StateOfAmtgard
                 " WHERE k.active = 'Active'" .
                 "   AND a.date BETWEEN '$prior_start' AND '$prior_end'" .
                 $kingdomClause .
+                Attendance::TypeClause($type, 'a') .
                 " GROUP BY a.kingdom_id"
             );
             if ($rs) {
@@ -82,7 +107,7 @@ class StateOfAmtgard
 		WHERE k.active = 'Active'
 		  AND a.mundane_id > 0
 		  AND a.date BETWEEN '$start' AND '$end'
-		  $kingdomClause
+		  $kingdomClause" . Attendance::TypeClause($type, 'a') . "
 		GROUP BY k.kingdom_id, k.name
 		ORDER BY sign_in_count DESC";
 
@@ -199,13 +224,17 @@ class StateOfAmtgard
         return strtolower(implode(' ', array_values($filtered)));
     }
 
-    public function getClassSignIns(string $start, string $end, array $kingdom_ids): array
+    /**
+     * Sign-ins per class. AttendanceType filters the counted sign-ins.
+     */
+    public function getClassSignIns(string $start, string $end, array $kingdom_ids, string $attendanceType = 'all'): array
     {
         global $DB;
 
+        $type = Attendance::NormalizeType($attendanceType);
         // 30-min cache
         sort($kingdom_ids);
-        $cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+        $cacheKey = self::sectionCacheKey($start . '|' . $end . '|' . implode(',', $kingdom_ids), $type);
         $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getClassSignIns', $cacheKey, 1800);
         if ($cached !== false && $cached !== null) {
             return $cached;
@@ -237,7 +266,7 @@ class StateOfAmtgard
              WHERE a.date BETWEEN \'' . $start . '\' AND \'' . $end . '\'
                AND a.mundane_id > 0
                AND c.active = 1
-               ' . $kingdom_filter . '
+               ' . $kingdom_filter . Attendance::TypeClause($type, 'a') . '
              GROUP BY c.class_id, c.name
              ORDER BY sign_in_count DESC'
         );
@@ -326,13 +355,20 @@ class StateOfAmtgard
         return $r;
     }
 
-    public function getParksAnalysis(string $start, string $end, array $kingdom_ids): array
+    /**
+     * Parks analysis. AttendanceType filters only the counted sign-ins: sign-ins per
+     * active park (6) and the top-10 parks (7). Park counts, new parks (first-ever
+     * sign-in), lost parks (last sign-in) and the at-risk downward trend (4) describe
+     * the park itself, so they always use ALL attendance.
+     */
+    public function getParksAnalysis(string $start, string $end, array $kingdom_ids, string $attendanceType = 'all'): array
     {
         global $DB;
 
+        $type = Attendance::NormalizeType($attendanceType);
         // 30-min cache
         sort($kingdom_ids);
-        $cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+        $cacheKey = self::sectionCacheKey($start . '|' . $end . '|' . implode(',', $kingdom_ids), $type);
         $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getParksAnalysis', $cacheKey, 1800);
         if ($cached !== false && $cached !== null) {
             return $cached;
@@ -562,6 +598,7 @@ class StateOfAmtgard
             " WHERE a.date BETWEEN '" . $safe_start . "' AND '" . $safe_end . "'" .
             "   AND a.mundane_id > 0" .
             $a_clause_bare .
+            Attendance::TypeClause($type, 'a') .
             " GROUP BY a.kingdom_id"
         );
         $si_by_kingdom = [];
@@ -591,6 +628,7 @@ class StateOfAmtgard
             " WHERE a.date BETWEEN '" . $safe_start . "' AND '" . $safe_end . "'" .
             "   AND a.mundane_id > 0" .
             $kingdom_clause .
+            Attendance::TypeClause($type, 'a') .
             " GROUP BY p.park_id, p.name, k.name" .
             " ORDER BY sign_in_count DESC" .
             " LIMIT 10"
@@ -628,13 +666,23 @@ class StateOfAmtgard
     }
 
 
-    public function getPlayerStats(string $start, string $end, array $kingdom_ids): array
+    /**
+     * Player statistics. AttendanceType: the population is players with at least one
+     * sign-in of the type in the window, and sign-in / credit figures and the per-year
+     * trend count only that type. Normal-player status (4+ sign-ins and 12+ credits)
+     * and lifespan (distinct years attended) describe the player, so they use ALL
+     * attendance. The temp tables carry both: cnt/cred (typed) and cnt_all/cred_all.
+     * For All the two pairs are identical and every player has cnt > 0, so the
+     * figures are the pre-change ones.
+     */
+    public function getPlayerStats(string $start, string $end, array $kingdom_ids, string $attendanceType = 'all'): array
     {
         global $DB;
 
+        $type = Attendance::NormalizeType($attendanceType);
         // 30-min cache
         sort($kingdom_ids);
-        $cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+        $cacheKey = self::sectionCacheKey($start . '|' . $end . '|' . implode(',', $kingdom_ids), $type);
         $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getPlayerStats', $cacheKey, 1800);
         if ($cached !== false && $cached !== null) {
             return $cached;
@@ -674,6 +722,11 @@ class StateOfAmtgard
         //                  (feeds all 6 ten-year aggregations including trend, lifespan,
         //                   and the normal-player HAVING subset)
         $ten_year_start_sql = "DATE_FORMAT(DATE_SUB('$end', INTERVAL 9 YEAR), '%Y-01-01')";
+        // Per-player (or per-player-year) typed and all-attendance sums.
+        $is_type = Attendance::TypePredicate($type, 'a');
+        $sums_sql = "SUM(CASE WHEN $is_type THEN 1 ELSE 0 END) AS cnt,"
+            . " SUM(CASE WHEN $is_type THEN a.credits ELSE 0 END) AS cred,"
+            . " COUNT(*) AS cnt_all, SUM(a.credits) AS cred_all";
 
         $DB->Clear();
         $DB->Execute("DROP TEMPORARY TABLE IF EXISTS _sa_ps_range");
@@ -686,12 +739,14 @@ class StateOfAmtgard
 				mundane_id INT NOT NULL,
 				cnt INT NOT NULL,
 				cred DECIMAL(10,2) NOT NULL,
+				cnt_all INT NOT NULL,
+				cred_all DECIMAL(10,2) NOT NULL,
 				PRIMARY KEY (mundane_id)
 			)
-			SELECT mundane_id, COUNT(*) AS cnt, SUM(credits) AS cred
-			FROM " . DB_PREFIX . "attendance
-			WHERE mundane_id > 0 AND date BETWEEN '$start' AND '$end' $kingdom_filter
-			GROUP BY mundane_id
+			SELECT a.mundane_id, $sums_sql
+			FROM " . DB_PREFIX . "attendance a
+			WHERE a.mundane_id > 0 AND a.date BETWEEN '$start' AND '$end' $kingdom_filter
+			GROUP BY a.mundane_id
 		");
 
         $DB->Clear();
@@ -701,13 +756,15 @@ class StateOfAmtgard
 				yr SMALLINT NOT NULL,
 				cnt INT NOT NULL,
 				cred DECIMAL(10,2) NOT NULL,
+				cnt_all INT NOT NULL,
+				cred_all DECIMAL(10,2) NOT NULL,
 				PRIMARY KEY (mundane_id, yr),
 				KEY ix_yr (yr)
 			)
-			SELECT mundane_id, YEAR(date) AS yr, COUNT(*) AS cnt, SUM(credits) AS cred
-			FROM " . DB_PREFIX . "attendance
-			WHERE mundane_id > 0 AND date >= $ten_year_start_sql AND date <= '$end' $kingdom_filter
-			GROUP BY mundane_id, YEAR(date)
+			SELECT a.mundane_id, YEAR(a.date) AS yr, $sums_sql
+			FROM " . DB_PREFIX . "attendance a
+			WHERE a.mundane_id > 0 AND a.date >= $ten_year_start_sql AND a.date <= '$end' $kingdom_filter
+			GROUP BY a.mundane_id, YEAR(a.date)
 		");
 
         // Trend window (Figure 3b): honor the selected date range, but never show
@@ -729,13 +786,15 @@ class StateOfAmtgard
 					yr SMALLINT NOT NULL,
 					cnt INT NOT NULL,
 					cred DECIMAL(10,2) NOT NULL,
+					cnt_all INT NOT NULL,
+					cred_all DECIMAL(10,2) NOT NULL,
 					PRIMARY KEY (mundane_id, yr),
 					KEY ix_yr (yr)
 				)
-				SELECT mundane_id, YEAR(date) AS yr, COUNT(*) AS cnt, SUM(credits) AS cred
-				FROM " . DB_PREFIX . "attendance
-				WHERE mundane_id > 0 AND date >= $trend_start_sql AND date <= '$end' $kingdom_filter
-				GROUP BY mundane_id, YEAR(date)
+				SELECT a.mundane_id, YEAR(a.date) AS yr, $sums_sql
+				FROM " . DB_PREFIX . "attendance a
+				WHERE a.mundane_id > 0 AND a.date >= $trend_start_sql AND a.date <= '$end' $kingdom_filter
+				GROUP BY a.mundane_id, YEAR(a.date)
 			");
             $trend_table = '_sa_ps_trend';
         }
@@ -747,6 +806,7 @@ class StateOfAmtgard
 			       AVG(cnt) AS avg_si, STDDEV_SAMP(cnt) AS std_si,
 			       MIN(cnt) AS min_si, MAX(cnt) AS max_si, AVG(cred) AS avg_cred
 			FROM _sa_ps_range
+			WHERE cnt > 0
 		");
         $total_sign_ins = $total_players = $min_sign_ins = $max_sign_ins = 0;
         $avg_sign_ins = $std_dev_sign_ins = $avg_credits = 0.0;
@@ -768,7 +828,7 @@ class StateOfAmtgard
 			       AVG(cnt) AS avg_si, STDDEV_SAMP(cnt) AS std_si,
 			       MIN(cnt) AS min_si, MAX(cnt) AS max_si, AVG(cred) AS avg_cred
 			FROM _sa_ps_range
-			WHERE cnt >= 4 AND cred >= 12
+			WHERE cnt > 0 AND cnt_all >= 4 AND cred_all >= 12
 		");
         $norm_count = $norm_total_si = $norm_min_si = $norm_max_si = 0;
         $norm_avg_si = $norm_std_si = $norm_avg_cred = 0.0;
@@ -804,7 +864,7 @@ class StateOfAmtgard
         $rs = $DB->DataSet("
 			SELECT yr, COUNT(*) AS cnt
 			FROM {$trend_table}
-			WHERE cnt >= 4 AND cred >= 12
+			WHERE cnt > 0 AND cnt_all >= 4 AND cred_all >= 12
 			GROUP BY yr ORDER BY yr
 		");
         $trend_normal_by_year = [];
@@ -824,6 +884,7 @@ class StateOfAmtgard
 				SELECT mundane_id, SUM(cnt) AS cnt2, SUM(cred) AS cred2
 				FROM _sa_ps_ten
 				GROUP BY mundane_id
+				HAVING cnt2 > 0
 			) p
 		");
         $ten_total_si = $ten_players = $ten_min_si = $ten_max_si = 0;
@@ -843,7 +904,7 @@ class StateOfAmtgard
         $DB->Clear();
         $rs = $DB->DataSet("
 			SELECT AVG(yrs) AS avg_lifespan FROM (
-				SELECT mundane_id, COUNT(*) AS yrs FROM _sa_ps_ten GROUP BY mundane_id
+				SELECT mundane_id, COUNT(*) AS yrs FROM _sa_ps_ten GROUP BY mundane_id HAVING SUM(cnt) > 0
 			) p
 		");
         $ten_avg_lifespan = 0.0;
@@ -861,7 +922,7 @@ class StateOfAmtgard
 				SELECT mundane_id, SUM(cnt) AS cnt2, SUM(cred) AS cred2
 				FROM _sa_ps_ten
 				GROUP BY mundane_id
-				HAVING cnt2 >= 4 AND cred2 >= 12
+				HAVING cnt2 > 0 AND SUM(cnt_all) >= 4 AND SUM(cred_all) >= 12
 			) p
 		");
         $ten_norm_count = $ten_norm_total_si = $ten_norm_min_si = $ten_norm_max_si = 0;
@@ -883,7 +944,7 @@ class StateOfAmtgard
 				SELECT mundane_id, COUNT(*) AS yrs
 				FROM _sa_ps_ten
 				GROUP BY mundane_id
-				HAVING SUM(cnt) >= 4 AND SUM(cred) >= 12
+				HAVING SUM(cnt) > 0 AND SUM(cnt_all) >= 4 AND SUM(cred_all) >= 12
 			) p
 		");
         $ten_norm_lifespan = 0.0;
@@ -978,14 +1039,23 @@ class StateOfAmtgard
      *     Amtgard entirely; both count as churn from this kingdom's perspective).
      * Row-count parity with the original pre-rewrite implementation has been verified.
      * Do not symmetrize the filters without an explicit product decision.
+     *
+     * AttendanceType (status always from ALL attendance; the type picks who is counted):
+     *   - new_players: first-ever sign-in (all types) in range, and at least one
+     *     sign-in of the type in range.
+     *   - returning_players: a sign-in of the type in range; history = any sign-in before.
+     *   - churned_players: a sign-in of the type in the prior period, and no sign-in
+     *     of any type in range (a player who only switched type has not churned).
+     *   - one_time_visitors: exactly one sign-in (all types) in range, and it is of the type.
      */
-    public function getPlayerCohorts(string $start, string $end, array $kingdom_ids): array
+    public function getPlayerCohorts(string $start, string $end, array $kingdom_ids, string $attendanceType = 'all'): array
     {
         global $DB;
 
+        $type = Attendance::NormalizeType($attendanceType);
         // 30-min cache
         sort($kingdom_ids);
-        $cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+        $cacheKey = self::sectionCacheKey($start . '|' . $end . '|' . implode(',', $kingdom_ids), $type);
         $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getPlayerCohorts', $cacheKey, 1800);
         if ($cached !== false && $cached !== null) {
             return $cached;
@@ -1022,14 +1092,16 @@ class StateOfAmtgard
         // Players whose very first attendance record ever falls inside [$start,$end].
         // Using a subquery on the full table (no date filter on inner MIN) so we
         // correctly exclude anyone who also attended before $start.
+        $new_typed = $type === 'all' ? '' :
+            " AND SUM(CASE WHEN na.date BETWEEN '$start' AND '$end' AND " . Attendance::TypePredicate($type, 'na') . " THEN 1 ELSE 0 END) > 0";
         $DB->Clear();
         $rs = $DB->DataSet(
             "SELECT COUNT(*) AS cnt FROM (" .
-            "  SELECT mundane_id" .
-            "  FROM " . DB_PREFIX . "attendance" .
-            "  WHERE mundane_id > 0 $kingdom_filter" .
-            "  GROUP BY mundane_id" .
-            "  HAVING MIN(date) BETWEEN '$start' AND '$end'" .
+            "  SELECT na.mundane_id" .
+            "  FROM " . DB_PREFIX . "attendance na" .
+            "  WHERE na.mundane_id > 0 $kingdom_filter" .
+            "  GROUP BY na.mundane_id" .
+            "  HAVING MIN(na.date) BETWEEN '$start' AND '$end'" . $new_typed .
             ") new_cohort"
         );
         $new_players = 0;
@@ -1047,7 +1119,7 @@ class StateOfAmtgard
             "  SELECT DISTINCT cur.mundane_id" .
             "  FROM " . DB_PREFIX . "attendance cur" .
             "  WHERE cur.mundane_id > 0 AND cur.date BETWEEN '$start' AND '$end'" .
-               $kingdom_filter .
+               $kingdom_filter . Attendance::TypeClause($type, 'cur') .
             ") cur" .
             " INNER JOIN (" .
             "  SELECT DISTINCT mundane_id" .
@@ -1073,7 +1145,7 @@ class StateOfAmtgard
                 "  SELECT DISTINCT prior.mundane_id" .
                 "  FROM " . DB_PREFIX . "attendance prior" .
                 "  WHERE prior.mundane_id > 0 AND prior.date BETWEEN '$prior_start' AND '$prior_end'" .
-                   $kingdom_filter .
+                   $kingdom_filter . Attendance::TypeClause($type, 'prior') .
                 ") prior" .
                 " LEFT JOIN (" .
                 "  SELECT DISTINCT cur.mundane_id" .
@@ -1089,15 +1161,17 @@ class StateOfAmtgard
 
         // ── one_time_visitors ────────────────────────────────────────────────────
         // Players with exactly 1 sign-in row in [$start,$end].
+        $one_typed = $type === 'all' ? '' :
+            ' AND SUM(CASE WHEN ' . Attendance::TypePredicate($type, 'ot') . ' THEN 1 ELSE 0 END) = 1';
         $DB->Clear();
         $rs = $DB->DataSet(
             "SELECT COUNT(*) AS cnt FROM (" .
-            "  SELECT mundane_id" .
-            "  FROM " . DB_PREFIX . "attendance" .
-            "  WHERE mundane_id > 0 AND date BETWEEN '$start' AND '$end'" .
+            "  SELECT ot.mundane_id" .
+            "  FROM " . DB_PREFIX . "attendance ot" .
+            "  WHERE ot.mundane_id > 0 AND ot.date BETWEEN '$start' AND '$end'" .
             $kingdom_filter .
-            "  GROUP BY mundane_id" .
-            "  HAVING COUNT(*) = 1" .
+            "  GROUP BY ot.mundane_id" .
+            "  HAVING COUNT(*) = 1" . $one_typed .
             ") one_timers"
         );
         $one_time_visitors = 0;
@@ -1115,13 +1189,18 @@ class StateOfAmtgard
         return $result;
     }
 
-    public function getPlayerLongevity(string $start, string $end, array $kingdom_ids): array
+    /**
+     * Playerbase longevity. AttendanceType picks the players counted (a sign-in of
+     * the type in range); longevity itself runs from the first-ever sign-in of any type.
+     */
+    public function getPlayerLongevity(string $start, string $end, array $kingdom_ids, string $attendanceType = 'all'): array
     {
         global $DB;
 
+        $type = Attendance::NormalizeType($attendanceType);
         // 30-min cache
         sort($kingdom_ids);
-        $cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+        $cacheKey = self::sectionCacheKey($start . '|' . $end . '|' . implode(',', $kingdom_ids), $type);
         $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getPlayerLongevity', $cacheKey, 1800);
         if ($cached !== false && $cached !== null) {
             return $cached;
@@ -1148,7 +1227,7 @@ class StateOfAmtgard
             "   FROM " . DB_PREFIX . "attendance a" .
             "   WHERE a.mundane_id > 0" .
             "     AND a.date BETWEEN '" . $safe_start . "' AND '" . $safe_end . "'" .
-            $kingdom_filter .
+            $kingdom_filter . Attendance::TypeClause($type, 'a') .
             " ) active_p" .
             " JOIN (" .
             "   SELECT mundane_id, MIN(date) AS first_date" .
@@ -1392,13 +1471,20 @@ class StateOfAmtgard
      * it does NOT also require the 12-credit "normal player" bar used elsewhere.)
      * "Active at N" means they actually attended within a 3-month window of the
      * N-month anniversary (not merely that their first..last span reached N).
+     *
+     * AttendanceType: the cohort is mature new players with at least one sign-in of
+     * the type. Cohort entry (first sign-in, first kingdom), the conversion funnel
+     * (one-and-done, real joiner: distinct sign-in days of any type) and tenure
+     * (first to last sign-in) use ALL attendance. Median / mean sign-ins, "still
+     * active at 1 / 2 years" and active months count only sign-ins of the type.
      */
-    public function getNewPlayerRetention(array $kingdom_ids): array
+    public function getNewPlayerRetention(array $kingdom_ids, string $attendanceType = 'all'): array
     {
         global $DB;
 
+        $type = Attendance::NormalizeType($attendanceType);
         sort($kingdom_ids);
-        $cacheKey = md5('retention|' . implode(',', $kingdom_ids));
+        $cacheKey = self::sectionCacheKey('retention|' . implode(',', $kingdom_ids), $type);
         $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getNewPlayerRetention', $cacheKey, 1800);
         if ($cached !== false && $cached !== null) {
             return $cached;
@@ -1411,21 +1497,32 @@ class StateOfAmtgard
         $cutoff  = date('Y-m-d', strtotime($ref_end . ' -24 months'));
 
         $safe_ids = array_values(array_filter(array_map('intval', $kingdom_ids), fn ($id) => $id > 0 && $id < 100000));
-        $kfilter  = !empty($safe_ids) ? (' WHERE first_kingdom IN (' . implode(',', $safe_ids) . ')') : '';
+        $conds = [];
+        if (!empty($safe_ids)) {
+            $conds[] = 'first_kingdom IN (' . implode(',', $safe_ids) . ')';
+        }
+        if ($type !== 'all') {
+            $conds[] = 'tdays > 0';
+        }
+        $kfilter  = $conds ? (' WHERE ' . implode(' AND ', $conds)) : '';
         $rjfilter = $kfilter === '' ? ' WHERE days >= 4' : ($kfilter . ' AND days >= 4');
+        // Typed sign-in expression; for All it is '1=1', so the typed columns equal the all-type ones.
+        $is_type = Attendance::TypePredicate($type, 'a');
 
         $num = fn ($v) => $v === null ? null : (float)$v;
 
         // One-pass per-player cohort facts into a (request-local) temp table.
         // first_kingdom = kingdom of the earliest sign-in; a12/a24 = attended within
-        // 3 months of the 1yr / 2yr anniversary; active_months = distinct months attended.
+        // 3 months of the 1yr / 2yr anniversary; active_months = distinct months attended;
+        // tdays = distinct sign-in days. a12/a24, active_months and tdays count only the type.
         $DB->query("DROP TEMPORARY TABLE IF EXISTS sor_ret");
         $DB->query(
             "CREATE TEMPORARY TABLE sor_ret AS " .
             "SELECT life.mundane_id, life.first_date, life.last_date, life.days, " .
-            "  COUNT(DISTINCT EXTRACT(YEAR_MONTH FROM a.date)) AS active_months, " .
-            "  MAX(TIMESTAMPDIFF(MONTH, life.first_date, a.date) BETWEEN 12 AND 14) AS a12, " .
-            "  MAX(TIMESTAMPDIFF(MONTH, life.first_date, a.date) BETWEEN 24 AND 26) AS a24, " .
+            "  COUNT(DISTINCT CASE WHEN $is_type THEN a.date END) AS tdays, " .
+            "  COUNT(DISTINCT CASE WHEN $is_type THEN EXTRACT(YEAR_MONTH FROM a.date) END) AS active_months, " .
+            "  COALESCE(MAX(CASE WHEN $is_type THEN TIMESTAMPDIFF(MONTH, life.first_date, a.date) BETWEEN 12 AND 14 END), 0) AS a12, " .
+            "  COALESCE(MAX(CASE WHEN $is_type THEN TIMESTAMPDIFF(MONTH, life.first_date, a.date) BETWEEN 24 AND 26 END), 0) AS a24, " .
             "  MIN(CASE WHEN a.date = life.first_date THEN a.kingdom_id END) AS first_kingdom " .
             "FROM (SELECT mundane_id, MIN(date) AS first_date, MAX(date) AS last_date, COUNT(DISTINCT date) AS days " .
             "      FROM " . DB_PREFIX . "attendance WHERE mundane_id > 0 AND date >= '1990-01-01' " .
@@ -1438,7 +1535,7 @@ class StateOfAmtgard
         $DB->Clear();
         $rs = $DB->DataSet(
             "SELECT COUNT(*) AS cohort, " .
-            " ROUND(AVG(days), 1) AS mean_signins, " .
+            " ROUND(AVG(tdays), 1) AS mean_signins, " .
             " ROUND(100*AVG(days = 1), 1) AS pct_one_and_done, " .
             " ROUND(100*AVG(days >= 2), 1) AS pct_ge2_visits, " .
             " ROUND(100*AVG(days >= 4), 1) AS pct_realjoin, " .
@@ -1459,7 +1556,7 @@ class StateOfAmtgard
 
         // Median sign-ins (whole cohort)
         $DB->Clear();
-        $rs = $DB->DataSet("SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days) OVER () AS med FROM sor_ret" . $kfilter . " LIMIT 1");
+        $rs = $DB->DataSet("SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY tdays) OVER () AS med FROM sor_ret" . $kfilter . " LIMIT 1");
         $headline['median_signins'] = ($rs && $rs->Next()) ? $num($rs->med) : null;
 
         // Real-joiner retention (>= 3 distinct sign-in days)
@@ -1585,24 +1682,26 @@ class StateOfAmtgard
      * @param list<int> $kingdomIds
      * @return array<string, mixed>|null
      */
-    public function DispatchChartSection(string $section, string $start, string $end, array $kingdomIds): ?array
+    public function DispatchChartSection(string $section, string $start, string $end, array $kingdomIds, string $attendanceType = 'all'): ?array
     {
+        $type = Attendance::NormalizeType($attendanceType);
         switch (trim($section)) {
             case 'kingdoms':
-                return ['kingdoms' => $this->getKingdomSignIns($start, $end, $kingdomIds)];
+                return ['kingdoms' => $this->getKingdomSignIns($start, $end, $kingdomIds, $type)];
             case 'classes':
-                return ['classes' => $this->getClassSignIns($start, $end, $kingdomIds)];
+                return ['classes' => $this->getClassSignIns($start, $end, $kingdomIds, $type)];
             case 'parks':
-                return ['parks' => $this->getParksAnalysis($start, $end, $kingdomIds)];
+                return ['parks' => $this->getParksAnalysis($start, $end, $kingdomIds, $type)];
             case 'players':
-                return ['players' => $this->getPlayerStats($start, $end, $kingdomIds)];
+                return ['players' => $this->getPlayerStats($start, $end, $kingdomIds, $type)];
             case 'cohorts':
-                return ['cohorts' => $this->getPlayerCohorts($start, $end, $kingdomIds)];
+                return ['cohorts' => $this->getPlayerCohorts($start, $end, $kingdomIds, $type)];
             case 'longevity':
-                return ['longevity' => $this->getPlayerLongevity($start, $end, $kingdomIds)];
+                return ['longevity' => $this->getPlayerLongevity($start, $end, $kingdomIds, $type)];
             case 'retention':
-                return ['retention' => $this->getNewPlayerRetention($kingdomIds)];
+                return ['retention' => $this->getNewPlayerRetention($kingdomIds, $type)];
             case 'awards':
+                // Award grants are award-based: the attendance type never applies.
                 return ['awards' => $this->getAwardGrants($start, $end, $kingdomIds)];
             default:
                 return null;

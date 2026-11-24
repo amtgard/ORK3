@@ -289,8 +289,14 @@ class Administration
     }
 
     /**
-     * Global ORK admin grants with last login and last credit (T-ADM-02).
+     * Global ORK admin grants with last seen and last credit (T-ADM-02).
      * Requires Token + global AUTH_ADMIN (same gate as PurgeLogs).
+     *
+     * The ORK stores no login time. LastLogin is derived: the session token
+     * expires LOGIN_TIMEOUT after the last authenticated request (every valid
+     * request pushes it forward), so expiry minus LOGIN_TIMEOUT is the last
+     * time the account was seen, not strictly the last login. It is capped at
+     * now in the database's own clock so it can never read as a future date.
      *
      * @return list<array<string, mixed>>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
@@ -305,7 +311,7 @@ class Administration
         $rs = $this->db->DataSet(
             'SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
                     m.persona, m.username, m.given_name, m.surname,
-                    DATE_SUB(m.token_expires, INTERVAL 72 HOUR) AS last_login,
+                    LEAST(DATE_SUB(m.token_expires, INTERVAL ' . (int) (defined('LOGIN_TIMEOUT') ? LOGIN_TIMEOUT : 30 * 86400) . ' SECOND), NOW()) AS last_login,
                     lc.last_credit
              FROM ' . DB_PREFIX . 'authorization a
              LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = a.mundane_id

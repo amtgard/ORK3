@@ -57,6 +57,26 @@ class Controller_Park extends Controller
         // [TOURNAMENTS HIDDEN] $this->data['park_tournaments'] = [];
     }
 
+    /**
+     * Park hero Avg / Week and Avg / Month for the In-Person / Online / All control
+     * (default All). Informational only; the kingdom CountOnlineAttendance setting
+     * never applies. Public, like the profile it refreshes.
+     */
+    public function attendance_averages_json($park_id = null)
+    {
+        session_write_close(); // release session lock so navigation is not blocked
+        $pid  = (int)preg_replace('/[^0-9]/', '', (string)$park_id);
+        $type = isset($_GET['AttendanceType']) && is_string($_GET['AttendanceType']) ? $_GET['AttendanceType'] : 'all';
+        $this->load_model('ParkProfile');
+        $averages = $pid > 0 ? $this->ParkProfile->attendance_averages($pid, $type) : ['MonthlyAvg' => 0, 'WeeklyAvg' => 0];
+        header('Content-Type: application/json');
+        echo json_encode([
+            'WeeklyAvg'  => (float)$averages['WeeklyAvg'],
+            'MonthlyAvg' => (float)$averages['MonthlyAvg'],
+        ]);
+        exit();
+    }
+
     public function profile($park_id = null)
     {
         // Same-slug kingdom-original ladders, so the rank pickers can say when the

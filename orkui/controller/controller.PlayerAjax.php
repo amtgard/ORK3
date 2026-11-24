@@ -677,6 +677,7 @@ class Controller_PlayerAjax extends Controller
             'province_eligible' => !empty($player['ProvinceEligible']),
             'active_knight'    => !empty($player['ActiveKnight']),
             'active_member'    => $player['ActiveMember'] ?? null,
+            'exclude_online'   => !empty($lookup['ExcludeOnline']),
         ]);
         exit;
     }

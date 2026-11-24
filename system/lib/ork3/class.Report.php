@@ -18,8 +18,13 @@ class Report extends Ork3
      * rule are not served for the rest of their TTL. Player::bust_player_award_recs_cache
      * reads this constant, so the bust keys can never drift out of step with the reads.
      * v4: the row shape gained monarchy_only, and the badge count became public-only.
+     * v5: "already has" stopped matching on shared award_ids and learned
+     *     cross-kingdom ladder equivalents (Award::pseudoLadderEquivalenceGroups).
      */
-    public const REC_CACHE_VERSION = 4;
+    public const REC_CACHE_VERSION = 5;
+
+    /** Lifetime of the Admin panel's hero/trend figures (also the home page's kingdom summary): 12 hours. */
+    public const DASHBOARD_CACHE_SECONDS = 43200;
 
     /**
      * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
@@ -770,6 +775,15 @@ class Report extends Ork3
             $idClause = empty($ids) ? ' AND 1=0 ' : ' AND recs.recommendations_id IN (' . implode(',', $ids) . ') ';
         }
 
+        // award_id ties a rec to a held award only when it names one specific award:
+        // 0, Custom Award and Custom Title are shared by many unrelated kingdom awards,
+        // and matching on them read one kingdom's custom title as "already has" another.
+        // Kingdom-original ladders on those ids are tied by their equivalence group
+        // instead (one award under several kingdoms' names).
+        $sharedAwardIds = implode(',', Ork3::$Lib->award->sharedAwardIds());
+        $eqHeldAtRank = Ork3::$Lib->award->sqlPseudoLadderEquivalentHeld('subeq', 'ka', 'COALESCE(recs.rank, 0)');
+        $eqHeldAny = Ork3::$Lib->award->sqlPseudoLadderEquivalentHeld('subeq2', 'ka');
+
         $sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
 			a.is_ladder as a_is_ladder,
@@ -806,14 +820,17 @@ class Report extends Ork3
 			ka.is_ladder as ka_is_ladder,
 			ka.kingdomaward_id as ka_kaward_id,
 			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
-			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
+			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND recs.award_id NOT IN ($sharedAwardIds) AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
+			(SELECT COUNT(subeq.awards_id) FROM " . DB_PREFIX . "awards subeq WHERE subeq.mundane_id = recs.mundane_id AND $eqHeldAtRank) as eqcount,
 			COALESCE(
+				(SELECT MAX(subeq2.rank) FROM " . DB_PREFIX . "awards subeq2 WHERE subeq2.mundane_id = recs.mundane_id AND $eqHeldAny),
 				(SELECT MAX(subr.rank) FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id),
-				(SELECT MAX(subr2.rank) FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id)
+				(SELECT MAX(subr2.rank) FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id AND recs.award_id NOT IN ($sharedAwardIds))
 			) as player_ka_rank,
 			COALESCE(
+				(SELECT subeq2.date FROM " . DB_PREFIX . "awards subeq2 WHERE subeq2.mundane_id = recs.mundane_id AND $eqHeldAny ORDER BY subeq2.rank DESC, subeq2.date DESC LIMIT 1),
 				(SELECT subr.date FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id ORDER BY subr.rank DESC, subr.date DESC LIMIT 1),
-				(SELECT subr2.date FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id ORDER BY subr2.rank DESC, subr2.date DESC LIMIT 1)
+				(SELECT subr2.date FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id AND recs.award_id NOT IN ($sharedAwardIds) ORDER BY subr2.rank DESC, subr2.date DESC LIMIT 1)
 			) as player_ka_date
 			FROM " . DB_PREFIX . "recommendations recs			
 			LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = recs.kingdomaward_id
@@ -871,6 +888,7 @@ class Report extends Ork3
                     'kingdom_name'       => $r->kingdom_name,
                     'kacount'            => (int)$r->kacount,
                     'awcount'            => (int)$r->awcount,
+                    'eqcount'            => (int)$r->eqcount,
                     'player_ka_rank'     => (int)$r->player_ka_rank,
                     'player_ka_date'     => $r->player_ka_date,
                     'a_is_ladder'        => (int)$r->a_is_ladder,
@@ -963,7 +981,7 @@ class Report extends Ork3
                 // rank is chosen the question is undecidable, so answer no, which is
                 // also what these recs did before their award was recognised as a ladder.
                 $rankUnset   = ($effIsLadder === 1 && (int)$row->rank === 0);
-                $alreadyHas = ($isCustom || $rankUnset) ? false : ($row->kacount > 0 || $row->awcount > 0);
+                $alreadyHas = ($isCustom || $rankUnset) ? false : ($row->kacount > 0 || $row->awcount > 0 || $row->eqcount > 0);
                 $coveredByMaster = false;
                 if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
                     foreach ((array)$ladderMap[$recAwardId]['MasterAwardIds'] as $mAid) {
@@ -1162,7 +1180,8 @@ class Report extends Ork3
                 . " WHERE lmx.la = IF(IFNULL(ka.award_id,0)=0, recs.award_id, ka.award_id))"
             : '0';
         $alreadyExpr = "((SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa WHERE oa.mundane_id = recs.mundane_id AND oa.kingdomaward_id = ka.kingdomaward_id AND oa.rank >= COALESCE(recs.rank,0)) > 0"
-            . " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND oa2.rank >= COALESCE(recs.rank,0)) > 0"
+            . " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND recs.award_id NOT IN (" . implode(',', Ork3::$Lib->award->sharedAwardIds()) . ") AND oa2.rank >= COALESCE(recs.rank,0)) > 0"
+            . " OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "awards oa3 WHERE oa3.mundane_id = recs.mundane_id AND " . Ork3::$Lib->award->sqlPseudoLadderEquivalentHeld('oa3', 'ka', 'COALESCE(recs.rank,0)') . ")"
             . " OR " . $masterCoverExpr . ")";
         // Must stay the exact SQL twin of the $isCustom test in PlayerAwardRecommendations
         // (per-kingdom title override folded in), or the count/paging prefilter and the PHP
@@ -1906,12 +1925,21 @@ class Report extends Ork3
         }
 
 
-        $sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, count(DISTINCT a.mundane_id) as distinct_players, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
+        // In-Person / Online split columns (Attendance::TypePredicate, the single source
+        // of the online predicate): the inner query flags whether each player had an in-person and/or an online
+        // sign-in in the group; the outer counts distinct players per flag. A player
+        // with both kinds in one period counts once in each split and once in the total.
+        $sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, count(DISTINCT a.mundane_id) as distinct_players,
+					count(DISTINCT case when a.had_in_person then a.mundane_id end) as distinct_in_person,
+					count(DISTINCT case when a.had_online then a.mundane_id end) as distinct_online,
+					count(DISTINCT case when a.had_online and not a.had_in_person then a.mundane_id end) as distinct_online_only,
+					a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
 					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
 					from
 						(select max(ssa.date) as `date`, max(ssa.date_year) as date_year, max(ssa.date_month) as date_month, max(date_week3) as date_week3,
-              ssa.mundane_id, ssd.event_start, ssd.event_end, ssa.park_id, ssd.event_calendardetail_id, ssd.event_id
+              ssa.mundane_id, ssd.event_start, ssd.event_end, ssa.park_id, ssd.event_calendardetail_id, ssd.event_id,
+              max(" . Attendance::TypePredicate('in_person', 'ssa') . ") as had_in_person, max(" . Attendance::TypePredicate('online', 'ssa') . ") as had_online
 							from " . DB_PREFIX . "attendance ssa
 								left join " . DB_PREFIX . "event_calendardetail ssd on ssa.event_calendardetail_id = ssd.event_calendardetail_id
 								left join " . DB_PREFIX . "park p on ssa.park_id = p.park_id
@@ -1936,8 +1964,11 @@ class Report extends Ork3
                         'Date' => $r->date,
                         'Year' => $r->year,
                         'Week' => $r->week,
-                        'Attendees' => $r->attendees,
-                        'DistinctPlayers' => $r->distinct_players,
+                        'Attendees' => (int)$r->attendees,
+                        'DistinctPlayers' => (int)$r->distinct_players,
+                        'DistinctPlayersInPerson' => (int)$r->distinct_in_person,
+                        'DistinctPlayersOnline' => (int)$r->distinct_online,
+                        'DistinctPlayersOnlineOnly' => (int)$r->distinct_online_only,
                         'EventCalendarDetailId' => $r->event_calendardetail_id,
                         'EventId' => $r->event_id,
                         'ParkId' => $r->park_id,
@@ -2019,6 +2050,7 @@ class Report extends Ork3
                         'UnitName' => $r->unit_name,
                         'Persona' => $r->persona,
                         'ClassName' => $r->class_name,
+                        'Online' => (int) $r->online,
                     );
             }
             $response['Status'] = Success();
@@ -2111,6 +2143,7 @@ class Report extends Ork3
                         'AttendancePersona' => $r->attendance_persona,
                         'Note' => $r->note,
                         'Flavor' => $r->class_id == 6 ? $r->flavor : '',
+                        'Online' => (int) $r->online,
                     );
             }
             $response['Status'] = Success($sql);
@@ -2415,14 +2448,18 @@ class Report extends Ork3
             return;
         }
         $cache = Ork3::$Lib->ghettocache;
-        $bustKey = $cache->key(['KingdomId' => $kingdomId]);
-        $cache->bust(__CLASS__ . '.GetKingdomParkAverages', $bustKey);
-        $cache->bust(__CLASS__ . '.GetKingdomParkMonthlyAverages', $bustKey);
-        foreach ([0, 1] as $isAdmin) {
-            $cache->bust(
-                __CLASS__ . '.GetKingdomExtendedParkAverages',
-                $cache->key(['KingdomId' => $kingdomId, 'IsAdmin' => $isAdmin])
-            );
+        // All uses the pre-change keys; In-Person / Online carry AttendanceType.
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $typeKey = $type === 'all' ? [] : ['AttendanceType' => $type];
+            $bustKey = $cache->key(['KingdomId' => $kingdomId] + $typeKey);
+            $cache->bust(__CLASS__ . '.GetKingdomParkAverages', $bustKey);
+            $cache->bust(__CLASS__ . '.GetKingdomParkMonthlyAverages', $bustKey);
+            foreach ([0, 1] as $isAdmin) {
+                $cache->bust(
+                    __CLASS__ . '.GetKingdomExtendedParkAverages',
+                    $cache->key(['KingdomId' => $kingdomId, 'IsAdmin' => $isAdmin] + $typeKey)
+                );
+            }
         }
     }
 
@@ -2439,6 +2476,8 @@ class Report extends Ork3
 
     public function GetKingdomParkAverages($request)
     {
+        // Informational In-Person / Online / All split; never tied to park status.
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false) {
             return $cache;
@@ -2491,6 +2530,7 @@ class Report extends Ork3
 										a.kingdom_id IN ($kidList)
 										and date >= '$per_period'
 										and a.mundane_id > 0
+										" . Attendance::TypeClause($type, 'a') . "
 									group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
 					where p.kingdom_id IN ($kidList) and p.active = 'Active'
@@ -2516,6 +2556,7 @@ class Report extends Ork3
 
     public function GetKingdomParkMonthlyAverages($request)
     {
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false) {
             return $cache;
@@ -2539,6 +2580,7 @@ class Report extends Ork3
 						WHERE a.kingdom_id IN ($kidList)
 						  AND a.date > '$monthly_period'
 						  AND a.mundane_id > 0
+						  " . Attendance::TypeClause($type, 'a') . "
 						GROUP BY a.date_year, a.date_month, a.park_id
 					) sub
 					GROUP BY park_id";
@@ -2563,14 +2605,22 @@ class Report extends Ork3
     /**
      * Extended kingdom park averages overlay (T-KNG-02): tp/tm per park + kingdom dedup totals.
      *
-     * @param array{KingdomId?: int, IsAdmin?: bool} $request
+     * AttendanceType (in_person | online | all, default all) filters every attendance
+     * subquery. Informational only: the kingdom CountOnlineAttendance setting never
+     * applies here, and no park status/size is derived from these figures.
+     *
+     * @param array{KingdomId?: int, IsAdmin?: bool, AttendanceType?: string} $request
      * @return array<string, array<string, int|float>>
      */
     public function GetKingdomExtendedParkAverages($request)
     {
         $kid = (int) ($request['KingdomId'] ?? 0);
         $isAdmin = !empty($request['IsAdmin']);
-        $cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid, 'IsAdmin' => (int) $isAdmin]);
+        $type = Attendance::NormalizeType($request['AttendanceType'] ?? null);
+        // All keeps the pre-change key; the other types get their own.
+        $typeKey = $type === 'all' ? [] : ['AttendanceType' => $type];
+        $typeClause = Attendance::TypeClause($type, 'a');
+        $cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid, 'IsAdmin' => (int) $isAdmin] + $typeKey);
         if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetKingdomExtendedParkAverages', $cacheKey, 1200)) !== false) {
             return $cached;
         }
@@ -2580,8 +2630,8 @@ class Report extends Ork3
         $wkCount = max(1, (int) ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
         $statsKids = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
 
-        $weekly = $this->GetKingdomParkAverages(['KingdomId' => $kid, 'AverageMonths' => 6]);
-        $monthly = $this->GetKingdomParkMonthlyAverages(['KingdomId' => $kid]);
+        $weekly = $this->GetKingdomParkAverages(['KingdomId' => $kid, 'AverageMonths' => 6] + $typeKey);
+        $monthly = $this->GetKingdomParkMonthlyAverages(['KingdomId' => $kid] + $typeKey);
         $result = [];
         foreach ((array) ($weekly['KingdomParkAveragesSummary'] ?? []) as $park) {
             $result[$park['ParkId']] = ['att' => (int) $park['AttendanceCount'], 'mo' => 0, 'tp' => 0, 'tm' => 0];
@@ -2600,7 +2650,7 @@ class Report extends Ork3
             FROM " . DB_PREFIX . "attendance a
             INNER JOIN " . DB_PREFIX . "park p  ON p.park_id  = a.park_id  AND p.kingdom_id IN ({$statsKids})
             INNER JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
-            WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0
+            WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0{$typeClause}
             GROUP BY a.park_id";
         $this->db->Clear();
         $pcResult = $this->db->DataSet($pcSql);
@@ -2620,7 +2670,7 @@ class Report extends Ork3
                 SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
                 INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
                 WHERE a.date >= '{$wkStart}'
-                    AND a.mundane_id > 0
+                    AND a.mundane_id > 0{$typeClause}
                 GROUP BY a.date_year, a.date_week3, a.mundane_id
             ) t";
         $this->db->Clear();
@@ -2632,7 +2682,7 @@ class Report extends Ork3
                 FROM " . DB_PREFIX . "attendance a
                 INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
                 WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                    AND a.mundane_id > 0
+                    AND a.mundane_id > 0{$typeClause}
                 GROUP BY a.date_year, a.date_month
             ) sub";
         $this->db->Clear();
@@ -2651,7 +2701,7 @@ class Report extends Ork3
                      INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id IN ({$statsKids})
                      WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
                        AND a.date <  DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-                       AND a.mundane_id > 0
+                       AND a.mundane_id > 0{$typeClause}
                      GROUP BY date_year, date_week3, mundane_id, a.park_id
                  ) mw ON p.park_id = mw.park_id
                  WHERE p.kingdom_id IN ({$statsKids}) AND p.active = 'Active'
@@ -2675,7 +2725,7 @@ class Report extends Ork3
                      INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
                      WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
                        AND a.date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                       AND a.mundane_id > 0
+                       AND a.mundane_id > 0{$typeClause}
                      GROUP BY a.date_year, a.date_month, a.park_id
                  ) mm
                  GROUP BY park_id"
@@ -2695,6 +2745,7 @@ class Report extends Ork3
 
     public function GetTopParksByAttendance($request = null)
     {
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false) {
             return $cache;
@@ -2739,6 +2790,7 @@ class Report extends Ork3
 									date >= '$escaped_start'
 									and date <= '$escaped_end'
 									and a.mundane_id > 0
+									" . Attendance::TypeClause($type, 'a') . "
 								group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 							on p.park_id = mundanesbyweek.park_id
 				where p.active = 'Active'
@@ -2775,8 +2827,12 @@ class Report extends Ork3
 
     public function GetActiveKingdomsSummary($request = null)
     {
+        $type = $this->_takeAttendanceType($request);
+        // Shared by the home page and the Admin panel (the 'all' type keys to ''),
+        // so the home page keeps this warm. Rolling 26-week / 12-month figures
+        // tolerate a long lifetime; Admin > Refresh stats busts it on demand.
         $key = Ork3::$Lib->ghettocache->key($request);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 3600)) !== false) {
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, self::DASHBOARD_CACHE_SECONDS)) !== false) {
             return $cache;
         }
 
@@ -2803,7 +2859,7 @@ class Report extends Ork3
 										a.mundane_id, a.date_year, a.date_week3 as week, p.kingdom_id
 									from " . DB_PREFIX . "attendance a
 									inner join " . DB_PREFIX . "park p on p.park_id = a.park_id
-									where a.date >= '$wk_start' and a.mundane_id > 0 group by a.date_year, a.date_week3, a.mundane_id, p.kingdom_id)
+									where a.date >= '$wk_start' and a.mundane_id > 0" . Attendance::TypeClause($type, 'a') . " group by a.date_year, a.date_week3, a.mundane_id, p.kingdom_id)
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
@@ -2811,8 +2867,8 @@ class Report extends Ork3
 							from
 								(select
 										mundane_id, date_month as month, kingdom_id
-									from " . DB_PREFIX . "attendance
-									where date > '$mo_start' and mundane_id > 0 group by date_month, mundane_id, kingdom_id)
+									from " . DB_PREFIX . "attendance am
+									where date > '$mo_start' and mundane_id > 0" . Attendance::TypeClause($type, 'am') . " group by date_month, mundane_id, kingdom_id)
 									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select kingdom_id, AVG(monthly_unique) AS avg_monthly
@@ -2820,7 +2876,7 @@ class Report extends Ork3
 								select a.date_year, a.date_month, p2.kingdom_id, COUNT(DISTINCT a.mundane_id) AS monthly_unique
 								from " . DB_PREFIX . "attendance a
 								inner join " . DB_PREFIX . "park p2 on p2.park_id = a.park_id
-								where a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) and a.mundane_id > 0
+								where a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) and a.mundane_id > 0" . Attendance::TypeClause($type, 'a') . "
 								group by a.date_year, a.date_month, p2.kingdom_id
 							) mo_sub
 							group by kingdom_id) avg_monthly_att on avg_monthly_att.kingdom_id = k.kingdom_id
@@ -2833,7 +2889,7 @@ class Report extends Ork3
 									from
 										(select
 												kingdom_id, park_id
-											from " . DB_PREFIX . "attendance
+											from " . DB_PREFIX . "attendance ap
 											where date > '" . date("Y-m-d", strtotime("-$request[ParkAttendanceWithin] week")) . "' group by date_week3, mundane_id) mundanesbyweek
 									group by kingdom_id, park_id) parkcount
 							group by kingdom_id) activeparks on activeparks.kingdom_id = k.kingdom_id
@@ -2882,34 +2938,54 @@ class Report extends Ork3
             $per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} day"));
         }
 
-        $sql_total = "SELECT COUNT(DISTINCT a.mundane_id) AS total_distinct
+        // In-Person / Online split columns via Attendance::TypePredicate.
+        // Distinct-player semantics: a player with both kinds counts once in each split
+        // and once in the total. Weekly averages share one denominator (weeks with any
+        // attendance), so each split average is <= the total average.
+        $sql_total = "SELECT COUNT(DISTINCT a.mundane_id) AS total_distinct,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('in_person') . " THEN a.mundane_id END) AS total_in_person,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('online') . " THEN a.mundane_id END) AS total_online
 			FROM " . DB_PREFIX . "attendance a
 			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where";
 
-        $sql_avg = "SELECT AVG(weekly_unique) AS avg_per_week FROM (
-			SELECT COUNT(DISTINCT a.mundane_id) AS weekly_unique
+        $sql_avg = "SELECT AVG(weekly_unique) AS avg_per_week, AVG(weekly_in_person) AS avg_in_person, AVG(weekly_online) AS avg_online FROM (
+			SELECT COUNT(DISTINCT a.mundane_id) AS weekly_unique,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('in_person') . " THEN a.mundane_id END) AS weekly_in_person,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('online') . " THEN a.mundane_id END) AS weekly_online
 			FROM " . DB_PREFIX . "attendance a
 			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where
 			GROUP BY a.date_year, a.date_week3
 		) sub";
 
         $total = 0;
+        $in_person_total = 0;
+        $online_total = 0;
         $avg = 0;
+        $in_person_avg = 0;
+        $online_avg = 0;
 
         $r = $this->db->query($sql_total);
         if ($r && $r->next()) {
             $total = (int)$r->total_distinct;
+            $in_person_total = (int)$r->total_in_person;
+            $online_total = (int)$r->total_online;
         }
 
         $r = $this->db->query($sql_avg);
         if ($r && $r->next()) {
             $avg = round((float)$r->avg_per_week, 1);
+            $in_person_avg = round((float)$r->avg_in_person, 1);
+            $online_avg = round((float)$r->avg_online, 1);
         }
 
         return array(
             'Status' => Success(),
             'TotalDistinctPlayers' => $total,
-            'AvgDistinctPerWeek' => $avg
+            'TotalDistinctPlayersInPerson' => $in_person_total,
+            'TotalDistinctPlayersOnline' => $online_total,
+            'AvgDistinctPerWeek' => $avg,
+            'AvgDistinctPerWeekInPerson' => $in_person_avg,
+            'AvgDistinctPerWeekOnline' => $online_avg
         );
     }
 
@@ -2936,7 +3012,12 @@ class Report extends Ork3
             $per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} day"));
         }
 
-        $sql = "SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique
+        // In-Person / Online split columns via Attendance::TypePredicate.
+        // Distinct players per month: a player with both kinds counts once in each split
+        // and once in Total, so InPerson + Online can exceed Total.
+        $sql = "SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('in_person') . " THEN a.mundane_id END) AS monthly_in_person,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('online') . " THEN a.mundane_id END) AS monthly_online
 			FROM " . DB_PREFIX . "attendance a
 			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where
 			GROUP BY a.date_year, a.date_month
@@ -2950,6 +3031,10 @@ class Report extends Ork3
                     'Year'  => (int)$r->date_year,
                     'Month' => (int)$r->date_month,
                     'Count' => (int)$r->monthly_unique,
+                    'Total' => (int)$r->monthly_unique,
+                    'InPerson' => (int)$r->monthly_in_person,
+                    'Online' => (int)$r->monthly_online,
+                    'OnlineOnly' => max(0, (int)$r->monthly_unique - (int)$r->monthly_in_person),
                 ];
             }
         }
@@ -3352,6 +3437,25 @@ class Report extends Ork3
     /*  Park Attendance Explorer helpers & methods                        */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * Read the In-Person / Online / All request key for a report that filters by
+     * attendance type, and rewrite it in $request so the GhettoCache key carries it.
+     * 'all' (the default, also for missing or unknown values) removes the key, so All
+     * shares the pre-change cache entry and returns the pre-change result.
+     */
+    private function _takeAttendanceType(&$request): string
+    {
+        if (!is_array($request)) {
+            $request = array();
+        }
+        $type = Attendance::NormalizeType($request['AttendanceType'] ?? null);
+        unset($request['AttendanceType']);
+        if ($type !== 'all') {
+            $request['AttendanceType'] = $type;
+        }
+        return $type;
+    }
+
     private function _periodExpr($period, $alias = 'a')
     {
         switch ($period) {
@@ -3370,6 +3474,7 @@ class Report extends Ork3
 
     public function ParkAttendanceAllParks($request)
     {
+        $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
             return $cache;
@@ -3402,6 +3507,7 @@ class Report extends Ork3
 					AND a.park_id > 0
 					AND p.active = 'Active'
 					$local_clause
+					" . Attendance::TypeClause($type, 'a') . "
 				GROUP BY p.park_id, period_label
 				ORDER BY p.name, period_label";
 
@@ -3436,7 +3542,8 @@ class Report extends Ork3
 					AND a2.date <= '$end_date'
 					AND a2.park_id > 0
 					AND p2.active = 'Active'"
-                    . ($local_only ? " AND m2.park_id = a2.park_id" : '');
+                    . ($local_only ? " AND m2.park_id = a2.park_id" : '')
+                    . Attendance::TypeClause($type, 'a2');
 
         $r_kw = $this->db->query($sql_kw);
         if ($r_kw !== false) {
@@ -3463,6 +3570,7 @@ class Report extends Ork3
 						AND a.date <= '$end_date'
 						AND a.park_id > 0
 						AND p.active = 'Active'
+						" . Attendance::TypeClause($type, 'a') . "
 					GROUP BY a.park_id, period_label, a.mundane_id
 				) sub
 				GROUP BY sub.park_id, sub.period_label";
@@ -3500,6 +3608,13 @@ class Report extends Ork3
 
     public function GetNewPlayerAttendance($request)
     {
+        // Attendance type (In-Person / Online / All). Who counts as a new player, and
+        // their first park, always come from ALL attendance: an online sign-in is real
+        // participation, so a player whose first sign-in was online is not "new" again
+        // at their first in-person visit. The type filters only the attendance counted
+        // and shown: visits, returning (2+ visits), last sign-in; New Players becomes the
+        // new players with at least one sign-in of that type in range at this scope.
+        $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
             return $cache;
@@ -3532,19 +3647,36 @@ class Report extends Ork3
         } else {
             $visit_scope = "AND a_range.kingdom_id IN ($kidList)";
         }
+        $visit_scope .= Attendance::TypeClause($type, 'a_range');
+        // All: every new player. Filtered: new players with at least one in-range sign-in
+        // of that type at a park within this report's scope (np.has_type), so a sign-in
+        // of that type somewhere else never counts them here. The scope is by park, the
+        // same as the first-park attribution (not attendance.kingdom_id, which can lag a
+        // park's kingdom), so In-Person equals All when no sign-in is online. All keeps
+        // the original SQL: no has_type column.
+        if ($type === 'all') {
+            $new_player_col = 'np.mundane_id';
+            $np_type_col    = '';
+        } else {
+            $np_scope       = $park_id > 0
+                ? "a_in.park_id = $park_id"
+                : "a_in.park_id IN (SELECT ps.park_id FROM " . DB_PREFIX . "park ps WHERE ps.kingdom_id IN ($kidList))";
+            $new_player_col = 'CASE WHEN np.has_type = 1 THEN np.mundane_id END';
+            $np_type_col    = ",\n\t\t\t\t       MAX($np_scope AND " . Attendance::TypePredicate($type, 'a_in') . ") AS has_type";
+        }
 
         // Summary query: all active parks with new player stats; parks with no new players show zeros.
         $sql_summary = "SELECT
 				p.park_id,
 				p.name AS park_name,
-				COUNT(DISTINCT np.mundane_id) AS new_players,
+				COUNT(DISTINCT $new_player_col) AS new_players,
 				SUM(CASE WHEN vc.visit_count >= 2 THEN 1 ELSE 0 END) AS returning_players,
 				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
 			FROM " . DB_PREFIX . "park p
 			LEFT JOIN (
 				-- New players: first sign-in is in range AND no earlier sign-in exists.
 				-- NOT EXISTS uses the mundane_id index on a_pre; avoids a full-table MIN() scan.
-				SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id
+				SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id$np_type_col
 				FROM " . DB_PREFIX . "attendance a_in
 				WHERE a_in.mundane_id > 0
 				  AND a_in.park_id > 0
@@ -3641,11 +3773,12 @@ class Report extends Ork3
 					GROUP BY a_range.mundane_id
 				) vc ON vc.mundane_id = np.mundane_id
 				INNER JOIN (
-					SELECT mundane_id, MAX(date) AS last_signin_date
-					FROM " . DB_PREFIX . "attendance
-					WHERE mundane_id > 0
-					  AND date >= '$start_date'
-					GROUP BY mundane_id
+					SELECT a_last.mundane_id, MAX(a_last.date) AS last_signin_date
+					FROM " . DB_PREFIX . "attendance a_last
+					WHERE a_last.mundane_id > 0
+					  AND a_last.date >= '$start_date'
+					  " . Attendance::TypeClause($type, 'a_last') . "
+					GROUP BY a_last.mundane_id
 				) ls ON ls.mundane_id = np.mundane_id
 				ORDER BY p.name, m.persona";
 
@@ -3674,6 +3807,11 @@ class Report extends Ork3
 
     public function GetNewPlayerAttendanceByKingdom($request)
     {
+        // Attendance type: same rule as GetNewPlayerAttendance. New-player identity and
+        // first kingdom come from ALL attendance; the type filters the counted visits,
+        // and New Players becomes those with at least one sign-in of that type in range
+        // in their first kingdom.
+        $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
             return $cache;
@@ -3681,11 +3819,32 @@ class Report extends Ork3
 
         $start_date = mysql_real_escape_string($request['StartDate']);
         $end_date   = mysql_real_escape_string($request['EndDate']);
+        // Filtered: counted only with a sign-in of that type in range at a park of this
+        // kingdom (tk). By park kingdom, the same as the first-kingdom attribution, so
+        // In-Person equals All when no sign-in is online. All keeps the original SQL.
+        if ($type === 'all') {
+            $new_player_col = 'np.mundane_id';
+            $tk_join        = '';
+        } else {
+            $new_player_col = 'CASE WHEN tk.mundane_id IS NOT NULL THEN np.mundane_id END';
+            $tk_join        = "
+			LEFT JOIN (
+				-- New-player candidates with a sign-in of the selected type per park kingdom.
+				SELECT a_t.mundane_id, pt.kingdom_id
+				FROM " . DB_PREFIX . "attendance a_t
+				INNER JOIN " . DB_PREFIX . "park pt ON pt.park_id = a_t.park_id
+				WHERE a_t.mundane_id > 0
+				  AND a_t.date >= '$start_date'
+				  AND a_t.date <= '$end_date'
+				  " . Attendance::TypeClause($type, 'a_t') . "
+				GROUP BY a_t.mundane_id, pt.kingdom_id
+			) tk ON tk.mundane_id = np.mundane_id AND tk.kingdom_id = k.kingdom_id";
+        }
 
         $sql = "SELECT
 				k.kingdom_id,
 				k.name AS kingdom_name,
-				COUNT(DISTINCT np.mundane_id) AS new_players,
+				COUNT(DISTINCT $new_player_col) AS new_players,
 				SUM(CASE WHEN vc.visit_count >= 2 THEN 1 ELSE 0 END) AS returning_players,
 				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
 			FROM " . DB_PREFIX . "kingdom k
@@ -3714,8 +3873,9 @@ class Report extends Ork3
 				WHERE a_range.date >= '$start_date'
 				  AND a_range.date <= '$end_date'
 				  AND a_range.mundane_id > 0
+				  " . Attendance::TypeClause($type, 'a_range') . "
 				GROUP BY a_range.mundane_id, a_range.kingdom_id
-			) vc ON vc.mundane_id = np.mundane_id AND vc.kingdom_id = k.kingdom_id
+			) vc ON vc.mundane_id = np.mundane_id AND vc.kingdom_id = k.kingdom_id$tk_join
 			WHERE k.active = 'Active'
 			  AND k.name IS NOT NULL
 			  AND k.name != ''
@@ -3754,6 +3914,7 @@ class Report extends Ork3
 
     public function ParkAttendanceSinglePark($request)
     {
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return $cache;
@@ -3781,6 +3942,7 @@ class Report extends Ork3
 					AND a2.date >= '$start_date'
 					AND a2.date <= '$end_date'
 					AND a2.mundane_id > 0
+					" . Attendance::TypeClause($type, 'a2') . "
 				GROUP BY a2.mundane_id
 				HAVING COUNT(*) >= $min_signins
 			)";
@@ -3807,6 +3969,7 @@ class Report extends Ork3
 					AND a.mundane_id > 0
 					$local_filter
 					$min_filter
+					" . Attendance::TypeClause($type, 'a') . "
 				GROUP BY a.mundane_id, period_label
 				ORDER BY m.persona, period_label";
 
@@ -4441,7 +4604,7 @@ class Report extends Ork3
         $kingdom_evt_bonus       = !empty($request['KingdomEventBonus']);
         $active_knight_threshold  = isset($request['ActiveKnightThreshold']) ? (int)$request['ActiveKnightThreshold'] : 0;
         $active_member_threshold  = isset($request['ActiveMemberThreshold']) ? (int)$request['ActiveMemberThreshold'] : 0;
-        $exclude_online           = !empty($request['ExcludeOnline']);
+        $exclude_online           = !empty($request['ExcludeOnline']); // resolved from the kingdom setting below unless passed
         $all_kingdoms             = !empty($request['AllKingdoms']); // count attendance from any kingdom
         $days_window             = isset($request['DaysWindow']) ? (int)$request['DaysWindow'] : 0;
         $min_age                 = isset($request['MinAge']) ? (int)$request['MinAge'] : 0;
@@ -4453,6 +4616,9 @@ class Report extends Ork3
         $exclude_events          = !empty($request['ExcludeEvents']);  // count only non-event (park-day) sign-ins
         $waiver_age_months       = isset($request['WaiverAgeMonths']) ? (int)$request['WaiverAgeMonths'] : 0; // months waiver must be on file — cannot auto-verify, shown as caveat only
         $min_distinct_months     = isset($request['MinDistinctMonths']) ? (int)$request['MinDistinctMonths'] : 0; // the counted sign-ins must fall in at least this many different calendar months
+        $dues_home_park_only     = !empty($request['DuesHomeParkOnly']); // dues must be paid at the player's home park, not merely somewhere in the kingdom (Freeholds)
+        $office_counts_as_dues   = !empty($request['OfficeCountsAsDues']); // holding any current Kingdom or park office stands in for dues (Blackspire)
+        $require_kingdom_event   = !empty($request['RequireKingdomEvent']); // at least one counted sign-in must be at a Kingdom-sponsored event (ork_event.park_id = 0) (Blackspire)
 
         // Compute start date.
         // display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
@@ -4492,6 +4658,13 @@ class Report extends Ork3
             return ['Players' => [], 'AttendanceRequired' => $att_req, 'MonthsWindow' => $months_win, 'MinMembershipMonths' => $min_mem_mo, 'ProvinceMode' => $province_mode];
         }
 
+        // The kingdom's CountOnlineAttendance setting decides online exclusion unless the caller
+        // passes ExcludeOnline. Independent of the stored-rule merge above (skipped when
+        // AttendanceMode is passed), and applied after a ParkId-only call has resolved its kingdom.
+        if (!array_key_exists('ExcludeOnline', $request)) {
+            $exclude_online = !Ork3::$Lib->kingdom->CountsOnlineAttendance($kingdom_id);
+        }
+
         $park_clause    = $park_id ? " AND m.park_id    = $park_id" : '';
         $mundane_clause = $mundane_id ? " AND m.mundane_id = $mundane_id" : '';
 
@@ -4501,8 +4674,8 @@ class Report extends Ork3
         // kingdom-wide report.
         $single_att_clause = $mundane_id ? " AND a.mundane_id = $mundane_id" : '';
 
-        // Online exclusion: LEFT JOIN event + park inside attendance subqueries, filter out
-        // rows where the event name or park name contains 'Online' (case-insensitive).
+        // Online exclusion: drop rows flagged online, and (historical rows) rows whose event
+        // or park name contains 'Online' (case-insensitive) via LEFT JOINs inside the subqueries.
         // ExcludeEvents: restrict attendance to park-day sign-ins only (event_id = 0 or NULL).
         $events_clause = $exclude_events ? "AND (a.event_id = 0 OR a.event_id IS NULL)" : '';
 
@@ -4513,7 +4686,8 @@ class Report extends Ork3
 					LEFT JOIN " . DB_PREFIX . "park    _op ON _op.park_id  = a.park_id";
             // NULL-safe: a.park_id = 0 (kingdom events) yields NULL park name — allow those through.
             // Only exclude when we can positively confirm 'Online' is in the name.
-            $online_clause = "AND (_oe.name IS NULL OR _oe.name NOT LIKE '%Online%')
+            $online_clause = "AND a.online = 0
+					AND (_oe.name IS NULL OR _oe.name NOT LIKE '%Online%')
 					AND (_op.name IS NULL OR _op.name NOT LIKE '%Online%')";
         }
 
@@ -4562,6 +4736,11 @@ class Report extends Ork3
         if ($min_distinct_months > 0) {
             $att_extra_cols .= ", COUNT(DISTINCT DATE_FORMAT(a.date, '%Y-%m')) AS month_count";
         }
+        // RequireKingdomEvent: how many of the counted sign-ins were at a
+        // Kingdom-sponsored event (needs the kve join below). Standard path only.
+        if ($require_kingdom_event) {
+            $att_extra_cols .= ", SUM(CASE WHEN kve.event_id IS NOT NULL AND kve.park_id = 0 THEN 1 ELSE 0 END) AS kingdom_evt_count";
+        }
 
         // Pre-build the att LEFT JOIN clause. Two paths:
         // 1. Outside-credit-cap (e.g. Tal Dagore): nested UNION ALL subquery tracks in/out kingdom
@@ -4577,6 +4756,7 @@ class Report extends Ork3
         // truth, so we filter via park membership + a fallback branch for kingdom-only
         // events (which have no park_id by definition).
         $_park_subq        = "SELECT park_id FROM " . DB_PREFIX . "park WHERE kingdom_id = $kingdom_id";
+        $_dues_park_clause = $dues_home_park_only ? "d.park_id = m.park_id" : "d.park_id IN ($_park_subq)";
         $_in_scope_clause  = "(a.park_id IN ($_park_subq) OR (a.kingdom_id = $kingdom_id AND a.park_id = 0))";
         $att_select_extra = '';
         if ($max_outside_kingdom_creds > 0) {
@@ -4593,18 +4773,22 @@ class Report extends Ork3
 					           $_per_evt * ($_in_scope_clause)    AS in_credits,
 					           $_per_evt * (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
+					    $online_join
 					    WHERE a.event_id IS NOT NULL AND a.event_id != 0
 					      AND a.date >= '$start_date'
 					      $single_att_clause
+					      $online_clause
 					    GROUP BY a.mundane_id, a.event_id, a.kingdom_id
 					    UNION ALL
 					    SELECT a.mundane_id,
 					           ($_in_scope_clause)    AS in_credits,
 					           (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
+					    $online_join
 					    WHERE (a.event_id = 0 OR a.event_id IS NULL)
 					      AND a.date >= '$start_date'
 					      $single_att_clause
+					      $online_clause
 					) att_inner
 					GROUP BY mundane_id
 				) att ON att.mundane_id = m.mundane_id";
@@ -4612,7 +4796,7 @@ class Report extends Ork3
         } else {
             // Standard path — resolve inline PHP expressions into variables first
             // so the att_join_clause string contains only PHP variable interpolations.
-            $_kve_join_sql  = $kingdom_evt_bonus
+            $_kve_join_sql  = ($kingdom_evt_bonus || $require_kingdom_event)
                 ? "LEFT JOIN " . DB_PREFIX . "event kve ON kve.event_id = a.event_id AND a.event_id != 0"
                 : '';
             $_att_where_kw  = $all_kingdoms ? "1=1" : $_in_scope_clause;
@@ -4656,16 +4840,27 @@ class Report extends Ork3
         $online_count_join   = '';
         $online_count_select = '';
         if ($exclude_online) {
+            // Same scope as the main attendance count, so for a COUNT-mode report
+            // excluded == (count with the setting on) - (count with it off):
+            // the outside-credit path reads every kingdom's rows, the standard path
+            // uses park membership (or any kingdom with AllKingdoms), HomeParkOnly
+            // keeps only home-park rows, ExcludeEvents keeps only park days.
+            $_online_count_scope       = $max_outside_kingdom_creds > 0 ? '1=1' : ($all_kingdoms ? '1=1' : $_in_scope_clause);
+            $_online_count_home_join   = ($home_park_only && $max_outside_kingdom_creds <= 0) ? $home_park_join : '';
+            $_online_count_home_clause = ($home_park_only && $max_outside_kingdom_creds <= 0) ? 'AND a.park_id = mp.park_id' : '';
             $online_count_join = "
 				LEFT JOIN (
 					SELECT a.mundane_id, COUNT(*) AS online_excluded_count
 					FROM " . DB_PREFIX . "attendance a
 					LEFT JOIN " . DB_PREFIX . "event _oe ON _oe.event_id = a.event_id AND a.event_id != 0
 					LEFT JOIN " . DB_PREFIX . "park  _op ON _op.park_id  = a.park_id
-					WHERE a.kingdom_id = $kingdom_id
+					$_online_count_home_join
+					WHERE $_online_count_scope
 					  AND a.date >= '$start_date'
 					  $single_att_clause
-					  AND (_oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
+					  $events_clause
+					  $_online_count_home_clause
+					  AND (a.online = 1 OR _oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
 					GROUP BY a.mundane_id
 				) oatt ON oatt.mundane_id = m.mundane_id
 			";
@@ -4730,6 +4925,8 @@ class Report extends Ork3
 				COALESCE(att.att_count, 0) AS att_count
 				$att_select_extra
 				" . ($min_distinct_months > 0 && $max_outside_kingdom_creds <= 0 ? ", COALESCE(att.month_count, 0) AS month_count" : "") . "
+				" . ($require_kingdom_event && $max_outside_kingdom_creds <= 0 ? ", COALESCE(att.kingdom_evt_count, 0) AS kingdom_evt_count" : "") . "
+				" . ($office_counts_as_dues ? ", CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "officer o WHERE o.mundane_id = m.mundane_id AND o.kingdom_id = $kingdom_id) THEN 1 ELSE 0 END AS in_office" : "") . "
 				$online_count_select
 				$event_count_select
 				" . ($home_park_only && $kingdom_evt_bonus ? ", COALESCE(att.kingdom_evt_credit, 0) AS kingdom_evt_credit" : "") . "
@@ -4739,7 +4936,7 @@ class Report extends Ork3
 				CASE WHEN EXISTS (
 					SELECT 1 FROM " . DB_PREFIX . "dues d
 					WHERE d.mundane_id = m.mundane_id
-					  AND d.park_id IN ($_park_subq)
+					  AND $_dues_park_clause
 					  AND d.revoked != 1
 					  AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
 				) THEN 1 ELSE 0 END AS dues_paid,
@@ -4747,7 +4944,7 @@ class Report extends Ork3
 				             ELSE MAX(d.dues_until) END
 				 FROM " . DB_PREFIX . "dues d
 				 WHERE d.mundane_id = m.mundane_id
-				   AND d.park_id IN ($_park_subq)
+				   AND $_dues_park_clause
 				   AND d.revoked != 1
 				   AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
 				) AS dues_until
@@ -4788,7 +4985,10 @@ class Report extends Ork3
                      'ShowEventCount' => $show_event_count,
                      'ExcludeEvents' => $exclude_events,
                      'WaiverAgeMonths' => $waiver_age_months,
-                     'MinDistinctMonths' => $min_distinct_months];
+                     'MinDistinctMonths' => $min_distinct_months,
+                     'DuesHomeParkOnly' => $dues_home_park_only,
+                     'OfficeCountsAsDues' => $office_counts_as_dues,
+                     'RequireKingdomEvent' => $require_kingdom_event];
         if ($r !== false && $r->size() > 0) {
             while ($r->next()) {
                 $_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;
@@ -4796,10 +4996,14 @@ class Report extends Ork3
                     || strtotime($_member_date) <= strtotime("-{$min_mem_mo} months");
                 $suspended       = (int)$r->suspended === 1;
                 $att_count       = (int)$r->att_count;
-                $base_ok         = !$suspended && $r->waivered == 1 && $r->dues_paid == 1 && $membership_ok;
+                $in_office       = $office_counts_as_dues && (int)($r->in_office ?? 0) === 1;
+                $dues_ok         = $r->dues_paid == 1 || $in_office;
+                $base_ok         = !$suspended && $r->waivered == 1 && $dues_ok && $membership_ok;
                 $month_count     = $min_distinct_months > 0 ? (int)($r->month_count ?? 0) : null;
                 $months_ok       = $min_distinct_months <= 0 || $month_count >= $min_distinct_months;
-                $kingdom_eligible = $base_ok && $att_count >= $att_req && $months_ok;
+                $kingdom_evt_count = $require_kingdom_event ? (int)($r->kingdom_evt_count ?? 0) : null;
+                $kingdom_evt_ok  = !$require_kingdom_event || $kingdom_evt_count >= 1;
+                $kingdom_eligible = $base_ok && $att_count >= $att_req && $months_ok && $kingdom_evt_ok;
 
                 $row = [
                     'MundaneId'       => (int)$r->mundane_id,
@@ -4826,6 +5030,10 @@ class Report extends Ork3
                     'EventCount'         => $show_event_count ? (int)$r->event_att_count : null,
                     'MonthCount'         => $month_count,
                     'MonthsOk'           => $months_ok,
+                    'InOffice'           => $in_office,
+                    'DuesOk'             => $dues_ok,
+                    'KingdomEventCount'  => $kingdom_evt_count,
+                    'KingdomEventOk'     => $kingdom_evt_ok,
                 ];
                 if ($active_knight_threshold > 0) {
                     $raw_att_count        = (int)$r->raw_att_count;
@@ -4920,6 +5128,85 @@ class Report extends Ork3
                     'KingdomName'    => $r->kingdom_name,
                     'ParkType'       => $r->park_type,
                     'LastAttendance' => $r->last_attendance,
+                ];
+            }
+        }
+        return $response;
+    }
+
+    /**
+     * Park Activity: every park in a kingdom (or everywhere) with its most recent
+     * attendance and its sign-in totals over a trailing window of whole months.
+     * Ported from the jsork "Freehold Activity" page, which pulled one
+     * AttendanceSummary per park from the browser; this is a single query.
+     *
+     * Request:
+     *   KingdomId      0 = all kingdoms, else the kingdom and its principalities
+     *   Months         trailing window, 1-120, default 24
+     *   IncludeRetired truthy = include Retired parks (default Active only)
+     *
+     * attendance.date is a DATE, so "today" is PHP's wall-clock date, not
+     * CURDATE(), which rolls over at 7 PM Central on this database.
+     */
+    public function GetParkActivity($request)
+    {
+        $kingdom_id      = valid_id($request['KingdomId'] ?? 0) ? (int)$request['KingdomId'] : 0;
+        $months          = (int)($request['Months'] ?? 24);
+        $months          = max(1, min(120, $months > 0 ? $months : 24));
+        $include_retired = !empty($request['IncludeRetired']);
+
+        $today        = date('Y-m-d');
+        $window_start = date('Y-m-d', strtotime("$today -$months month"));
+
+        $kingdom_clause = $kingdom_id
+            ? " AND p.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ")"
+            : '';
+        $active_clause = $include_retired ? '' : " AND p.active = 'Active'";
+        $window        = "a.date > '$window_start' AND a.date <= '$today'";
+
+        $sql = "
+			SELECT p.park_id, p.name AS park_name, p.active,
+			       k.kingdom_id, k.name AS kingdom_name,
+			       pt.title AS park_type,
+			       (SELECT MAX(a.date) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id) AS last_attendance,
+			       (SELECT COUNT(DISTINCT a.date) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id AND $window) AS signin_days,
+			       (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id AND $window) AS attendances,
+			       (SELECT COUNT(DISTINCT a.mundane_id) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id AND $window) AS distinct_players
+			FROM " . DB_PREFIX . "park p
+			JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+			LEFT JOIN " . DB_PREFIX . "parktitle pt ON pt.parktitle_id = p.parktitle_id
+			WHERE p.park_id > 0
+			  AND p.name != ''
+			  AND p.name NOT LIKE '%No Park%'
+			  $active_clause
+			  $kingdom_clause
+			ORDER BY k.name, p.name
+		";
+
+        $r = $this->db->query($sql);
+        $response = [
+            'Status'      => Success(),
+            'Parks'       => [],
+            'ReportDate'  => $today,
+            'WindowStart' => $window_start,
+            'Months'      => $months,
+        ];
+        if ($r !== false && $r->size() > 0) {
+            $today_ts = strtotime($today);
+            while ($r->next()) {
+                $last = $r->last_attendance ?: null;
+                $response['Parks'][] = [
+                    'ParkId'          => (int)$r->park_id,
+                    'ParkName'        => $r->park_name,
+                    'ParkType'        => $r->park_type,
+                    'Active'          => $r->active,
+                    'KingdomId'       => (int)$r->kingdom_id,
+                    'KingdomName'     => $r->kingdom_name,
+                    'LastAttendance'  => $last,
+                    'DaysInactive'    => $last ? max(0, (int)floor(($today_ts - strtotime($last)) / 86400)) : null,
+                    'SigninDays'      => (int)$r->signin_days,
+                    'Attendances'     => (int)$r->attendances,
+                    'DistinctPlayers' => (int)$r->distinct_players,
                 ];
             }
         }
@@ -6902,6 +7189,472 @@ class Report extends Ork3
             ),
         );
 
+        // ====================================================================
+        // RELEASE 3.5.7 — Garber  (Surveys + Bonus Credit)
+        // ====================================================================
+        // Every survey and bonus-credit table is new this release, so these are
+        // pure post-launch adoption counts (no before/after impact pass).
+        //
+        // Privacy: respondents choose how much of their identity travels with
+        // their answers (full / partial / anonymous). Everything here is an
+        // org-wide aggregate COUNT — never a per-respondent or per-small-group
+        // breakdown — and test responses (is_test = 1, preview runs by the
+        // author) are excluded from every response metric.
+
+        // Fill a date-keyed count map into a gap-free series so a quiet day or
+        // week shows as 0 instead of silently vanishing from the trend chart.
+        // $step is 'day' or 'week'; weeks start on Monday to match the SQL.
+        $fillSeries = function (array $counts, $periods, $step) {
+            $rows = array();
+            $today = strtotime(date('Y-m-d'));
+            if ($step === 'week') {
+                $start = strtotime('monday this week', $today);
+                for ($i = $periods - 1; $i >= 0; $i--) {
+                    $ts = strtotime('-' . $i . ' week', $start);
+                    $rows[] = array('k' => date('M j', $ts), 'c' => (int)($counts[date('Y-m-d', $ts)] ?? 0));
+                }
+            } else {
+                for ($i = $periods - 1; $i >= 0; $i--) {
+                    $ts = strtotime('-' . $i . ' day', $today);
+                    $rows[] = array('k' => date('M j', $ts), 'c' => (int)($counts[date('Y-m-d', $ts)] ?? 0));
+                }
+            }
+            return $rows;
+        };
+        // Run a "SELECT <Y-m-d> AS k, COUNT(*) AS c" query into a k => c map.
+        $dateCounts = function ($sql) {
+            $map = array();
+            foreach ($this->_rfuBreakdown($sql) as $row) {
+                $map[$row['k']] = $row['c'];
+            }
+            return $map;
+        };
+
+        // --- Surveys created ---------------------------------------------------
+        $svTotal    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey`");
+        $svOpened   = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey` WHERE opened_at IS NOT NULL");
+        $svOpenNow  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey` WHERE status = 'open'");
+        $svAuthors  = $this->_rfuScalar("SELECT COUNT(DISTINCT created_by) AS c FROM `{$p}survey` WHERE created_by > 0");
+        $svKingdoms = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT s.scope_id) AS c
+               FROM `{$p}survey` s
+               JOIN `{$p}kingdom` k ON k.kingdom_id = s.scope_id AND k.active = 'Active'
+              WHERE s.scope_type = 'kingdom'"
+        );
+        $svParks = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT s.scope_id) AS c
+               FROM `{$p}survey` s
+               JOIN `{$p}park` pk ON pk.park_id = s.scope_id AND pk.active = 'Active'
+              WHERE s.scope_type = 'park'"
+        );
+        $svQuestions = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}survey_question` WHERE type NOT IN ('section', 'image')"
+        );
+        $svAvgQuestions = ($svTotal > 0) ? round($svQuestions / $svTotal, 1) : 0;
+        $svCloned = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_activity` WHERE action = 'clone'");
+        $svEventAudience = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}survey` WHERE audience_event_calendardetail_id IS NOT NULL AND audience_event_calendardetail_id > 0"
+        );
+        $svNarrowed = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}survey`
+              WHERE audience_recent_months > 0 OR audience_min_tenure_months > 0
+                 OR (audience_event_calendardetail_id IS NOT NULL AND audience_event_calendardetail_id > 0)"
+        );
+        $svSharing = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey` WHERE results_share <> 'none'");
+        $svStatusBreak = $this->_rfuBreakdown(
+            "SELECT CASE status
+                        WHEN 'draft'    THEN 'Draft'
+                        WHEN 'open'     THEN 'Open'
+                        WHEN 'closed'   THEN 'Closed'
+                        ELSE 'Archived'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}survey`
+              GROUP BY status ORDER BY FIELD(status, 'draft', 'open', 'closed', 'archived')"
+        );
+        $svScopeBreak = $this->_rfuBreakdown(
+            "SELECT CASE scope_type
+                        WHEN 'ork'     THEN 'Amtgard-wide'
+                        WHEN 'kingdom' THEN 'Kingdom'
+                        ELSE 'Park'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}survey`
+              GROUP BY scope_type ORDER BY FIELD(scope_type, 'ork', 'kingdom', 'park')"
+        );
+        $svWeekCounts = $dateCounts(
+            "SELECT DATE_FORMAT(DATE_SUB(DATE(created_at), INTERVAL WEEKDAY(created_at) DAY), '%Y-%m-%d') AS k, COUNT(*) AS c
+               FROM `{$p}survey`
+              WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK)
+              GROUP BY k"
+        );
+        $svTypeBreak = $this->_rfuBreakdown(
+            "SELECT CASE type
+                        WHEN 'single'     THEN 'Single choice'
+                        WHEN 'multi'      THEN 'Multiple choice'
+                        WHEN 'dropdown'   THEN 'Dropdown'
+                        WHEN 'yesno'      THEN 'Yes / No'
+                        WHEN 'rating'     THEN 'Rating'
+                        WHEN 'nps'        THEN 'Net Promoter'
+                        WHEN 'matrix'     THEN 'Matrix'
+                        WHEN 'ranking'    THEN 'Ranking'
+                        WHEN 'pairwise'   THEN 'Pairwise ranking'
+                        WHEN 'short_text' THEN 'Short text'
+                        WHEN 'paragraph'  THEN 'Paragraph'
+                        WHEN 'number'     THEN 'Number'
+                        ELSE 'Date'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}survey_question`
+              WHERE type NOT IN ('section', 'image')
+              GROUP BY type ORDER BY c DESC, k ASC"
+        );
+        $featSurveysCreated = array(
+            'key'         => 'surveys_created',
+            'title'       => 'Surveys Created',
+            'description' => 'Amtgard, a kingdom or a park builds a survey, narrows who it is for, opens it, and later closes it. Counts are of surveys that still exist — a deleted survey is gone from every figure.',
+            'kpis' => array(
+                $this->_rfuKpi('Surveys created', $svTotal, null, null, 'every survey in the builder, whatever its status'),
+                $this->_rfuKpi('Surveys opened', $svOpened, $svTotal, $share($svOpened, $svTotal), 'surveys opened to respondents at least once — the rest are still drafts', null, null, 'of surveys created'),
+                $this->_rfuKpi('Surveys open right now', $svOpenNow, null, null, 'status Open — currently accepting responses'),
+                $this->_rfuKpi('Survey authors', $svAuthors, null, null, 'distinct players who have created a survey'),
+                $this->_rfuKpi('Kingdoms with a kingdom survey', $svKingdoms, $activeKingdoms, $kPct($svKingdoms), 'active kingdoms that have created a survey scoped to the kingdom', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Parks with a park survey', $svParks, $activeParks, $share($svParks, $activeParks), 'active parks that have created a survey scoped to the park', null, null, 'of active parks'),
+                $this->_rfuKpi('Questions written', $svQuestions, null, null, 'answerable questions across all surveys — section headings and images are not counted'),
+                $this->_rfuKpi('Average questions per survey', $svAvgQuestions, null, null, 'answerable questions ÷ surveys created', null, null, null, null, 1),
+                $this->_rfuKpi('Surveys cloned', $svCloned, null, null, 'times a survey was cloned to run again or somewhere else — read from the activity log, so it includes clones whose survey was later deleted'),
+                $this->_rfuKpi('Surveys with a narrowed audience', $svNarrowed, $svTotal, $share($svNarrowed, $svTotal), 'a recent-sign-in, minimum-tenure or event-attendance filter on top of the scope (the default "not retired" filter is not counted)', null, null, 'of surveys created'),
+                $this->_rfuKpi('Surveys aimed at an event', $svEventAudience, $svTotal, $share($svEventAudience, $svTotal), 'audience limited to players who attended a particular event', null, null, 'of surveys created'),
+                $this->_rfuKpi('Surveys sharing results', $svSharing, $svTotal, $share($svSharing, $svTotal), 'results shared down to kingdoms or parks, as responses arrive or after close', null, null, 'of surveys created'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-survey-status', 'bar', 'Surveys by status', $svStatusBreak, 'Surveys'),
+                $this->_rfuChartFromBreakdown('rfu-survey-scope', 'pie', 'Surveys by scope', $svScopeBreak),
+                $this->_rfuChartFromBreakdown('rfu-survey-created', 'column', 'Surveys created per week (last 12 weeks)', $fillSeries($svWeekCounts, 12, 'week'), 'Surveys'),
+                $this->_rfuChartFromBreakdown('rfu-survey-types', 'bar', 'Questions by type', $svTypeBreak, 'Questions'),
+            ),
+            'links' => array(
+                $this->_rfuKingdomTileFromSql(
+                    'Kingdoms with a kingdom survey',
+                    "SELECT k.kingdom_id, k.name, COUNT(*) AS c
+                       FROM `{$p}survey` s
+                       JOIN `{$p}kingdom` k ON k.kingdom_id = s.scope_id AND k.active = 'Active'
+                      WHERE s.scope_type = 'kingdom'
+                      GROUP BY k.kingdom_id, k.name ORDER BY k.name ASC",
+                    'survey',
+                    'surveys'
+                ),
+            ),
+        );
+
+        // --- Survey responses & trends -----------------------------------------
+        // survey_participation holds one row per player per survey and is only
+        // written for real (non-test) submissions, so it is the clean count of
+        // distinct completions; survey_start is the matching count of players
+        // who opened the runner, giving an honest completion rate.
+        $rsTotal = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_response` WHERE is_test = 0");
+        $rsSurveys = $this->_rfuScalar("SELECT COUNT(DISTINCT survey_id) AS c FROM `{$p}survey_response` WHERE is_test = 0");
+        $rsAvgPerSurvey = ($rsSurveys > 0) ? round($rsTotal / $rsSurveys, 1) : 0;
+        $rs7  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_response` WHERE is_test = 0 AND submitted_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+        $rs30 = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_response` WHERE is_test = 0 AND submitted_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
+        $rsRespondents = $this->_rfuScalar("SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}survey_participation`");
+        $rsActiveRespondents = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT p.mundane_id) AS c
+               FROM `{$p}survey_participation` p
+              WHERE EXISTS (SELECT 1 FROM `{$p}attendance` a
+                             WHERE a.mundane_id = p.mundane_id AND a.`date` >= DATE_SUB(CURDATE(), INTERVAL 2 YEAR))"
+        );
+        $rsStarts      = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_start`");
+        $rsCompletions = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_participation`");
+        $rsCompletionRate = ($rsStarts > 0) ? min(100.0, round(100.0 * $rsCompletions / $rsStarts, 1)) : null;
+        $rsInProgress  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_draft`");
+        // Duration is stored only for fully linked responses (partial responses
+        // have it stripped by design), so this is the average over those.
+        $rsAvgMinutes = 0;
+        $this->db->Clear();
+        $r = $this->db->query(
+            "SELECT AVG(duration_seconds) AS a FROM `{$p}survey_response`
+              WHERE is_test = 0 AND duration_seconds IS NOT NULL AND duration_seconds > 0"
+        );
+        if ($r !== false && $r->next() && $r->a !== null) {
+            $rsAvgMinutes = round(((float)$r->a) / 60, 1);
+        }
+        $rsConsent = array('full' => 0, 'partial' => 0, 'anonymous' => 0);
+        foreach ($this->_rfuBreakdown("SELECT consent AS k, COUNT(*) AS c FROM `{$p}survey_response` WHERE is_test = 0 GROUP BY consent") as $row) {
+            $rsConsent[$row['k']] = $row['c'];
+        }
+        $rsLinkedPct = ($rsTotal > 0) ? round(100.0 * $rsConsent['full'] / $rsTotal, 1) : null;
+        $rsDayCounts = $dateCounts(
+            "SELECT DATE_FORMAT(submitted_at, '%Y-%m-%d') AS k, COUNT(*) AS c
+               FROM `{$p}survey_response`
+              WHERE is_test = 0 AND submitted_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+              GROUP BY k"
+        );
+        $rsWeekCounts = $dateCounts(
+            "SELECT DATE_FORMAT(DATE_SUB(DATE(submitted_at), INTERVAL WEEKDAY(submitted_at) DAY), '%Y-%m-%d') AS k, COUNT(*) AS c
+               FROM `{$p}survey_response`
+              WHERE is_test = 0 AND submitted_at >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK)
+              GROUP BY k"
+        );
+        $rsScopeBreak = $this->_rfuBreakdown(
+            "SELECT CASE s.scope_type
+                        WHEN 'ork'     THEN 'Amtgard-wide'
+                        WHEN 'kingdom' THEN 'Kingdom'
+                        ELSE 'Park'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}survey_response` r
+               JOIN `{$p}survey` s ON s.survey_id = r.survey_id
+              WHERE r.is_test = 0
+              GROUP BY s.scope_type ORDER BY FIELD(s.scope_type, 'ork', 'kingdom', 'park')"
+        );
+        // Top surveys by volume — titles only, never respondent detail.
+        $rsTopBreak = $this->_rfuBreakdown(
+            "SELECT s.title AS k, COUNT(*) AS c
+               FROM `{$p}survey_response` r
+               JOIN `{$p}survey` s ON s.survey_id = r.survey_id
+              WHERE r.is_test = 0
+              GROUP BY s.survey_id, s.title ORDER BY c DESC, s.survey_id ASC LIMIT 8"
+        );
+        $consentChart = array(
+            'id'         => 'rfu-survey-consent',
+            'type'       => 'pie',
+            'title'      => 'Responses by the respondent\'s data-gate choice',
+            'categories' => array('Linked to their profile', 'Kingdom only, no name', 'Fully anonymous'),
+            'data'       => array($rsConsent['full'], $rsConsent['partial'], $rsConsent['anonymous']),
+        );
+        $featSurveyResponses = array(
+            'key'         => 'survey_responses',
+            'title'       => 'Survey Responses & Trends',
+            'description' => 'Eligible players answer an open survey from My Amtgard or a share link. Test submissions by survey authors are excluded; every figure is an org-wide count, never broken out by respondent.',
+            'kpis' => array(
+                $this->_rfuKpi('Responses submitted', $rsTotal, null, null, 'completed, non-test responses across every survey'),
+                $this->_rfuKpi('Responses in the last 7 days', $rs7, null, null, 'completed responses submitted in the past week'),
+                $this->_rfuKpi('Responses in the last 30 days', $rs30, null, null, 'completed responses submitted in the past month'),
+                $this->_rfuKpi('Surveys with a response', $rsSurveys, $svTotal, $share($rsSurveys, $svTotal), 'surveys that have drawn at least one completed response', null, null, 'of surveys created'),
+                $this->_rfuKpi('Average responses per survey', $rsAvgPerSurvey, null, null, 'responses ÷ surveys that have received any', null, null, null, null, 1),
+                $this->_rfuKpi('Players who have answered a survey', $rsRespondents, null, null, 'distinct players with at least one completed survey, whatever privacy choice they made'),
+                $this->_rfuKpi('Active players who have answered a survey', $rsActiveRespondents, $denom, $pct($rsActiveRespondents), 'distinct respondents who also attended in the past 2 years — the active-player share that has taken part', null, null, 'of active players'),
+                $this->_rfuKpi('Completion rate', $rsCompletionRate, null, null, 'players who finished a survey ÷ players who opened it to answer', null, null, null, '%', 1),
+                $this->_rfuKpi('Surveys in progress', $rsInProgress, null, null, 'saved drafts — a player part-way through a survey they can resume'),
+                $this->_rfuKpi('Average time to complete', $rsAvgMinutes, null, null, 'minutes, across responses that carry a duration (only fully linked responses do — it is withheld from the others to protect identity)', null, null, null, ' min', 1),
+                $this->_rfuKpi('Responses linked to a profile', $rsConsent['full'], $rsTotal, $rsLinkedPct, 'respondents who chose the full-identity option on the data gate', null, null, 'of responses'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-survey-resp-day', 'column', 'Responses per day (last 30 days)', $fillSeries($rsDayCounts, 30, 'day'), 'Responses'),
+                $this->_rfuChartFromBreakdown('rfu-survey-resp-week', 'column', 'Responses per week (last 12 weeks)', $fillSeries($rsWeekCounts, 12, 'week'), 'Responses'),
+                $consentChart,
+                $this->_rfuChartFromBreakdown('rfu-survey-resp-scope', 'pie', 'Responses by survey scope', $rsScopeBreak),
+                $this->_rfuChartFromBreakdown('rfu-survey-resp-top', 'bar', 'Most-answered surveys', $rsTopBreak, 'Responses'),
+            ),
+        );
+
+        // --- Survey bonus credit ------------------------------------------------
+        // A survey's credit is a bonus_credit_category (source_type 'survey')
+        // switched on by a kingdom or park (survey_credit). Each grant is one
+        // survey_credit_grant row pointing at the bonus_credit it created.
+        // "Granted" excludes revoked credits; revoked ones are reported apart.
+        $scSurveys = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT survey_id) AS c FROM `{$p}survey_credit` WHERE disabled_at IS NULL"
+        );
+        $scKingdoms = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT sc.grantor_id) AS c
+               FROM `{$p}survey_credit` sc
+               JOIN `{$p}kingdom` k ON k.kingdom_id = sc.grantor_id AND k.active = 'Active'
+              WHERE sc.grantor_type = 'kingdom' AND sc.disabled_at IS NULL"
+        );
+        $scParks = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT sc.grantor_id) AS c
+               FROM `{$p}survey_credit` sc
+               JOIN `{$p}park` pk ON pk.park_id = sc.grantor_id AND pk.active = 'Active'
+              WHERE sc.grantor_type = 'park' AND sc.disabled_at IS NULL"
+        );
+        $scGranted = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}survey_credit_grant` g
+               JOIN `{$p}bonus_credit` b ON b.bonus_credit_id = g.bonus_credit_id AND b.revoked_at IS NULL"
+        );
+        $scRevoked = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}survey_credit_grant` g
+               JOIN `{$p}bonus_credit` b ON b.bonus_credit_id = g.bonus_credit_id AND b.revoked_at IS NOT NULL"
+        );
+        $scValue = 0.0;
+        $this->db->Clear();
+        $r = $this->db->query(
+            "SELECT COALESCE(SUM(b.credits), 0) AS v
+               FROM `{$p}survey_credit_grant` g
+               JOIN `{$p}bonus_credit` b ON b.bonus_credit_id = g.bonus_credit_id AND b.revoked_at IS NULL"
+        );
+        if ($r !== false && $r->next()) {
+            $scValue = (float)$r->v;
+        }
+        $scPlayers = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT g.mundane_id) AS c
+               FROM `{$p}survey_credit_grant` g
+               JOIN `{$p}bonus_credit` b ON b.bonus_credit_id = g.bonus_credit_id AND b.revoked_at IS NULL"
+        );
+        // Of the surveys that offer credit, the share of linked respondents who
+        // earned it. A respondent only earns credit when they link their profile,
+        // so the denominator is full-consent responses to credit-bearing surveys.
+        $scEligibleResponses = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}survey_response` r
+              WHERE r.is_test = 0 AND r.consent = 'full'
+                AND r.survey_id IN (SELECT survey_id FROM `{$p}survey_credit`)"
+        );
+        $scEarnedPct = $share(min($scGranted, $scEligibleResponses), $scEligibleResponses);
+        $scGrantorBreak = $this->_rfuBreakdown(
+            "SELECT CASE sc.grantor_type WHEN 'kingdom' THEN 'Kingdom-funded' ELSE 'Park-funded' END AS k, COUNT(*) AS c
+               FROM `{$p}survey_credit_grant` g
+               JOIN `{$p}survey_credit` sc ON sc.credit_id = g.credit_id
+               JOIN `{$p}bonus_credit` b ON b.bonus_credit_id = g.bonus_credit_id AND b.revoked_at IS NULL
+              GROUP BY sc.grantor_type ORDER BY FIELD(sc.grantor_type, 'kingdom', 'park')"
+        );
+        $scWeekCounts = $dateCounts(
+            "SELECT DATE_FORMAT(DATE_SUB(DATE(b.granted_at), INTERVAL WEEKDAY(b.granted_at) DAY), '%Y-%m-%d') AS k, COUNT(*) AS c
+               FROM `{$p}survey_credit_grant` g
+               JOIN `{$p}bonus_credit` b ON b.bonus_credit_id = g.bonus_credit_id AND b.revoked_at IS NULL
+              WHERE b.granted_at >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK)
+              GROUP BY k"
+        );
+        $featSurveyCredit = array(
+            'key'         => 'survey_credit',
+            'title'       => 'Bonus Credit for Answering',
+            'description' => 'A kingdom or park can reward everyone who completes a survey and links it to their profile with bonus credit toward class levels. Credit is granted the moment the response is submitted.',
+            'kpis' => array(
+                $this->_rfuKpi('Surveys offering credit', $scSurveys, $svTotal, $share($scSurveys, $svTotal), 'surveys with credit switched on by at least one kingdom or park (and not since switched off)', null, null, 'of surveys created'),
+                $this->_rfuKpi('Kingdoms funding survey credit', $scKingdoms, $activeKingdoms, $kPct($scKingdoms), 'active kingdoms that have switched on credit for a survey — adopting an Amtgard-wide one counts', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Parks funding survey credit', $scParks, $activeParks, $share($scParks, $activeParks), 'active parks that have switched on credit for a survey', null, null, 'of active parks'),
+                $this->_rfuKpi('Survey credits granted', $scGranted, null, null, 'bonus credits awarded for answering a survey, not counting any later revoked'),
+                $this->_rfuKpi('Class credit awarded for surveys', $scValue, null, null, 'total credit value of the survey credits granted — a credit may be worth more or less than 1', null, null, null, null, 2),
+                $this->_rfuKpi('Players credited for a survey', $scPlayers, null, null, 'distinct players holding at least one survey credit'),
+                $this->_rfuKpi('Linked respondents who earned credit', $scGranted, $scEligibleResponses, $scEarnedPct, 'survey credits granted ÷ fully linked responses to surveys that offer credit — the gap is respondents who answered before credit was switched on or who did not qualify under the funder\'s scope', null, null, 'of linked responses'),
+                $this->_rfuKpi('Survey credits revoked', $scRevoked, null, null, 'survey credits an officer later took back'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-survey-credit-funder', 'pie', 'Survey credits by funder', $scGrantorBreak),
+                $this->_rfuChartFromBreakdown('rfu-survey-credit-week', 'column', 'Survey credits granted per week (last 12 weeks)', $fillSeries($scWeekCounts, 12, 'week'), 'Credits'),
+            ),
+        );
+
+        // --- Bonus credits awarded (org-wide) ----------------------------------
+        // The bonus-credit engine behind survey credit is also open to officers
+        // for credits of their own, so this feature counts EVERY bonus credit and
+        // splits it by origin. 'survey' categories are the ones a survey made.
+        $bcAwarded = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}bonus_credit` WHERE revoked_at IS NULL");
+        $bcRevoked = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}bonus_credit` WHERE revoked_at IS NOT NULL");
+        $bcValue = 0.0;
+        $this->db->Clear();
+        $r = $this->db->query("SELECT COALESCE(SUM(credits), 0) AS v FROM `{$p}bonus_credit` WHERE revoked_at IS NULL");
+        if ($r !== false && $r->next()) {
+            $bcValue = (float)$r->v;
+        }
+        $bcPlayers = $this->_rfuScalar("SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}bonus_credit` WHERE revoked_at IS NULL");
+        $bcViaSurvey = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}bonus_credit` b
+               JOIN `{$p}bonus_credit_category` c ON c.category_id = b.category_id
+              WHERE b.revoked_at IS NULL AND c.source_type = 'survey'"
+        );
+        $bcManual = $bcAwarded - $bcViaSurvey;
+        $bcCategories = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}bonus_credit_category` WHERE archived_at IS NULL AND source_type <> 'survey'"
+        );
+        $bcKingdoms = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT c.scope_id) AS c
+               FROM `{$p}bonus_credit_category` c
+               JOIN `{$p}kingdom` k ON k.kingdom_id = c.scope_id AND k.active = 'Active'
+              WHERE c.scope_type = 'kingdom' AND c.archived_at IS NULL AND c.source_type <> 'survey'"
+        );
+        $bcOrkCategories = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}bonus_credit_category`
+              WHERE scope_type = 'ork' AND archived_at IS NULL AND source_type <> 'survey'"
+        );
+        $bcGranters = $this->_rfuScalar("SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}bonus_credit_granter`");
+        $bcAdopting = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT a.kingdom_id) AS c
+               FROM `{$p}bonus_credit_adoption` a
+               JOIN `{$p}kingdom` k ON k.kingdom_id = a.kingdom_id AND k.active = 'Active'
+              WHERE a.withdrawn_at IS NULL"
+        );
+        $bcAcceptOutside = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}bonus_credit_kingdom_setting` s
+               JOIN `{$p}kingdom` k ON k.kingdom_id = s.kingdom_id AND k.active = 'Active'
+              WHERE s.accepts_outside = 1"
+        );
+        $bcOriginBreak = array(
+            array('k' => 'Through a survey', 'c' => $bcViaSurvey),
+            array('k' => 'Granted by an officer', 'c' => $bcManual),
+        );
+        $bcMonthBreak = $this->_rfuBreakdown(
+            "SELECT DATE_FORMAT(MIN(granted_at), '%b %Y') AS k, COUNT(*) AS c
+               FROM `{$p}bonus_credit`
+              WHERE revoked_at IS NULL AND granted_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+              GROUP BY DATE_FORMAT(granted_at, '%Y-%m') ORDER BY MIN(granted_at) ASC"
+        );
+        $bcClassBreak = $this->_rfuBreakdown(
+            "SELECT cl.name AS k, COUNT(*) AS c
+               FROM `{$p}bonus_credit` b
+               JOIN `{$p}class` cl ON cl.class_id = b.class_id
+              WHERE b.revoked_at IS NULL
+              GROUP BY cl.class_id, cl.name ORDER BY c DESC, cl.name ASC LIMIT 10"
+        );
+        $featBonusCredits = array(
+            'key'         => 'bonus_credits',
+            'title'       => 'Bonus Credits Awarded',
+            'description' => 'Bonus credit counts toward a player\'s class levels and lives in its own category on their profile. Survey credit is one source; kingdoms can also create credits and appoint officers to grant them. Figures cover every bonus credit, whatever its origin.',
+            'kpis' => array(
+                $this->_rfuKpi('Bonus credits awarded', $bcAwarded, null, null, 'credits on player records, not counting any revoked'),
+                $this->_rfuKpi('Class credit awarded', $bcValue, null, null, 'total credit value of those awards — a single award may be worth more or less than 1', null, null, null, null, 2),
+                $this->_rfuKpi('Players with bonus credit', $bcPlayers, null, null, 'distinct players holding at least one bonus credit'),
+                $this->_rfuKpi('Awarded through a survey', $bcViaSurvey, $bcAwarded, $share($bcViaSurvey, $bcAwarded), 'credits whose category was created by a survey', null, null, 'of credits awarded'),
+                $this->_rfuKpi('Granted by an officer', $bcManual, $bcAwarded, $share($bcManual, $bcAwarded), 'credits awarded by hand from a kingdom\'s own or an Amtgard-wide category', null, null, 'of credits awarded'),
+                $this->_rfuKpi('Credits revoked', $bcRevoked, null, null, 'credits an officer took back — kept on record, no longer counted'),
+                $this->_rfuKpi('Credit categories created', $bcCategories, null, null, 'live, non-archived categories an officer can grant from (categories a survey creates for itself are not counted here)'),
+                $this->_rfuKpi('Kingdoms with a credit category', $bcKingdoms, $activeKingdoms, $kPct($bcKingdoms), 'active kingdoms that have defined at least one category of their own', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Amtgard-wide categories', $bcOrkCategories, null, null, 'categories defined by ORK admins for any kingdom to adopt'),
+                $this->_rfuKpi('Kingdoms adopting an Amtgard-wide credit', $bcAdopting, $activeKingdoms, $kPct($bcAdopting), 'active kingdoms with at least one adoption in force (not withdrawn)', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Kingdoms accepting outside credit', $bcAcceptOutside, $activeKingdoms, $kPct($bcAcceptOutside), 'kingdoms that let other kingdoms\' credits reach their players', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Officers appointed to grant credit', $bcGranters, null, null, 'distinct players added as a credit granter by a kingdom'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-bonus-origin', 'pie', 'Bonus credits by origin', $bcOriginBreak),
+                $this->_rfuChartFromBreakdown('rfu-bonus-month', 'column', 'Bonus credits granted per month (last 12 months)', $bcMonthBreak, 'Credits'),
+                $this->_rfuChartFromBreakdown('rfu-bonus-class', 'bar', 'Bonus credits by class (top 10)', $bcClassBreak, 'Credits'),
+            ),
+        );
+
+        // --- Finding surveys ----------------------------------------------------
+        $dsBanner = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey` WHERE status = 'open' AND show_banner = 1");
+        $dsBannerShare = $share($dsBanner, $svOpenNow);
+        $dsDismissals = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey_dismissal`");
+        $dsDismissers = $this->_rfuScalar("SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}survey_dismissal`");
+        $dsResume = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}survey` WHERE allow_resume = 1");
+        $featSurveyDiscovery = array(
+            'key'         => 'survey_discovery',
+            'title'       => 'Finding Surveys',
+            'description' => 'Open surveys promote themselves with a site banner, an Available Surveys card on My Amtgard, kingdom and park pages, and a share link. Link opens are not tracked, so reach is read from the banner and what players do with it.',
+            'kpis' => array(
+                $this->_rfuKpi('Open surveys with the banner on', $dsBanner, $svOpenNow, $dsBannerShare, 'surveys that promote themselves in the site-wide banner (on by default, switched off under Promotion in the builder)', null, null, 'of open surveys'),
+                $this->_rfuKpi('Banner dismissals', $dsDismissals, null, null, 'times a player dismissed a survey from the banner — a dismissal never closes the survey for them'),
+                $this->_rfuKpi('Players who dismissed a survey', $dsDismissers, null, null, 'distinct players who have dismissed at least one survey banner'),
+                $this->_rfuKpi('Surveys that let players resume', $dsResume, $svTotal, $share($dsResume, $svTotal), 'surveys saving a player\'s progress so they can finish later', null, null, 'of surveys created'),
+            ),
+            'charts' => array(),
+        );
+
+        $release357 = array(
+            'version' => '3.5.7',
+            'name'    => 'Garber',
+            'date'    => '2026-11-22',
+            'blurb'   => 'Surveys come to the ORK: Amtgard, a kingdom or a park builds a phone-friendly survey and eligible players answer it from My Amtgard, choosing how much of their identity travels with their answers — with bonus credit toward class levels as a thank-you.',
+            'features' => array(
+                $featSurveysCreated,
+                $featSurveyResponses,
+                $featSurveyCredit,
+                $featBonusCredits,
+                $featSurveyDiscovery,
+            ),
+        );
+
         $release356 = array(
             'version' => '3.5.6',
             'name'    => 'Crown',
@@ -7134,6 +7887,7 @@ class Report extends Ork3
         // legacy 'manual' — a recent window shows how players are checking in now.
         $attnSignin     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method = 'signin_link'");
         $attnSelfreg    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method = 'self_reg'");
+        $attnOnline     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` a WHERE a.`date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)" . Attendance::TypeClause('online', 'a'));
         $entryBreak     = $this->_rfuBreakdown(
             "SELECT entry_method AS k, COUNT(*) AS c FROM `{$p}attendance`
 			 WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method IS NOT NULL AND entry_method <> ''
@@ -7151,6 +7905,7 @@ class Report extends Ork3
                 $this->_rfuKpi('Self-reg links created', $selfregLinks, null, null, 'rows in self-registration link'),
                 $this->_rfuKpi('Self-reg links redeemed', $selfregUsed, $selfregLinks, $selfregConv, 'self-reg links that created a new player', null, null, 'of self-reg links were used'),
                 $this->_rfuKpi('Self-reg check-ins recorded (30d)', $attnSelfreg, null, null, "attendance in the last 30 days with entry_method 'self_reg'"),
+                $this->_rfuKpi('Online check-ins recorded (30d)', $attnOnline, null, null, 'attendance in the last 30 days marked Online'),
             ),
             'charts' => array(
                 $this->_rfuChartFromBreakdown('rfu-entry-method', 'pie', 'Attendance by entry method (last 30 days)', $entryBreak, 'Sign-ins'),
@@ -7841,7 +8596,7 @@ class Report extends Ork3
                 'players_with_design'    => (int)$playersWithDesign,
                 'active_recommendations' => (int)$activeRecommendations,
             ),
-            'releases' => array($release356, $release355, $release354, $release353, $release352, $release351, $release350),
+            'releases' => array($release357, $release356, $release355, $release354, $release353, $release352, $release351, $release350),
         );
     }
 
@@ -8232,6 +8987,13 @@ class Report extends Ork3
             return $auth;
         }
 
+        // Three full scans of a year or two of attendance (~4s on prod) for a page
+        // opened a handful of times a day: cache the result, stamp it, and let
+        // Admin > Refresh stats bust it (see BustAdminDashboardCache).
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, '', self::DASHBOARD_CACHE_SECONDS)) !== false) {
+            return $cache;
+        }
+
         $thisYearStart = date('Y') . '-01-01';
         $lastYearStart = (date('Y') - 1) . '-01-01';
         $lastYearEnd = date('Y-m-d', strtotime('-1 year'));
@@ -8301,11 +9063,35 @@ class Report extends Ork3
             }
         }
 
-        return [
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, '', [
             'TrendStats' => $trendStats,
             'PrevWeekly' => $prevWeekly,
             'PrevMonthly' => $prevMonthly,
-        ];
+            'AsOf' => time(),
+        ]);
+    }
+
+    /**
+     * Drop every cached figure the Admin panel's hero and trend rows read, so the
+     * next load recomputes them. Global-admin only (same gate as the stats).
+     *
+     * @return array<string, mixed>
+     */
+    public function BustAdminDashboardCache($Token = null): array
+    {
+        $auth = $this->_authorizeGlobalAdmin($Token);
+        if ($auth !== null) {
+            return $auth;
+        }
+        Ork3::$Lib->ghettocache->bust(__CLASS__ . '.GetAdminDashboardStats', '');
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $req = ['AttendanceType' => $type];
+            $this->_takeAttendanceType($req);
+            Ork3::$Lib->ghettocache->bust(__CLASS__ . '.GetActiveKingdomsSummary', Ork3::$Lib->ghettocache->key($req));
+        }
+        Ork3::$Lib->ghettocache->bust(__CLASS__ . '.GetDistinctActivePlayerCount', Ork3::$Lib->ghettocache->key(['weeks' => 26]));
+
+        return ['Status' => Success()];
     }
 
     /**
@@ -8369,7 +9155,8 @@ class Report extends Ork3
      * "is there many people at field?" number for the public park page.
      * UNGATED: park-level aggregate, same class of data as the public Live
      * map. Real-time only for parks using QR sign-in links; reeve-entered
-     * attendance appears when it's typed in.
+     * attendance appears when it's typed in. In-person only: online sign-ins
+     * are not people physically on the field. (No cache layer: nothing stale.)
      */
     public function GetParkFieldCountToday($request)
     {
@@ -8378,8 +9165,8 @@ class Report extends Ork3
             return array('Status' => InvalidParameter(), 'Count' => 0);
         }
         $r = $this->db->query(
-            'SELECT COUNT(DISTINCT mundane_id) AS c FROM ' . DB_PREFIX . "attendance
-			 WHERE park_id = $park_id AND date = CURDATE()"
+            'SELECT COUNT(DISTINCT a.mundane_id) AS c FROM ' . DB_PREFIX . "attendance a
+			 WHERE a.park_id = $park_id AND a.date = CURDATE()" . Attendance::TypeClause('in_person', 'a')
         );
         $count = 0;
         if ($r !== false && $r->size() > 0 && $r->next()) {
@@ -8497,16 +9284,20 @@ class Report extends Ork3
         }
 
         $scopeName = '';
+        $resolvedKingdomId = $kingdomId;
         if ($parkId > 0) {
             $this->db->Clear();
             $nr = $this->db->DataSet(
-                'SELECT p.name AS park_name, k.name AS kingdom_name
+                'SELECT p.name AS park_name, p.kingdom_id AS park_kingdom_id, k.name AS kingdom_name
                  FROM ' . DB_PREFIX . 'park p
                  LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = p.kingdom_id
                  WHERE p.park_id = ' . $parkId . ' LIMIT 1'
             );
             if ($nr && $nr->Next()) {
                 $scopeName = $nr->kingdom_name . ' — ' . $nr->park_name;
+                if ($resolvedKingdomId <= 0) {
+                    $resolvedKingdomId = (int) $nr->park_kingdom_id;
+                }
             }
         } elseif ($kingdomId > 0) {
             $this->db->Clear();
@@ -8650,6 +9441,7 @@ class Report extends Ork3
                 'Name' => $group['Name'],
                 'DisplayName' => $group['DisplayName'],
                 'KnightGroup' => $knightGroupMap[$group['Name']] ?? '',
+                'KingdomAwardIds' => array_values(array_map('intval', $group['KaIds'])),
             ];
             $pseudoKaIds = array_merge($pseudoKaIds, $group['KaIds']);
             $pseudoKeyCases[] = 'WHEN ka.kingdomaward_id IN (' . implode(',', $group['KaIds'])
@@ -8657,7 +9449,7 @@ class Report extends Ork3
         }
 
         if ($awardCols === []) {
-            return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
+            return ['ScopeName' => $scopeName, 'KingdomId' => $resolvedKingdomId, 'LadderAwards' => [], 'GridRows' => []];
         }
 
         $realIdList = $realAwardIds !== [] ? implode(',', $realAwardIds) : '0';
@@ -8672,11 +9464,12 @@ class Report extends Ork3
         // Cache key must cover both sets or a kingdom gaining a pseudo-ladder
         // would keep serving the old grid.
         $awardIds = $realIdList . '|k' . $pseudoIdList;
-        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
+        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'v' => 3]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
             return [
                 'ScopeName' => $scopeName,
+                'KingdomId' => $resolvedKingdomId,
                 'LadderAwards' => $awardCols,
                 'GridRows' => $cachedGrid,
             ];
@@ -8696,7 +9489,8 @@ class Report extends Ork3
         // column 94 -- which is not even a column here, so they would vanish again.
         $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, m.is_legend, p.park_id, p.name AS park_name,
                            {$pseudoCaseSql} AS col_key,
-                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
+                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count,
+                           MAX(IF(ma.date >= '1980-01-01' AND ma.date <= CURDATE(), ma.date, NULL)) AS last_date
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
@@ -8749,12 +9543,17 @@ class Report extends Ork3
                 $val = (is_string($aid) && $aid !== '' && $aid[0] === 'k')
                     ? ($_max > 0 ? $_max : $_count)
                     : max($_max, $_count);
-                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
+                $_lastDate = $dataResult->last_date;
+                $playerData[$mid]['Awards'][$aid] = [
+                    'Rank' => $val > 0 ? $val : null,
+                    'IsMaster' => false,
+                    'Date' => ($_lastDate !== null && $_lastDate !== '') ? substr((string) $_lastDate, 0, 10) : null,
+                ];
             }
         }
 
         if ($playerData === []) {
-            return ['ScopeName' => $scopeName, 'LadderAwards' => $awardCols, 'GridRows' => []];
+            return ['ScopeName' => $scopeName, 'KingdomId' => $resolvedKingdomId, 'LadderAwards' => $awardCols, 'GridRows' => []];
         }
 
         $mundaneIds = implode(',', array_keys($playerData));
@@ -8810,11 +9609,15 @@ class Report extends Ork3
                 }
             }
         }
+        $recency = $this->ladderGridRecency(array_keys($playerData));
         foreach ($playerData as $mid => &$pRow) {
             // A Legend never signs in again; they stay on the grid as honors
             // history, so they are never filed under inactive.
             $pRow['RecentSignIn'] = isset($recentIds[$mid]) || !empty($pRow['IsLegend']);
             $pRow['KnightGroups'] = [];
+            $pRow['LastAwardDate'] = $recency[$mid]['LastAwardDate'] ?? null;
+            $pRow['LastAwardLabel'] = $recency[$mid]['LastAwardLabel'] ?? '';
+            $pRow['LastSignIn'] = $recency[$mid]['LastSignIn'] ?? null;
         }
         unset($pRow);
 
@@ -8849,9 +9652,136 @@ class Report extends Ork3
 
         return [
             'ScopeName' => $scopeName,
+            'KingdomId' => $resolvedKingdomId,
             'LadderAwards' => $awardCols,
             'GridRows' => $gridRows,
         ];
+    }
+
+    /**
+     * Last award (any non-revoked, real-dated, non-future) and last sign-in per player.
+     *
+     * @param list<int> $mundaneIds
+     * @return array<int, array{LastAwardDate: ?string, LastAwardLabel: string, LastSignIn: ?string}>
+     */
+    private function ladderGridRecency(array $mundaneIds): array
+    {
+        $mundaneIds = array_values(array_filter(array_map('intval', $mundaneIds)));
+        if ($mundaneIds === []) {
+            return [];
+        }
+        $in = implode(',', $mundaneIds);
+        $out = [];
+        foreach ($mundaneIds as $mid) {
+            $out[$mid] = ['LastAwardDate' => null, 'LastAwardLabel' => '', 'LastSignIn' => null];
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT t.mundane_id, t.date, t.rank, t.label FROM (
+                SELECT ma.mundane_id, ma.date, ma.rank,
+                       COALESCE(NULLIF(ma.custom_name, \'\'), alias.name, NULLIF(ka.name, \'\'), a.name) AS label,
+                       ROW_NUMBER() OVER (PARTITION BY ma.mundane_id ORDER BY ma.date DESC, ma.awards_id DESC) AS rn
+                FROM ' . DB_PREFIX . 'awards ma
+                JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+                LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = ma.alias_award_id
+                WHERE ma.mundane_id IN (' . $in . ")
+                  AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                  AND ma.date >= '1980-01-01' AND ma.date <= CURDATE()
+             ) t WHERE t.rn = 1"
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $mid = (int) $rs->mundane_id;
+                if (!isset($out[$mid])) {
+                    continue;
+                }
+                $label = trim((string) preg_replace('/^Order of (?:the )?/i', '', (string) $rs->label));
+                $rank = (int) $rs->rank;
+                if ($rank > 0) {
+                    $label .= ' ' . $rank;
+                }
+                $out[$mid]['LastAwardDate'] = (string) $rs->date;
+                $out[$mid]['LastAwardLabel'] = $label;
+            }
+        }
+
+        $this->db->Clear();
+        $ss = $this->db->DataSet(
+            'SELECT mundane_id, MAX(date) AS last_date FROM ' . DB_PREFIX . 'attendance
+             WHERE mundane_id IN (' . $in . ") AND date >= '1980-01-01'
+             GROUP BY mundane_id"
+        );
+        if ($ss) {
+            while ($ss->Next()) {
+                $mid = (int) $ss->mundane_id;
+                if (isset($out[$mid])) {
+                    $out[$mid]['LastSignIn'] = (string) $ss->last_date;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Players on the Smart Planning Grid's "New Players" list: active, in scope,
+     * not on the main grid, and signed in on 2+ distinct dates in the last 90 days.
+     *
+     * @return array{Status: array<string, mixed>, Players: list<array<string, mixed>>}
+     */
+    public function GetLadderGridNewPlayers($request)
+    {
+        $grid = $this->GetLadderAwardGrid($request);
+        $st = $grid['Status'] ?? null;
+        if (is_array($st) && ($st['Status'] ?? 0) !== 0) {
+            return ['Status' => $st, 'Players' => []];
+        }
+        $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : 0;
+        $parkId = valid_id($request['ParkId'] ?? 0) ? (int) $request['ParkId'] : 0;
+
+        $onGrid = [];
+        foreach ($grid['GridRows'] ?? [] as $row) {
+            $onGrid[(int) $row['MundaneId']] = true;
+        }
+
+        $locationClause = $parkId > 0 ? 'AND m.park_id = ' . $parkId : 'AND m.kingdom_id = ' . $kingdomId;
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name
+             FROM ' . DB_PREFIX . 'mundane m
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+             JOIN ' . DB_PREFIX . "attendance a ON a.mundane_id = m.mundane_id
+                  AND a.date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY) AND a.date <= CURDATE()
+             WHERE m.active = 1 {$locationClause}
+             GROUP BY m.mundane_id, m.persona, m.suspended, p.park_id, p.name
+             HAVING COUNT(DISTINCT a.date) >= 2
+             ORDER BY m.persona"
+        );
+        $players = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $mid = (int) $rs->mundane_id;
+                if (!$mid || isset($onGrid[$mid])) {
+                    continue;
+                }
+                $players[$mid] = [
+                    'MundaneId' => $mid,
+                    'Persona' => (string) $rs->persona,
+                    'ParkId' => (int) $rs->park_id,
+                    'ParkName' => (string) ($rs->park_name ?? ''),
+                    'Suspended' => (int) $rs->suspended,
+                ];
+            }
+        }
+        $recency = $this->ladderGridRecency(array_keys($players));
+        foreach ($players as $mid => &$pl) {
+            $pl += $recency[$mid];
+        }
+        unset($pl);
+
+        return ['Status' => Success(), 'Players' => array_values($players)];
     }
 
     /**

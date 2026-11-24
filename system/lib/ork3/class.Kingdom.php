@@ -8,6 +8,7 @@ class Kingdom extends Ork3
     // redundant DB hits — most notably for ordinary kingdoms that have no children.
     private $childPrincipalityCache = array();
     private $statsIncludesPrincipalityCache = array();
+    private $countsOnlineAttendanceCache = array();
 
     public function __construct()
     {
@@ -415,6 +416,7 @@ class Kingdom extends Ork3
             $c->add_config($mundane_id, CFG_KINGDOM, 'color', $this->kingdom->kingdom_id, 'AtlasColor', 'FE7569');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AwardRecsPublic', '1');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'IncludePrincipalityInStatistics', '0');
+            $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'CountOnlineAttendance', '1');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'QualTestReeveEnabled', '0');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'QualTestCorporaEnabled', '0');
 
@@ -759,6 +761,21 @@ class Kingdom extends Ork3
             && (int)$configs['IncludePrincipalityInStatistics']['Value'] === 1;
         $this->statsIncludesPrincipalityCache[$kingdomId] = $enabled;
         return $enabled;
+    }
+
+    // False iff the CountOnlineAttendance config flag for $kingdomId is off; a missing
+    // row counts online sign-ins (true). Read only by Voting Eligibility: online
+    // attendance counts everywhere else. Values may be stored bare (1) or JSON-quoted ("1").
+    public function CountsOnlineAttendance(int $kingdomId): bool
+    {
+        if (isset($this->countsOnlineAttendanceCache[$kingdomId])) {
+            return $this->countsOnlineAttendanceCache[$kingdomId];
+        }
+        $configs = Common::get_configs($kingdomId, CFG_KINGDOM);
+        $counts = !isset($configs['CountOnlineAttendance'])
+            || (int)$configs['CountOnlineAttendance']['Value'] === 1;
+        $this->countsOnlineAttendanceCache[$kingdomId] = $counts;
+        return $counts;
     }
 
     // GetFamilyKingdomIds($kingdomId) when StatsIncludesPrincipalities is true AND

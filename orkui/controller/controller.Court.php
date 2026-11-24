@@ -8,6 +8,36 @@ class Controller_Court extends Controller
         $this->load_model('Court');
     }
 
+    /**
+     * Breadcrumb follows the court's scope, not the session's Kingdom and park (the
+     * base Controller seeds those from the session, so an officer planning for another
+     * park saw their own home above the court). Same approach as the Reports
+     * controller's _pe_scope_breadcrumb. $planner_link adds a Court Planner crumb
+     * pointing at the scope's list, for the pages under it.
+     */
+    private function scope_breadcrumb(int $kingdom_id, int $park_id, string $kingdom_name, string $park_name, bool $planner_link): void
+    {
+        unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['courts']);
+        if ($kingdom_id > 0) {
+            $this->data['menu']['kingdom'] = [
+                'url'     => UIR . 'Kingdom/profile/' . $kingdom_id,
+                'display' => htmlspecialchars($kingdom_name !== '' ? $kingdom_name : 'Kingdom', ENT_QUOTES, 'UTF-8'),
+            ];
+        }
+        if ($park_id > 0) {
+            $this->data['menu']['park'] = [
+                'url'     => UIR . 'Park/profile/' . $park_id,
+                'display' => htmlspecialchars($park_name !== '' ? $park_name : 'Park', ENT_QUOTES, 'UTF-8'),
+            ];
+        }
+        if ($planner_link) {
+            $this->data['menu']['courts'] = [
+                'url'     => UIR . 'Court/list/' . ($park_id > 0 ? 'park/' . $park_id : 'kingdom/' . $kingdom_id),
+                'display' => 'Court Planner',
+            ];
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Court list — standalone page
     // Route: ?Route=Court/list/kingdom/{kingdom_id}
@@ -68,17 +98,19 @@ class Controller_Court extends Controller
 
         // Location name
         $locationName = '';
+        $parkName     = '';
+        $kInfo        = $this->Court->get_kingdom_short_info($kingdom_id);
+        $kingdomName  = (string)($kInfo['KingdomInfo']['KingdomName'] ?? '');
         if ($park_id > 0) {
             $pInfo = $this->Court->get_park_short_info($park_id);
             if (isset($pInfo['ParkInfo']['ParkName'])) {
-                $locationName = $pInfo['ParkInfo']['ParkName'];
+                $parkName     = $pInfo['ParkInfo']['ParkName'];
+                $locationName = $parkName;
             }
         } else {
-            $kInfo = $this->Court->get_kingdom_short_info($kingdom_id);
-            if (isset($kInfo['KingdomInfo']['KingdomName'])) {
-                $locationName = $kInfo['KingdomInfo']['KingdomName'];
-            }
+            $locationName = $kingdomName;
         }
+        $this->scope_breadcrumb($kingdom_id, $park_id, $kingdomName, $parkName, false);
 
         $this->data['CourtList']      = $courtList;
         $this->data['UpcomingEvents'] = $upcomingEvents;
@@ -117,6 +149,7 @@ class Controller_Court extends Controller
             $this->data['Error'] = 'You do not have permission to manage this court.';
             return;
         }
+        $this->scope_breadcrumb((int)$court['KingdomId'], (int)$court['ParkId'], (string)$court['KingdomName'], (string)$court['ParkName'], true);
 
         $courtAwards  = $this->Court->get_court_awards($court_id, $uid);
         // Non-award line items that share the running order with the awards.
@@ -236,6 +269,7 @@ class Controller_Court extends Controller
             $this->data['Error'] = 'You do not have permission to record this court.';
             return;
         }
+        $this->scope_breadcrumb((int)$court['KingdomId'], (int)$court['ParkId'], (string)$court['KingdomName'], (string)$court['ParkName'], true);
 
         // Event options for the top strip's re-link select — mirrors detail()'s
         // identical call; scoped to the COURT's kingdom, not the session's.
