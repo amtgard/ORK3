@@ -81,6 +81,11 @@ class Model_Legend extends Model
         return Legend::setYear($uid, $mundaneId, $year);
     }
 
+    public function roll(): array
+    {
+        return Legend::roll();
+    }
+
     public function memories(int $mundaneId, int $limit = Legend::MEMORIES_PER_PAGE, int $offset = 0): array
     {
         return Legend::memories($mundaneId, $limit, $offset);

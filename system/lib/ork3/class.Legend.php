@@ -487,6 +487,34 @@ class Legend
     }
 
     /**
+     * The In Memoriam roll: every Legend, the latest year first and by persona
+     * within a year, each with their home and how many memories stand on their wall.
+     *
+     * @return list<array{MundaneId: int, Persona: string, Year: int, ParkName: string, KingdomName: string, Memories: int}>
+     */
+    public static function roll(): array
+    {
+        $p = DB_PREFIX;
+        return array_map(static fn (array $r): array => [
+            'MundaneId'   => (int) $r['mundane_id'],
+            'Persona'     => (string) $r['persona'],
+            'Year'        => (int) $r['legend_year'],
+            'ParkName'    => (string) $r['park_name'],
+            'KingdomName' => (string) $r['kingdom_name'],
+            'Memories'    => (int) $r['memories'],
+        ], self::rows(
+            "SELECT m.mundane_id, m.persona, m.legend_year, pk.name AS park_name, k.name AS kingdom_name,
+                    (SELECT COUNT(*) FROM {$p}legend_memory lm
+                      WHERE lm.mundane_id = m.mundane_id AND lm.removed_by_id = 0) AS memories
+             FROM {$p}mundane m
+             LEFT JOIN {$p}park pk ON pk.park_id = m.park_id
+             LEFT JOIN {$p}kingdom k ON k.kingdom_id = m.kingdom_id
+             WHERE m.is_legend = 1
+             ORDER BY m.legend_year DESC, m.persona, m.mundane_id"
+        ));
+    }
+
+    /**
      * What has been taken off a wall, newest removal first, for those who may
      * manage the Legend. There is no restoring: this is the record.
      *
