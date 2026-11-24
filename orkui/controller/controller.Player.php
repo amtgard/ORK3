@@ -484,6 +484,7 @@ class Controller_Player extends Controller
         $this->data['CanManageLegend'] = $legendView['CanManageLegend'];
         $this->data['LegendMarkedBy']  = $legendView['MarkedBy'];
         $this->data['LegendMarkedOn']  = $legendView['MarkedOn'];
+        $this->data['LegendWallOpen']  = $legendView['WallOpen'];
         $this->data['Memories']        = $legendView['Memories'];
         $this->data['MemoryCount']     = $legendView['MemoryCount'];
         $this->data['RemovedMemories'] = $legendView['RemovedMemories'];

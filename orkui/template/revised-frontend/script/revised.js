@@ -21394,7 +21394,8 @@ window.orkEnsureGoogleMaps = (function() {
         var titleEl = gid('pn-legend-title'), introEl = gid('pn-legend-intro'), errEl = gid('pn-legend-error'),
             yearRow = gid('pn-legend-year-row'), yearEl = gid('pn-legend-year'), detailEl = gid('pn-legend-detail'),
             cancelBtn = gid('pn-legend-cancel'), confirmBtn = gid('pn-legend-confirm'), closeBtn = gid('pn-legend-close-btn'),
-            copyBtn = gid('pn-legend-copy'), yearWarnEl = gid('pn-legend-year-warn');
+            copyBtn = gid('pn-legend-copy'), yearWarnEl = gid('pn-legend-year-warn'),
+            wallRow = gid('pn-legend-wall-row'), wallEl = gid('pn-legend-wall');
         var onConfirm = null, reloadOnClose = false, previewRun = 0, busy = false, release = null, playerFacts = null;
 
         function open(opts) {
@@ -21409,6 +21410,9 @@ window.orkEnsureGoogleMaps = (function() {
             detailEl.textContent = '';
             yearRow.style.display = opts.year ? '' : 'none';
             yearEl.value = opts.yearValue || '';
+            // Mark as Legend only: the wall is on unless the officer unticks it.
+            wallRow.style.display = opts.wall ? '' : 'none';
+            wallEl.checked = true;
             cancelBtn.style.display = '';
             confirmBtn.textContent = opts.confirmText;
             confirmBtn.className = 'pn-btn ' + (opts.danger ? 'btn-danger-confirm' : 'pn-btn-primary');
@@ -21460,7 +21464,7 @@ window.orkEnsureGoogleMaps = (function() {
             return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         }
         function markIntro(who) {
-            return 'This marks ' + who + ' as having passed away. Their login stops working, and their profile becomes a memorial with a Memory Wall.';
+            return 'This marks ' + who + ' as having passed away. Their login stops working, and their profile becomes a memorial.';
         }
         // A year earlier than the record shows is often a typo. It warns; it doesn't block.
         function warnYear() {
@@ -21502,6 +21506,7 @@ window.orkEnsureGoogleMaps = (function() {
             reloadOnClose = true;
             introEl.textContent = message;
             yearRow.style.display = 'none';
+            wallRow.style.display = 'none';
             detailEl.textContent = '';
             render();
             copyBtn.style.display = detailEl.querySelector('li') ? '' : 'none';
@@ -21546,13 +21551,15 @@ window.orkEnsureGoogleMaps = (function() {
                 title: 'Mark as Legend',
                 intro: markIntro(PnConfig.playerPersona),
                 year: true,
+                wall: true,
                 confirmText: 'Mark as Legend',
                 danger: true,
                 startDisabled: true,
                 onConfirm: function() {
                     var year = readYear();
                     if (!year) return;
-                    run(function() { return legendPost('convert', PnConfig.playerId, { Year: year }); }, function(r) {
+                    var wall = wallEl.checked ? '1' : '0';
+                    run(function() { return legendPost('convert', PnConfig.playerId, { Year: year, Wall: wall }); }, function(r) {
                         showResult(PnConfig.playerPersona + ' is now a Legend.', function() {
                             if (r.cleared && r.cleared.length) {
                                 appendList('Cleared', labelsOf(r.cleared));
@@ -21596,6 +21603,21 @@ window.orkEnsureGoogleMaps = (function() {
                 }
             });
             loadDetail('Checking what was cleared…', 'cleared', appendWhatWasCleared);
+        });
+
+        var wallBtn = gid('pn-legend-wall-btn');
+        if (wallBtn) wallBtn.addEventListener('click', function() {
+            var turnOn = !PnConfig.legendWallOpen;
+            open({
+                title: turnOn ? 'Turn On Memory Wall' : 'Turn Off Memory Wall',
+                intro: turnOn
+                    ? 'This opens a Memory Wall on ' + PnConfig.playerPersona + "'s memorial, where members can leave memories. Any memories left before come back."
+                    : 'This takes the Memory Wall off ' + PnConfig.playerPersona + "'s memorial. The memories on it are hidden, not deleted, and come back if the wall is turned on again.",
+                confirmText: turnOn ? 'Turn On Memory Wall' : 'Turn Off Memory Wall',
+                onConfirm: function() {
+                    run(function() { return legendPost('wall', PnConfig.playerId, { Open: turnOn ? '1' : '0' }); }, reload);
+                }
+            });
         });
 
         var yearBtn = gid('pn-legend-year-btn');

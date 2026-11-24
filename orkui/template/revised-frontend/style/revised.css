@@ -11342,6 +11342,10 @@ a.pn-lg-login, a.pn-lg-login:visited {
 }
 #pn-legend-admin .pn-detail-row { margin-bottom: 10px; }
 #pn-legend-admin .pn-legend-note { margin: 0 0 10px; }
+.pn-legend-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#theme_container .pn-legend-wall-label,
+.pn-legend-wall-label { display: flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 400; cursor: pointer; }
+.pn-legend-wall-label input { width: 18px; height: 18px; margin: 0; flex: none; }
 .pn-legend-year-warn { margin-top: 6px; font-size: 13px; }
 #pn-legend-overlay .pn-modal-footer { flex-wrap: wrap; }
 #theme_container #pn-legend-year,

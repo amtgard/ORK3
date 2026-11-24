@@ -6,6 +6,8 @@
 --
 --   ork_mundane.is_legend    1 = this player is a Legend (indexed: lists filter on it)
 --   ork_mundane.legend_year  the year they passed (0 = unset); the banner reads it
+--   ork_mundane.legend_wall  1 = this Legend's Memory Wall is open (the default); 0 hides
+--                            the wall and its memories, which are kept
 --   ork_legend_log           one snapshot per convert / undo / year change, holding
 --                            what the conversion cleared so an undo can restore it
 --   ork_legend_memory        the memory wall: short notes left by friends and family;
@@ -26,7 +28,8 @@
 
 ALTER TABLE ork_mundane
   ADD COLUMN IF NOT EXISTS is_legend   TINYINT(1)        NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS legend_year SMALLINT UNSIGNED NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS legend_year SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS legend_wall TINYINT(1)        NOT NULL DEFAULT 1;
 
 ALTER TABLE ork_mundane ADD INDEX IF NOT EXISTS idx_mundane_is_legend (is_legend);
 

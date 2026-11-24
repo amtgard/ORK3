@@ -8,6 +8,9 @@
 	$can_delete_recommendation = !empty($canDeleteRecommendation);
 
 	$isLegend = !empty($IsLegend);
+	// A Legend's Memory Wall can be closed (Legend::setWall): then there is no tab, and the
+	// profile opens as any other player's does. The In Memoriam card stays either way.
+	$hasWall  = $isLegend && !empty($LegendWallOpen);
 	// A Legend's suspension data stays on the record; the Legend status takes priority in the display.
 	$isSuspended = ($Player['Suspended'] == 1) && !$isLegend;
 	$isActive = ($Player['Active'] == 1 && !$isSuspended);
@@ -1651,10 +1654,17 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<span class="pn-detail-label">Year of Passing</span>
 					<span class="pn-detail-value"><?= (int)$LegendYear ?></span>
 				</div>
+				<div class="pn-detail-row">
+					<span class="pn-detail-label">Memory Wall</span>
+					<span class="pn-detail-value"><?= $hasWall ? 'On' : 'Off' ?></span>
+				</div>
 				<?php if (!empty($LegendMarkedBy) && !empty($LegendMarkedOn)): ?>
 				<p class="pn-legend-note">Marked by <?= htmlspecialchars($LegendMarkedBy, ENT_QUOTES) ?> on <?= date('F j, Y', strtotime($LegendMarkedOn)) ?></p>
 				<?php endif; ?>
-				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-undo-btn">Remove Legend Status</button>
+				<div class="pn-legend-actions">
+					<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-wall-btn"><?= $hasWall ? 'Turn Off Memory Wall' : 'Turn On Memory Wall' ?></button>
+					<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-undo-btn">Remove Legend Status</button>
+				</div>
 			<?php else: ?>
 				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-mark-btn">Mark as Legend</button>
 			<?php endif; ?>
@@ -1672,7 +1682,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 	<div class="pn-main">
 		<div class="pn-tabs">
 			<ul class="pn-tab-nav">
-				<?php if ($isLegend): ?>
+				<?php if ($hasWall): ?>
 				<li class="pn-tab-active" data-tab="memories">
 					<i class="fas fa-feather-alt"></i><span class="pn-tab-label"> Memory Wall</span> <span class="pn-tab-count">(<?= is_array($Memories ?? null) ? count($Memories) : 0 ?>)</span>
 				</li>
@@ -1708,9 +1718,11 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					// filled in their About content (Persona/Story text). Otherwise default to
 					// Awards as before. Auto-derived stuff like milestones/beltline doesn't
 					// count — only deliberate text content from the design modal.
-					// A Legend's profile always opens on the Memory Wall.
-					$_aboutIsDefault = !$isOwnProfile && !$isLegend && ($_hasAboutPersona || $_hasAboutStory);
-					$_awardsIsDefault = !$isOwnProfile && !$isLegend && !$_aboutIsDefault;
+					// A Legend's profile opens on the Memory Wall when it has one; without one it
+					// opens on About whenever that tab exists (milestones and beltline count here:
+					// who they were, ahead of the awards table).
+					$_aboutIsDefault = !$isOwnProfile && !$hasWall && ($_hasAboutPersona || $_hasAboutStory || ($isLegend && $_showAboutTab));
+					$_awardsIsDefault = !$isOwnProfile && !$hasWall && !$_aboutIsDefault;
 				?>
 				<?php if ($_showAboutTab): ?>
 				<li<?= $_aboutIsDefault ? ' class="pn-tab-active"' : '' ?> data-tab="about">
@@ -1739,9 +1751,9 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
 			</ul>
-			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isLegend ? 'Memory Wall' : ($isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards')) ?></div>
+			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $hasWall ? 'Memory Wall' : ($isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards')) ?></div>
 
-			<?php if ($isLegend): ?>
+			<?php if ($hasWall): ?>
 			<div class="pn-tab-panel" id="pn-tab-memories">
 				<?php include __DIR__ . '/_legend_wall.tpl'; ?>
 			</div>
@@ -4189,6 +4201,9 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 				<input type="number" id="pn-legend-year" min="<?= (int)$LegendMinYear ?>" max="<?= (int)date('Y') ?>" step="1" />
 				<div class="pn-legend-warnings pn-legend-year-warn" id="pn-legend-year-warn" aria-live="polite"></div>
 			</div>
+			<div class="pn-rec-field" id="pn-legend-wall-row">
+				<label class="pn-legend-wall-label" for="pn-legend-wall"><input type="checkbox" id="pn-legend-wall" checked /> Open a Memory Wall, where members can leave memories</label>
+			</div>
 			<div id="pn-legend-detail"></div>
 		</div>
 		<div class="pn-modal-footer">
@@ -4379,6 +4394,7 @@ var PnConfig = {
 	isLegend:       <?= $isLegend ? 'true' : 'false' ?>,
 	canManageLegend:<?= !empty($CanManageLegend) ? 'true' : 'false' ?>,
 	legendYear:     <?= (int)($LegendYear ?? 0) ?>,
+	legendWallOpen: <?= $hasWall ? 'true' : 'false' ?>,
 	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
 	heldAwardIds:        <?= json_encode(array_values($playerHeldAwardIds)) ?>,

@@ -69,6 +69,9 @@ class Legend
     /** @var array<int,bool> per-request memo of isLegend() */
     private static $memo = [];
 
+    /** @var array<int,bool> per-request memo of wallOpen() */
+    private static $wallMemo = [];
+
     /** Is this player a Legend? Memoised for the request; clearMemo() after a change. */
     public static function isLegend(int $mundaneId): bool
     {
@@ -84,10 +87,28 @@ class Legend
         return self::$memo[$mundaneId];
     }
 
+    /**
+     * Is this Legend's Memory Wall open? Those who manage the status may close it
+     * (setWall), which hides the wall and its memories without deleting them. False
+     * for anyone who is not a Legend. Memoised like isLegend().
+     */
+    public static function wallOpen(int $mundaneId): bool
+    {
+        if (!self::isLegend($mundaneId)) {
+            return false;
+        }
+        if (!array_key_exists($mundaneId, self::$wallMemo)) {
+            $row = self::rows('SELECT legend_wall FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId);
+            self::$wallMemo[$mundaneId] = (int) ($row[0]['legend_wall'] ?? 0) === 1;
+        }
+        return self::$wallMemo[$mundaneId];
+    }
+
     /** Forget every memoised answer; call after converting, undoing or in tests. */
     public static function clearMemo(): void
     {
         self::$memo = [];
+        self::$wallMemo = [];
     }
 
     /** A global ORK admin: an unscoped admin authorization row. */
@@ -151,7 +172,7 @@ class Legend
      * MarkedBy and MarkedOn name who converted this Legend, for those who may
      * manage them; empty for anyone else, or when the log has no conversion.
      *
-     * @return array{IsLegend: bool, CanManageLegend: bool, MarkedBy: string, MarkedOn: string, CanViewAdmin: bool, CanEditAdmin: bool, CanEditAwards: bool, Memories: list<array<string, mixed>>, MemoryCount: int, RemovedMemories: list<array<string, mixed>>, MinYear: int, MaxMemoryChars: int}
+     * @return array{IsLegend: bool, CanManageLegend: bool, MarkedBy: string, MarkedOn: string, CanViewAdmin: bool, CanEditAdmin: bool, CanEditAwards: bool, WallOpen: bool, Memories: list<array<string, mixed>>, MemoryCount: int, RemovedMemories: list<array<string, mixed>>, MinYear: int, MaxMemoryChars: int}
      */
     public static function profileView(int $uid, int $mundaneId, int $parkId): array
     {
@@ -172,9 +193,11 @@ class Legend
             'CanViewAdmin'    => $viewAdmin,
             'CanEditAdmin'    => self::canEditAdmin($uid, $mundaneId, $parkId),
             'CanEditAwards'   => $manageAwards && !$blocked,
+            'WallOpen'        => self::wallOpen($mundaneId),
             'Memories'        => self::memories($mundaneId),
             'MemoryCount'     => self::memoryCount($mundaneId),
-            'RemovedMemories' => $canManage && self::isLegend($mundaneId) ? self::removedMemories($uid, $mundaneId)['Memories'] : [],
+            // The record of removals is part of the wall, and is hidden with it.
+            'RemovedMemories' => $canManage && self::wallOpen($mundaneId) ? self::removedMemories($uid, $mundaneId)['Memories'] : [],
             'MinYear'         => self::MIN_YEAR,
             'MaxMemoryChars'  => self::MAX_MEMORY_CHARS,
         ];
@@ -265,20 +288,22 @@ class Legend
      * Mark a player a Legend. In one transaction: clear their future roles,
      * set the status, log what was cleared, and end every login they hold. The
      * clearing goes straight to the tables, ahead of the status change, so no
-     * guard on a Legend can stop a conversion's own writes.
+     * guard on a Legend can stop a conversion's own writes. $wallOpen says
+     * whether the memorial has a Memory Wall (setWall changes it later).
      *
      * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>, Warnings?: list<string>}
      */
-    public static function convert(int $uid, int $mundaneId, int $year): array
+    public static function convert(int $uid, int $mundaneId, int $year, bool $wallOpen = true): array
     {
         $refused = self::refuseConversion($uid, $mundaneId) ?? self::refuseYear($year);
         if ($refused !== null) {
             return $refused;
         }
-        return self::transaction($mundaneId, function (array $player) use ($uid, $mundaneId, $year): array {
+        return self::transaction($mundaneId, function (array $player) use ($uid, $mundaneId, $year, $wallOpen): array {
             if ((int) $player['is_legend'] === 1) {
                 return self::refuse(1, self::REFUSED);
             }
+            $wall = $wallOpen ? 1 : 0;
             $priorActive = (int) $player['active'];
             $items       = self::clearable($mundaneId);
             $warnings    = self::vacancyWarnings($mundaneId);
@@ -289,9 +314,9 @@ class Legend
             self::write('DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . $mundaneId);
             self::clearCourtRoles($items);
 
-            self::write('UPDATE ' . DB_PREFIX . 'mundane SET is_legend = 1, legend_year = ' . $year . ', active = 0 WHERE mundane_id = ' . $mundaneId);
+            self::write('UPDATE ' . DB_PREFIX . 'mundane SET is_legend = 1, legend_year = ' . $year . ', legend_wall = ' . $wall . ', active = 0 WHERE mundane_id = ' . $mundaneId);
             self::log($mundaneId, 'convert', $year, $priorActive, $items, $uid, $warnings);
-            self::audit('convert', $uid, $mundaneId, ['IsLegend' => 0, 'Active' => $priorActive], ['IsLegend' => 1, 'Active' => 0, 'LegendYear' => $year, 'ClearedCount' => count($items)]);
+            self::audit('convert', $uid, $mundaneId, ['IsLegend' => 0, 'Active' => $priorActive], ['IsLegend' => 1, 'Active' => 0, 'LegendYear' => $year, 'MemoryWall' => $wall, 'ClearedCount' => count($items)]);
 
             // The MyISAM writes, last (see the class comment).
             self::purgeSessions($mundaneId);
@@ -416,6 +441,32 @@ class Legend
     }
 
     /**
+     * Open or close a Legend's Memory Wall. Closing hides the wall and everything
+     * on it; nothing is deleted, and opening it again brings the memories back.
+     *
+     * @return array{Status: int, Error?: string}
+     */
+    public static function setWall(int $uid, int $mundaneId, bool $open): array
+    {
+        $refused = self::refuseManagement($uid, $mundaneId);
+        if ($refused !== null) {
+            return $refused;
+        }
+        return self::transaction($mundaneId, function (array $player) use ($uid, $mundaneId, $open): array {
+            if ((int) $player['is_legend'] !== 1) {
+                return self::refuse(1, 'This player is not a Legend.');
+            }
+            $wall = $open ? 1 : 0;
+            if ((int) $player['legend_wall'] !== $wall) {
+                self::write('UPDATE ' . DB_PREFIX . 'mundane SET legend_wall = ' . $wall . ' WHERE mundane_id = ' . $mundaneId);
+                self::audit('setWall', $uid, $mundaneId, ['MemoryWall' => (int) $player['legend_wall']], ['MemoryWall' => $wall]);
+            }
+
+            return ['Status' => 0];
+        });
+    }
+
+    /**
      * End every login the player holds, whoever asks: their ork_session rows,
      * the vestigial ork_mundane.token and third-party app tokens. An app's
      * approval stays, so it can ask for a new token if the status is ever undone.
@@ -452,7 +503,8 @@ class Legend
 
     /**
      * One page of a Legend's visible memories, newest first. Empty for anyone who
-     * is not a Legend, so undoing hides the wall without deleting it. The limit
+     * is not a Legend, so undoing hides the wall without deleting it, and for a
+     * Legend whose wall is closed (wallOpen). The limit
      * and offset come from a public route: a limit outside 1 to MEMORIES_PER_PAGE
      * means a full page.
      *
@@ -460,7 +512,7 @@ class Legend
      */
     public static function memories(int $mundaneId, int $limit = self::MEMORIES_PER_PAGE, int $offset = 0): array
     {
-        if (!self::isLegend($mundaneId)) {
+        if (!self::wallOpen($mundaneId)) {
             return [];
         }
         $limit  = $limit > 0 && $limit < self::MEMORIES_PER_PAGE ? $limit : self::MEMORIES_PER_PAGE;
@@ -480,7 +532,7 @@ class Legend
     /** How many visible memories a Legend has: 0 for anyone who is not a Legend. */
     public static function memoryCount(int $mundaneId): int
     {
-        if (!self::isLegend($mundaneId)) {
+        if (!self::wallOpen($mundaneId)) {
             return 0;
         }
         return (int) (self::rows('SELECT COUNT(*) AS n FROM ' . DB_PREFIX . "legend_memory WHERE mundane_id = {$mundaneId} AND removed_by_id = 0")[0]['n'] ?? 0);
@@ -488,7 +540,8 @@ class Legend
 
     /**
      * The In Memoriam roll: every Legend, the latest year first and by persona
-     * within a year, each with their home and how many memories stand on their wall.
+     * within a year, each with their home and how many memories stand on their wall
+     * (none when the wall is closed).
      *
      * @return list<array{MundaneId: int, Persona: string, Year: int, ParkName: string, KingdomName: string, Memories: int}>
      */
@@ -505,7 +558,7 @@ class Legend
         ], self::rows(
             "SELECT m.mundane_id, m.persona, m.legend_year, pk.name AS park_name, k.name AS kingdom_name,
                     (SELECT COUNT(*) FROM {$p}legend_memory lm
-                      WHERE lm.mundane_id = m.mundane_id AND lm.removed_by_id = 0) AS memories
+                      WHERE lm.mundane_id = m.mundane_id AND lm.removed_by_id = 0 AND m.legend_wall = 1) AS memories
              FROM {$p}mundane m
              LEFT JOIN {$p}park pk ON pk.park_id = m.park_id
              LEFT JOIN {$p}kingdom k ON k.kingdom_id = m.kingdom_id
@@ -608,6 +661,9 @@ class Legend
         }
         if (!self::isLegend($mundaneId)) {
             return self::refuse(1, 'Memories can only be left for a Legend.');
+        }
+        if (!self::wallOpen($mundaneId)) {
+            return self::refuse(1, 'This memorial does not have a Memory Wall.');
         }
         $body = trim($body);
         if ($body === '' || !mb_check_encoding($body, 'UTF-8')) {
@@ -897,7 +953,7 @@ class Legend
         global $DB;
         $DB->BeginTrans();
         try {
-            $player = self::rows('SELECT is_legend, legend_year, active FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId . ' FOR UPDATE');
+            $player = self::rows('SELECT is_legend, legend_year, legend_wall, active FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId . ' FOR UPDATE');
             $result = $player ? $work($player[0]) : self::refuse(1, 'Player not found.');
             if ($result['Status'] !== 0) {
                 $DB->RollbackTrans();

@@ -66,9 +66,9 @@ class Model_Legend extends Model
         return Legend::cleared($uid, $mundaneId);
     }
 
-    public function convert(int $uid, int $mundaneId, int $year): array
+    public function convert(int $uid, int $mundaneId, int $year, bool $wallOpen = true): array
     {
-        return Legend::convert($uid, $mundaneId, $year);
+        return Legend::convert($uid, $mundaneId, $year, $wallOpen);
     }
 
     public function undo(int $uid, int $mundaneId): array
@@ -79,6 +79,11 @@ class Model_Legend extends Model
     public function set_year(int $uid, int $mundaneId, int $year): array
     {
         return Legend::setYear($uid, $mundaneId, $year);
+    }
+
+    public function set_wall(int $uid, int $mundaneId, bool $open): array
+    {
+        return Legend::setWall($uid, $mundaneId, $open);
     }
 
     public function roll(): array

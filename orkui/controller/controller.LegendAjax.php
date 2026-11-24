@@ -26,11 +26,11 @@ class Controller_LegendAjax extends Controller
         $this->envelope($r, ['items' => $r['Items'] ?? [], 'warnings' => $r['Warnings'] ?? [], 'player' => $r['Player'] ?? []]);
     }
 
-    /** Mark a player as a Legend. Year is a form field. */
+    /** Mark a player as a Legend. Year is a form field; Wall = 0 leaves the memorial without a Memory Wall. */
     public function convert($p = null)
     {
         $uid = $this->requirePost();
-        $r = $this->Legend->convert($uid, $this->playerId($p), $this->Legend->parse_year($_POST['Year'] ?? ''));
+        $r = $this->Legend->convert($uid, $this->playerId($p), $this->Legend->parse_year($_POST['Year'] ?? ''), ($_POST['Wall'] ?? '1') !== '0');
         $this->envelope($r, ['cleared' => $r['Cleared'] ?? [], 'warnings' => $r['Warnings'] ?? []]);
     }
 
@@ -48,6 +48,14 @@ class Controller_LegendAjax extends Controller
         $uid = $this->requireLogin();
         $r = $this->Legend->cleared($uid, $this->playerId($p));
         $this->envelope($r, ['cleared' => $r['Cleared'] ?? [], 'warnings' => $r['Warnings'] ?? [], 'clearedOn' => $r['ClearedOn'] ?? '']);
+    }
+
+    /** Open (Open = 1) or close a Legend's Memory Wall. */
+    public function wall($p = null)
+    {
+        $uid = $this->requirePost();
+        $r = $this->Legend->set_wall($uid, $this->playerId($p), ($_POST['Open'] ?? '') === '1');
+        $this->envelope($r, []);
     }
 
     /** Correct a Legend's year. */
