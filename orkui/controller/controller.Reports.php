@@ -1717,6 +1717,10 @@ class Controller_Reports extends Controller
         } elseif ($type === 'Kingdom') {
             $this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . $kingdom_id . '&tab=reports';
         }
+        // Kingdom and park crumbs follow the grid's scope, not the session's. A park
+        // grid's ScopeName is "Kingdom — Park", so the park crumb takes the bare name.
+        $this->load_model('Park');
+        $this->_pe_scope_breadcrumb($type, $id, $type === 'Park' ? (string)$this->Park->get_park_name($park_id) : $scopeName);
 
         $this->data['LadderAwards'] = $assembly['LadderAwards'] ?? [];
         $this->data['GridRows'] = $assembly['GridRows'] ?? [];
