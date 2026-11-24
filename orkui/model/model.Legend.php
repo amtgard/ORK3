@@ -86,9 +86,14 @@ class Model_Legend extends Model
         return Legend::setWall($uid, $mundaneId, $open);
     }
 
-    public function roll(): array
+    public function roll(int $kingdomId = 0): array
     {
-        return Legend::roll();
+        return Legend::roll($kingdomId);
+    }
+
+    public function kingdom_name(int $kingdomId): string
+    {
+        return Legend::kingdomName($kingdomId);
     }
 
     public function memories(int $mundaneId, int $limit = Legend::MEMORIES_PER_PAGE, int $offset = 0): array

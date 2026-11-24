@@ -11334,6 +11334,24 @@ a.pn-lg-login, a.pn-lg-login:visited {
     overflow-wrap: anywhere;
 }
 .pn-legend-warnings { color: #975a16; }
+.pn-legend-caution {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    text-align: left;
+    background: #fff5f5;
+    border: 1px solid #feb2b2;
+    border-radius: 6px;
+    color: #c53030;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+.pn-legend-caution i { margin-top: 3px; }
+.pn-legend-note-top { margin: 0 0 10px; }
 .pn-legend-note {
     margin: 12px 0 0;
     text-align: left;
@@ -11398,6 +11416,7 @@ html[data-theme="dark"] #theme_container .pn-lg-remove-reason {
 html[data-theme="dark"] .pn-lg-removed,
 html[data-theme="dark"] .pn-lg-removed-note { color: #b8a684; }
 html[data-theme="dark"] .pn-legend-warnings { color: #f6c37a; }
+html[data-theme="dark"] .pn-legend-caution { background: #3b1d1d; border-color: #7a2e2e; color: #feb2b2; }
 
 @media (max-width: 600px) {
     .pn-legend-card { padding: 14px 16px 15px; }

@@ -541,13 +541,14 @@ class Legend
     /**
      * The In Memoriam roll: every Legend, the latest year first and by persona
      * within a year, each with their home and how many memories stand on their wall
-     * (none when the wall is closed).
+     * (none when the wall is closed). With a kingdom id, only that kingdom's Legends.
      *
      * @return list<array{MundaneId: int, Persona: string, Year: int, ParkName: string, KingdomName: string, Memories: int}>
      */
-    public static function roll(): array
+    public static function roll(int $kingdomId = 0): array
     {
         $p = DB_PREFIX;
+        $inKingdom = $kingdomId > 0 ? " AND m.kingdom_id = {$kingdomId}" : '';
         return array_map(static fn (array $r): array => [
             'MundaneId'   => (int) $r['mundane_id'],
             'Persona'     => (string) $r['persona'],
@@ -562,9 +563,18 @@ class Legend
              FROM {$p}mundane m
              LEFT JOIN {$p}park pk ON pk.park_id = m.park_id
              LEFT JOIN {$p}kingdom k ON k.kingdom_id = m.kingdom_id
-             WHERE m.is_legend = 1
+             WHERE m.is_legend = 1{$inKingdom}
              ORDER BY m.legend_year DESC, m.persona, m.mundane_id"
         ));
+    }
+
+    /** The name of a kingdom or principality for its Hall of Legends; '' when there is none by that id. */
+    public static function kingdomName(int $kingdomId): string
+    {
+        if ($kingdomId <= 0) {
+            return '';
+        }
+        return (string) (self::rows('SELECT name FROM ' . DB_PREFIX . "kingdom WHERE kingdom_id = {$kingdomId}")[0]['name'] ?? '');
     }
 
     /**

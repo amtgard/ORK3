@@ -51,6 +51,21 @@ final class LegendRollTest extends TestCase
         $this->assertNotSame('', $mine[0]['KingdomName']);
     }
 
+    public function test_a_kingdom_roll_lists_only_that_kingdoms_legends(): void
+    {
+        $legend  = $this->fixture->addPlayer($this->park, 'legend', 2021)['mundane_id'];
+        $kingdom = (int) $this->fixture->pdo()->query('SELECT kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $legend)->fetchColumn();
+
+        $this->assertContains($legend, array_column(Legend::roll($kingdom), 'MundaneId'));
+        $this->assertSame([$kingdom], array_values(array_unique(array_map(
+            fn (array $r): int => (int) $this->fixture->pdo()->query('SELECT kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $r['MundaneId'])->fetchColumn(),
+            Legend::roll($kingdom)
+        ))));
+        $this->assertNotContains($legend, array_column(Legend::roll($kingdom + 1000000), 'MundaneId'));
+        $this->assertNotSame('', Legend::kingdomName($kingdom));
+        $this->assertSame('', Legend::kingdomName($kingdom + 1000000));
+    }
+
     public function test_a_removed_memory_is_not_counted(): void
     {
         $legend = $this->fixture->addPlayer($this->park, 'legend', 2020)['mundane_id'];

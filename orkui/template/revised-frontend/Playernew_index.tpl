@@ -1666,6 +1666,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-undo-btn">Remove Legend Status</button>
 				</div>
 			<?php else: ?>
+				<p class="pn-legend-note pn-legend-note-top">For a player who has passed away in real life. Not for a retired persona or a character.</p>
 				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-mark-btn">Mark as Legend</button>
 			<?php endif; ?>
 		</div>
@@ -4195,6 +4196,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 		</div>
 		<div class="pn-modal-body">
 			<div class="pn-form-error" id="pn-legend-error" role="alert"></div>
+			<div class="pn-legend-caution" id="pn-legend-caution" role="note"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> <span>This is only for a real person who has passed away. It is not for a retired persona or a character.</span></div>
 			<p class="pn-legend-intro" id="pn-legend-intro" role="status"></p>
 			<div class="pn-rec-field" id="pn-legend-year-row">
 				<label for="pn-legend-year">Year of Passing <span class="required-indicator">*</span></label>

@@ -21413,6 +21413,9 @@ window.orkEnsureGoogleMaps = (function() {
             // Mark as Legend only: the wall is on unless the officer unticks it.
             wallRow.style.display = opts.wall ? '' : 'none';
             wallEl.checked = true;
+            // Mark as Legend only: this is for a person who has died, not a character.
+            var cautionEl = gid('pn-legend-caution');
+            if (cautionEl) cautionEl.style.display = opts.wall ? '' : 'none';
             cancelBtn.style.display = '';
             confirmBtn.textContent = opts.confirmText;
             confirmBtn.className = 'pn-btn ' + (opts.danger ? 'btn-danger-confirm' : 'pn-btn-primary');
