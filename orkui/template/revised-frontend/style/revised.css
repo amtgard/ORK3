@@ -6702,6 +6702,8 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 .adm-btn-danger { background: #e53e3e; color: #fff; }
 
 /* --- Admin Dashboard Hero (cp-) --- */
+.cp-ts-meta { font-size: 11px; color: #a0aec0; text-align: right; margin: -6px 0 6px; }
+.cp-ts-meta a { color: inherit; text-decoration: underline; }
 .cp-ts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
 .cp-ts-card { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 14px; }
 .cp-ts-icon { width: 38px; height: 38px; border-radius: 8px; background: #ebf4ff; color: #3182ce; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -9204,6 +9206,7 @@ html[data-theme="dark"] .cp-ts-card { background: var(--ork-card-bg); border-col
 html[data-theme="dark"] .cp-ts-val { color: var(--ork-text); }
 html[data-theme="dark"] .cp-ts-lbl { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .cp-ts-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .cp-ts-meta { color: var(--ork-text-muted); }
 html[data-theme="dark"] .cp-ts-icon,
 html[data-theme="dark"] .cp-action-icon-blue { background: rgba(49,130,206,0.15); color: #90cdf4; }
 html[data-theme="dark"] .cp-ts-up,

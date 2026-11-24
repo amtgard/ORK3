@@ -32,17 +32,25 @@ class Controller_Admin extends Controller
         unset($this->data['menu']['kingdom']);
         unset($this->data['menu']['park']);
 
+        // Admin > Refresh stats: drop the cached hero/trend figures, then reload clean.
+        $this->load_model('AdminDashboard');
+        if (($this->request->refresh ?? '') === '1') {
+            $this->AdminDashboard->bust_dashboard_cache();
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
         // Kingdom Overview In-Person / Online / All; the domain normalizes the value.
         $this->load_model('Admin');
         $this->data['AttendanceType'] = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
         $this->data['ActiveKingdomSummary'] = $this->Admin->get_active_kingdoms_summary($this->data['AttendanceType']);
         $this->data['TotalActivePlayers'] = $this->Report->GetDistinctActivePlayerCount(26);
 
-        $this->load_model('AdminDashboard');
         $dashboard = $this->AdminDashboard->dashboard_stats();
         $this->data['TrendStats'] = $dashboard['TrendStats'];
         $this->data['PrevWeekly'] = $dashboard['PrevWeekly'];
         $this->data['PrevMonthly'] = $dashboard['PrevMonthly'];
+        $this->data['StatsAsOf'] = (int) ($dashboard['AsOf'] ?? 0);
 
         $this->template = '../revised-frontend/Admin_index.tpl';
     }

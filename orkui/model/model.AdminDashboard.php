@@ -16,6 +16,11 @@ class Model_AdminDashboard extends Model
         return $r;
     }
 
+    public function bust_dashboard_cache(): void
+    {
+        $this->_report()->BustAdminDashboardCache($this->session->token ?? '');
+    }
+
     public function global_admin_grants(string $token = ''): array
     {
         $r = $this->_administration()->GetGlobalAdminGrants($token);
