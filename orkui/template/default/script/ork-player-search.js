@@ -30,7 +30,7 @@
    OrkPlayerSearch.reattach(inputEl, newOpts) — setOpts on existing or attach fresh (a new scope
      re-validates the filter pill and clears it when it no longer resolves).
    OrkPlayerSearch.filterField(inputEl, {uir, scope, onChange(filter|null, info), placement})
-     → {get, set, getTiers, setScope, destroy} — the filter UI alone, for searches that render their
+     → {get, set, getTiers, reset, setScope, destroy} — the filter UI alone, for searches that render their
      own results (header Universal Search). scope uses the attach() scope keys. getTiers() returns
      {active, inactive, banned} (status toggles in the filter modal; all true = default, no narrowing).
 */
@@ -132,25 +132,20 @@ window.OrkPlayerSearch = (function () {
     return fetch(url, signal ? { signal: signal, credentials: 'same-origin' } : { credentials: 'same-origin' })
       .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
-  function cached(store, key, url, pick){
+  function cached(store, key, url, pick, onData){
     if (!store[key]) {
-      store[key] = getJSON(url).then(function(d){ return (d && d[pick]) || []; });
+      store[key] = getJSON(url).then(function(d){ if (onData) onData(d); return (d && d[pick]) || []; });
       store[key].catch(function(){ delete store[key]; });   // a failed load may be retried
     }
     return store[key];
   }
   function loadKingdoms(uir, scope){
     var k = scopeQS(scope);
-    if (!kingdomCache[k]) {
-      kingdomCache[k] = getJSON(uir + 'SearchAjax/filteroptions' + k).then(function(d){
-        if (d && 'signedIn' in d) {
-          viewerCaps = { signedIn: parseInt(d.signedIn, 10) === 1, canSeeBanned: parseInt(d.canSeeBanned, 10) === 1 };
-        }
-        return (d && d.kingdoms) || [];
-      });
-      kingdomCache[k].catch(function(){ delete kingdomCache[k]; });   // a failed load may be retried
-    }
-    return kingdomCache[k];
+    return cached(kingdomCache, k, uir + 'SearchAjax/filteroptions' + k, 'kingdoms', function(d){
+      if (d && 'signedIn' in d) {
+        viewerCaps = { signedIn: parseInt(d.signedIn, 10) === 1, canSeeBanned: parseInt(d.canSeeBanned, 10) === 1 };
+      }
+    });
   }
   function loadParks(uir, scope, kid){
     var k = scopeQS(scope) + '&forKingdom=' + (parseInt(kid, 10) || 0);
@@ -219,7 +214,7 @@ window.OrkPlayerSearch = (function () {
     root.innerHTML =
         '<div class="ops-filter-backdrop"></div>'
       + '<div class="ops-filter-dialog" role="dialog" aria-modal="true" aria-labelledby="ops-filter-title">'
-      +   '<div class="ops-filter-title" id="ops-filter-title"><i class="fas fa-filter" aria-hidden="true"></i> Filter by kingdom or park</div>'
+      +   '<div class="ops-filter-title" id="ops-filter-title"><i class="fas fa-filter" aria-hidden="true"></i> Filter players</div>'
       +   '<label class="ops-filter-lbl" for="ops-filter-k">Kingdom</label>'
       +   '<select class="ops-filter-sel" id="ops-filter-k"><option value="">All kingdoms</option></select>'
       +   '<label class="ops-filter-lbl" for="ops-filter-p">Park</label>'
@@ -251,7 +246,7 @@ window.OrkPlayerSearch = (function () {
       cb.addEventListener('change', updateApply);
       // Enter toggles too (Space is native for checkboxes); never submits a host form.
       cb.addEventListener('keydown', function(e){
-        if (e.key === 'Enter') { e.preventDefault(); cb.checked = !cb.checked; updateApply(); }
+        if (e.key === 'Enter') { e.preventDefault(); cb.click(); }   // click() fires change
       });
     });
     // Keep the modal's events from reaching host-page "outside click"/Escape handlers
@@ -442,8 +437,8 @@ window.OrkPlayerSearch = (function () {
     pill.appendChild(pillTxt); pill.appendChild(pillX);
     var btn = document.createElement('button');
     btn.type = 'button'; btn.className = 'ops-filter-btn';
-    btn.setAttribute('aria-label', 'Filter by kingdom or park');
-    btn.setAttribute('data-tip', 'Filter by kingdom or park');
+    btn.setAttribute('aria-label', 'Filter players');
+    btn.setAttribute('data-tip', 'Filter players');
     btn.setAttribute('aria-haspopup', 'dialog');
     btn.innerHTML = '<i class="fas fa-filter" aria-hidden="true"></i>';
     root.appendChild(pill); root.appendChild(btn);
@@ -557,9 +552,9 @@ window.OrkPlayerSearch = (function () {
       root.style.height = input.offsetHeight + 'px';
     }
     function render(){
-      var tip = 'Filter by kingdom or park';
+      var tip = 'Filter players';
       if (!tiersDefault(tiers)) {
-        tip += ' — showing ' + TIERS.filter(function(x){ return tiers[x[0]]; })
+        tip += ' — showing ' + TIERS.filter(function(x){ return tiers[x[0]] && tierVisible(x[0]); })
           .map(function(x){ return x[1].replace(' Players', '').toLowerCase(); }).join(', ') + ' players';
       }
       btn.setAttribute('data-tip', tip);
@@ -706,6 +701,7 @@ window.OrkPlayerSearch = (function () {
       get: function(){ return current ? Object.assign({}, current) : null; },
       set: function(f){ set(f); },
       getTiers: function(){ return Object.assign({}, tiers); },
+      reset: function(){ set(null, {}, defaultTiers()); },   // pill AND tiers back to defaults
       // New hard scope: re-validate the pill against it (clears it when it no longer fits).
       setScope: function(s){
         var next = scopeFrom(s);
@@ -849,7 +845,8 @@ window.OrkPlayerSearch = (function () {
       var pid = f ? f.parkId : opts.parkId, kid = f ? f.kingdomId : opts.kingdomId;
       return uir + 'Search/advanced&q=' + encodeURIComponent(lastTerm || input.value.trim())
         + (pid ? '&parkId='    + encodeURIComponent(pid) : '')
-        + (kid ? '&kingdomId=' + encodeURIComponent(kid) : '');
+        + (kid ? '&kingdomId=' + encodeURIComponent(kid) : '')
+        + tiersQS(currentTiers(), ['includeActive', 'includeInactive', 'includeBanned']);
     }
     function render(){
       // An empty page can still have more results behind it (rows filtered client-side
@@ -1006,10 +1003,14 @@ window.OrkPlayerSearch = (function () {
     // out rather than shown unfiltered; typing still runs the real, server-filtered search.
     function preloadRows(){
       var f = currentFilter(), t = currentTiers(), rows = opts.preload.slice();
-      // Status toggles: drop rows known to be in an excluded tier.
+      // Status toggles: keep only rows provably in an included tier; a row without Active can't be
+      // verified, so it is left out (same strictness as the pill). Typing runs the real search.
       if (!tiersDefault(t)) rows = rows.filter(function(p){
         if (p.Banned || p.PenaltyBox || p.Suspended) return t.banned;
-        return (p.Active === 0 || p.Active === '0') ? t.inactive : t.active;
+        var a = p.Active == null || p.Active === '' ? NaN : parseInt(p.Active, 10);
+        if (a === 0) return t.inactive;
+        if (a === 1) return t.active;
+        return false;
       });
       if (!f) return rows;
       return rows.filter(function(p){
@@ -1112,5 +1113,7 @@ window.OrkPlayerSearch = (function () {
     }
   }
 
-  return { attach: attach, reattach: reattach, filterField: filterField };
+  return { attach: attach, reattach: reattach, filterField: filterField,
+    // Advanced Search hand-off params for non-default tiers (header link uses the same names).
+    tiersQS: function(t){ return t ? tiersQS(normTiers(t), ['includeActive', 'includeInactive', 'includeBanned']) : ''; } };
 })();

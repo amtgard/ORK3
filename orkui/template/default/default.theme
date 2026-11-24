@@ -591,7 +591,7 @@ document.addEventListener('keydown', function (e) {
 		} else {
 			var el = document.getElementById('UniversalSearch');
 			if (el) el.value = '';
-			if (nsFilter) nsFilter.set(null);
+			if (nsFilter) nsFilter.reset();   // pill and status toggles
 			var dd = document.getElementById('nav-search-dropdown');
 			if (dd) { dd.className = ''; dd.innerHTML = ''; }
 		}
@@ -740,8 +740,9 @@ document.addEventListener('keydown', function (e) {
 			// An active filter pill carries over, with the same params the component's Advanced link uses.
 			var advTerm = $.trim($('#UniversalSearch').val() || '');
 			var advF = nsFilter ? nsFilter.get() : null;
-			var advScope = advF ? (advF.parkId ? '&parkId=' + encodeURIComponent(advF.parkId) : '')
-				+ '&kingdomId=' + encodeURIComponent(advF.kingdomId) : '';
+			var advScope = (advF ? (advF.parkId ? '&parkId=' + encodeURIComponent(advF.parkId) : '')
+				+ '&kingdomId=' + encodeURIComponent(advF.kingdomId) : '')
+				+ (nsFilter ? OrkPlayerSearch.tiersQS(nsFilter.getTiers()) : '');   // status toggles
 			html += '<div class="nsdd-divider"></div>' +
 				'<a class="nsdd-item" href="' + nsUir + 'Search/advanced&q=' + encodeURIComponent(advTerm) + advScope + '">' +
 				'<span class="nsdd-item-icon"><i class="fas fa-search-plus fa-fw"></i></span>' +
@@ -814,7 +815,7 @@ document.addEventListener('keydown', function (e) {
 				document.getElementById('nav-search-toggle').classList.remove('active');
 				var _inp = document.getElementById('UniversalSearch');
 				if (_inp) { _inp.value = ''; _inp.blur(); }
-				if (nsFilter) nsFilter.set(null);
+				if (nsFilter) nsFilter.reset();   // pill and status toggles
 			}
 		});
 	});

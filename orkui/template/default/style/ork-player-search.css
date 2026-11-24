@@ -130,7 +130,7 @@ html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
 /* Status toggles (Active / Inactive / Banned): switch-styled checkboxes, wrapping on narrow screens. */
 .ops-filter-tiers{ display:flex; flex-wrap:wrap; gap:6px 14px; margin:12px 0 0; padding:10px 0 0; border-top:1px solid #e2e8f0; }
 .ops-filter-tiers[hidden], .ops-filter-tier[hidden]{ display:none; }
-.ops-filter-tier{ position:relative; display:inline-flex; align-items:center; gap:7px; min-height:28px; margin:0; padding:0;
+.ops-filter-tier{ position:relative; display:inline-flex; align-items:center; gap:7px; min-height:34px; margin:0; padding:0;
   float:none; width:auto; font-size:13px; font-weight:600; line-height:1.2; color:#4a5568; cursor:pointer; user-select:none; }
 /* The real checkbox stays focusable/operable; it overlays the switch invisibly. */
 .ops-filter-tier-cb{ position:absolute; left:0; top:50%; width:30px; height:18px; margin:-9px 0 0; padding:0;
