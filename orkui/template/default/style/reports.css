@@ -1276,6 +1276,11 @@ html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-col-player {
 html[data-theme="dark"] .lg-table tbody tr:hover td {
   background: rgba(99,179,237,0.12) !important;
 }
+/* The Persona cell is sticky: a translucent hover lets the columns scrolled under it
+   show through. Same tint, pre-blended onto the card background, so it stays opaque. */
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-col-player {
+  background: #344660 !important;
+}
 html[data-theme="dark"] .lg-table td.lg-col-award {
   border-left-color: var(--ork-border, #4a5568);
 }
@@ -1437,9 +1442,15 @@ html[data-theme="dark"] .lg-sc-tip {
   opacity: 0.7;
   cursor: wait;
 }
-/* The dark .rp-btn-ghost rules would otherwise leave pale text on the white button */
-html[data-theme="dark"] .rp-btn-ghost.lg-sc-btn,
+/* The dark .rp-btn-ghost rules would otherwise leave pale text on the white button,
+   and the dark ghost hover's translucent fill would put dark text on a dark button. */
+html[data-theme="dark"] .rp-btn-ghost.lg-sc-btn {
+  background: #fff;
+  border-color: #fff;
+  color: #1e1b4b;
+}
 html[data-theme="dark"] .rp-btn-ghost.lg-sc-btn:hover {
+  background: #eef2ff;
   border-color: #fff;
   color: #1e1b4b;
 }
