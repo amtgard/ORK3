@@ -977,6 +977,17 @@ p {
 #nav-search-wrap .ops-filter { z-index: calc(var(--ork-z-nav-overlay, 10001) + 1); }
 #nav-search-wrap .ops-filter [data-tip]:hover::after,
 #nav-search-wrap .ops-filter .ops-filter-btn[data-tip]:focus-visible::after { top: calc(100% + 6px) !important; bottom: auto !important; }
+/* The header input is a ~19px underline field, so the component's calc(100% - 4px) icon would be
+   ~15px tall. Give the icon a real hit area: 32px tall on desktop, 36x36 at phone width. The overlay
+   is absolutely positioned and centres the icon, so it overhangs the field evenly and the nav bar
+   height never changes. Hover tint suits the dark nav instead of the light in-page field tint. */
+#nav-search-wrap .ops-filter-btn { width: 28px; height: 32px; max-height: none; flex: none; color: rgba(255,255,255,0.6); }
+#nav-search-wrap .ops-filter-btn:hover,
+#nav-search-wrap .ops-filter-btn.ops-filter-on { color: #fff; }
+#nav-search-wrap .ops-filter-btn:hover { background: rgba(255,255,255,0.12); }
+@media (max-width: 480px) {
+    #nav-search-wrap .ops-filter-btn { width: 36px; height: 36px; }
+}
 #nav-search-dropdown {
     display: none;
     position: absolute;

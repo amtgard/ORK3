@@ -629,10 +629,13 @@ document.addEventListener('keydown', function (e) {
 			uir: nsUir,
 			scope: {},
 			placement: 'anchored',   // popover just under the search bar, not a centred modal
-			onChange: function() {
+			onChange: function(f, info) {
 				var term = $.trim(nsInput.value);
 				clearTimeout(nsTimer);
 				if (nsXhr) nsXhr.abort();
+				// Pill broken back into "KCG:AR…" text: unparseable mid-edit, so don't search it
+				// (it would flash "no results"); drop the filtered results, the next keystroke searches.
+				if (info && info.broken) { $('#nav-search-dropdown').removeClass('nsdd-visible').empty(); return; }
 				if (term.length >= 2) nsSearch(term);
 				else $('#nav-search-dropdown').removeClass('nsdd-visible').empty();
 			}

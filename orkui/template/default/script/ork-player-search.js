@@ -45,8 +45,17 @@ window.OrkPlayerSearch = (function () {
   }
   function csv(v){ return list(v).join(','); }
 
+  // Inputs removed from the page without destroy() (e.g. dynamically rebuilt rows) are dropped
+  // from the registry instead of being visited forever; an input that is re-inserted later
+  // re-registers itself on focus. Only the registration is dropped, never the handle.
+  function pruneInstances(){
+    for (var i = instances.length - 1; i >= 0; i--){
+      if (!instances[i].input.isConnected) { instances[i].close(); instances.splice(i, 1); }
+    }
+  }
   // Shared global listeners (registered once for the whole module, not per attach()).
   document.addEventListener('click', function(e){
+    pruneInstances();
     for (var i = 0; i < instances.length; i++){
       var inst = instances[i];
       if (e.target !== inst.input && !inst.dd.contains(e.target)) inst.close();
@@ -77,15 +86,21 @@ window.OrkPlayerSearch = (function () {
   var kingdomCache = {};      // scope key → Promise<[{id,name,abbr}]>, page lifetime
   var parkCache = {};         // scope key + kingdom → Promise<[{id,name,abbr,kingdomId?,kingdomAbbr?}]>
 
+  // The filter endpoints only read kingdomId/parkId for restrictTo:'kingdom' without
+  // restrictKingdomIds (SearchService::filterScopeKingdomIds), so they are zeroed everywhere else:
+  // unrestricted fields then share one cache entry, and a reattach that only moves the ring centre
+  // doesn't re-validate the pill.
   function scopeFrom(o){
     o = o || {};
-    return { kingdomId: o.kingdomId || 0, parkId: o.parkId || 0, restrictTo: o.restrictTo || '',
-      restrictKingdomIds: list(o.restrictKingdomIds), excludeKingdomId: o.excludeKingdomId || 0,
+    var rk = list(o.restrictKingdomIds), restrictTo = o.restrictTo || '';
+    var centred = restrictTo === 'kingdom' && !rk.length;
+    return { kingdomId: centred ? (parseInt(o.kingdomId, 10) || 0) : 0, parkId: centred ? (parseInt(o.parkId, 10) || 0) : 0,
+      restrictTo: restrictTo, restrictKingdomIds: rk, excludeKingdomId: o.excludeKingdomId || 0,
       excludeParkId: o.excludeParkId || 0 };
   }
   function scopeQS(s){
-    var rk = csv(s.restrictKingdomIds);
-    return '&kingdomId=' + (parseInt(s.kingdomId, 10) || 0) + '&parkId=' + (parseInt(s.parkId, 10) || 0)
+    var rk = csv(s.restrictKingdomIds), kid = parseInt(s.kingdomId, 10) || 0, pid = parseInt(s.parkId, 10) || 0;
+    return (kid ? '&kingdomId=' + kid : '') + (pid ? '&parkId=' + pid : '')
       + (s.restrictTo       ? '&restrictTo='         + encodeURIComponent(s.restrictTo) : '')
       + (rk                 ? '&restrictKingdomIds=' + encodeURIComponent(rk)           : '')
       + (s.excludeKingdomId ? '&excludeKingdomId='   + (parseInt(s.excludeKingdomId, 10) || 0) : '')
@@ -131,6 +146,13 @@ window.OrkPlayerSearch = (function () {
   // ancestors (the header search fades visibility without resizing), and — only for the rare
   // out-of-flow fallback anchor (grid / space-* flex parents) — scroll.
   var syncQueued = false, syncAbsOnly = true;
+  // Same idea for filter fields: a disconnected input leaves the registry (and the ResizeObserver);
+  // its own sync() re-registers it when it is shown again (focus / mouseenter).
+  function pruneFields(){
+    for (var i = filterFields.length - 1; i >= 0; i--){
+      if (!filterFields[i].input.isConnected) filterFields[i].unregister();
+    }
+  }
   function queueSync(absOnly, reprobe){
     if (!absOnly) syncAbsOnly = false;
     // Per field: a hidden/collapsed field keeps the flag until it is next shown and re-measured.
@@ -140,6 +162,7 @@ window.OrkPlayerSearch = (function () {
     (window.requestAnimationFrame || setTimeout)(function(){
       var only = syncAbsOnly;
       syncQueued = false; syncAbsOnly = true;
+      pruneFields();
       filterFields.forEach(function(f){ if (!only || f.absAnchor()) f.sync(); });
     });
   }
@@ -319,7 +342,8 @@ window.OrkPlayerSearch = (function () {
 
   /* filterField(input, {uir, scope, onChange(filter|null, info)}) → {get, set, setScope, destroy}
      info.textChanged is true when the visible text changed (pill broken back into text / prefix
-     absorbed), so a host can drop a stale selection. */
+     absorbed), so a host can drop a stale selection; info.broken is true when Backspace broke the
+     pill back into text — the text is mid-edit, so hosts should not re-search until the next input. */
   function filterField(input, cfg){
     if (!input || !input.parentNode) return null;
     if (input._opsFilter) { input._opsFilter.configure(cfg || {}); return input._opsFilter; }
@@ -432,6 +456,11 @@ window.OrkPlayerSearch = (function () {
     function hideOverlay(){ root.style.display = 'none'; }
     function sync(){
       if (destroyed) return;
+      if (filterFields.indexOf(field) < 0 && input.isConnected) {   // pruned while detached, now back
+        filterFields.push(field);
+        if (ro) ro.observe(input);
+        field.needsReprobe = true;   // its new place may be a different formatting context
+      }
       if (!enabled()) { hideOverlay(); restorePadding(); return; }
       if (!shown()) { hideOverlay(); return; }
       // A visibility:hidden input (e.g. the collapsed header search) gets no overlay and no extra
@@ -530,15 +559,26 @@ window.OrkPlayerSearch = (function () {
         }).catch(function(){});
       }, 120);
     }
+    // A label is only restored as text when it is a prefix the resolver can parse again ("KCG",
+    // "KCG:AR"); a name-based fallback label (missing abbreviation) is not.
+    var PARSEABLE_LABEL_RE = /^[A-Za-z0-9]{2,3}(?::[A-Za-z0-9]{2,3})?$/;
     function onKeydown(e){
       if (e.key !== 'Backspace' || !current || input.selectionStart !== 0 || input.selectionEnd !== 0) return;
       e.preventDefault();
-      // Break the pill back into editable text: "KCG:AR" + whatever was typed, caret after the label.
-      // No separator, so it only re-pills when the user types the closing space again.
       var label = filterLabel(current);
+      if (!PARSEABLE_LABEL_RE.test(label)) {
+        // Name-based label (kingdom or park lacks an abbreviation): restoring it would leave text
+        // that can never re-pill and would pollute the name search, so just drop the filter and
+        // keep the typed text as is — the same as clicking the pill's ×. The icon re-applies it.
+        set(null);
+        return;
+      }
+      // Break the pill back into editable text: "KCG:AR" + whatever was typed, caret after the label.
+      // No separator, so it only re-pills when the user types the closing space again. broken:true
+      // tells hosts not to re-search on "KCG:ARjohn" (unparseable mid-edit); the next keystroke does.
       input.value = label + input.value;
       try { input.setSelectionRange(label.length, label.length); } catch (err) {}
-      set(null, { textChanged: true });
+      set(null, { textChanged: true, broken: true });
     }
     function onFocus(){ checkScope(); sync(); }
     function onBtn(e){ e.preventDefault(); checkScope(); openModal(field); }
@@ -557,6 +597,10 @@ window.OrkPlayerSearch = (function () {
       sync: sync,
       needsReprobe: false,
       absAnchor: function(){ return mode === 'abs'; },
+      unregister: function(){
+        var i = filterFields.indexOf(field); if (i >= 0) filterFields.splice(i, 1);
+        if (ro) ro.unobserve(input);
+      },
       placement: function(){ return cfg.placement === 'anchored' ? 'anchored' : 'modal'; },
       uir: function(){ return cfg.uir || window.UIR || ''; },
       scope: function(){ return scope; },
@@ -825,6 +869,7 @@ window.OrkPlayerSearch = (function () {
 
     var inst = { input: input, dd: dd, close: close, position: position };
     instances.push(inst);
+    var destroyedInst = false;
 
     function onInput(){
       clearTimeout(timer);
@@ -861,9 +906,23 @@ window.OrkPlayerSearch = (function () {
       var it = e.target.closest('[role=option]'); if (!it) return;
       pick(parseInt(it.dataset.i,10));
     }
+    // Preloaded rows honour the filter pill: with a pill set, only rows that provably match it are
+    // shown (ParkId for a park filter, KingdomId for a kingdom filter). Rows the client can't verify
+    // (no ids, or a different kingdom that might be one of the filter's principalities) are left
+    // out rather than shown unfiltered; typing still runs the real, server-filtered search.
+    function preloadRows(){
+      var f = currentFilter(), rows = opts.preload.slice();
+      if (!f) return rows;
+      return rows.filter(function(p){
+        return f.parkId ? parseInt(p.ParkId, 10) === f.parkId : parseInt(p.KingdomId, 10) === f.kingdomId;
+      });
+    }
     function onFocus(){
+      if (!destroyedInst && instances.indexOf(inst) < 0) instances.push(inst);   // re-inserted after a prune
       if (input.value.trim() === '' && opts.preload && opts.preload.length) {
-        items = opts.preload.slice(); hasMore = false; active = -1; render();
+        var rows = preloadRows();
+        if (!rows.length) return;
+        items = rows; hasMore = false; active = -1; render();
       }
     }
     function onBlur(){
@@ -884,6 +943,9 @@ window.OrkPlayerSearch = (function () {
       if (info && info.textChanged && opts.onClear) opts.onClear();
       clearTimeout(timer);
       abortInflight();
+      // Pill broken into "KCG:AR…" text: that can't parse until the closing space, so a search now
+      // would flash "No players found". Drop the stale (filtered) results; the next keystroke searches.
+      if (info && info.broken) { close(); return; }
       // Deferred a tick, like refresh(): the click that changed the pill must settle first.
       setTimeout(function(){
         var t = input.value.trim();
@@ -932,6 +994,7 @@ window.OrkPlayerSearch = (function () {
         ['role','aria-autocomplete','aria-expanded','aria-controls','aria-activedescendant'].forEach(function(a){ input.removeAttribute(a); });
         if (filt) { filt.destroy(); filt = null; }
         dd.remove(); live.remove();
+        destroyedInst = true;
         var idx = instances.indexOf(inst); if (idx >= 0) instances.splice(idx, 1);
         input._opsAttached = false; delete input._opsHandle;
       },
