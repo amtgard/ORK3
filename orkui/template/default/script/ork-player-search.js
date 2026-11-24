@@ -560,7 +560,8 @@ window.OrkPlayerSearch = (function () {
       }, 120);
     }
     // A label is only restored as text when it is a prefix the resolver can parse again ("KCG",
-    // "KCG:AR"); a name-based fallback label (missing abbreviation) is not.
+    // "KCG:AR"); a name-based fallback label (missing abbreviation) is not. A bare kingdom label
+    // is restored as "KCG:" because FILTER_PREFIX_RE requires the colon to re-pill.
     var PARSEABLE_LABEL_RE = /^[A-Za-z0-9]{2,3}(?::[A-Za-z0-9]{2,3})?$/;
     function onKeydown(e){
       if (e.key !== 'Backspace' || !current || input.selectionStart !== 0 || input.selectionEnd !== 0) return;
@@ -573,11 +574,13 @@ window.OrkPlayerSearch = (function () {
         set(null);
         return;
       }
-      // Break the pill back into editable text: "KCG:AR" + whatever was typed, caret after the label.
+      // Break the pill back into editable text: "KCG:AR" (or "KCG:" for a kingdom-only pill, since
+      // the colon is what lets it parse again) + whatever was typed, caret after the prefix.
       // No separator, so it only re-pills when the user types the closing space again. broken:true
       // tells hosts not to re-search on "KCG:ARjohn" (unparseable mid-edit); the next keystroke does.
-      input.value = label + input.value;
-      try { input.setSelectionRange(label.length, label.length); } catch (err) {}
+      var restored = label.indexOf(':') === -1 ? label + ':' : label;
+      input.value = restored + input.value;
+      try { input.setSelectionRange(restored.length, restored.length); } catch (err) {}
       set(null, { textChanged: true, broken: true });
     }
     function onFocus(){ checkScope(); sync(); }
