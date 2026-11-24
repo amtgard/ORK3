@@ -12,7 +12,7 @@ foreach ((is_array($Legends ?? null) ? $Legends : array()) as $_lgr) {
 }
 ?>
 <style>
-.lgr-root { max-width: 860px; margin: 16px auto 0; }
+.lgr-root { max-width: 1000px; margin: 16px auto 0; }
 .lgr-card {
 	margin: 0 0 20px; padding: 18px 26px 20px; text-align: center;
 	background: #f7efe0; border: 1px solid #dcc9a4; border-radius: 8px; color: #5a4220;
@@ -20,7 +20,7 @@ foreach ((is_array($Legends ?? null) ? $Legends : array()) as $_lgr) {
 .lgr-hall { margin: 0 0 10px; font: 700 26px/1.2 Georgia, 'Times New Roman', serif; overflow-wrap: anywhere; }
 .lgr-title { margin: 0 0 8px; color: #8a6a33; font: 700 11px/1 system-ui, sans-serif; letter-spacing: .2em; text-transform: uppercase; }
 .lgr-rule { width: 64px; height: 1px; margin: 0 auto 10px; background: #b08d4f; }
-.lgr-words { font: italic 16px/1.55 Georgia, 'Times New Roman', serif; overflow-wrap: anywhere; }
+.lgr-words { font: italic 16px/1.55 Georgia, 'Times New Roman', serif; overflow-wrap: anywhere; text-wrap: balance; }
 .lgr-year {
 	display: flex; align-items: center; gap: 12px; margin: 22px 0 10px;
 	color: #8a6a33; font: 700 13px/1 system-ui, sans-serif; letter-spacing: .12em;
