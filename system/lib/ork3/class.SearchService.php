@@ -1093,8 +1093,13 @@ class SearchService extends Ork3
      *   token              (string) session token — gates banned visibility + real-name matching
      *   bannedScope        ('kingdom'|'all') may only NARROW the banned scope; 'all' is honoured
      *                      only for viewers already entitled to Amtgard-wide banned visibility
+     *   includeActive, includeInactive, includeBanned
+     *                      (bool, each default true) tier include flags. They only NARROW: banned
+     *                      rows still require the viewer's grants and stay capped to the surface
+     *                      narrowing below, so includeBanned=true never widens. All false -> [].
      *
-     * Tiers (always, every surface): 0 active, 1 inactive (last resort), 2 banned. Banned
+     * Tiers: 0 active, 1 inactive (last resort), 2 banned; all visible tiers are returned unless an
+     * include flag drops one. Banned
      * (suspended OR penalty_box) visibility is derived ONLY from the viewer's grants (viewerCaps):
      * global admins and kingdom-level officers see Amtgard-wide, park-only officers see their
      * parks' kingdom families, everyone else sees none. A park surface additionally narrows the
@@ -1102,8 +1107,9 @@ class SearchService extends Ork3
      *
      * Legacy positional signature ($q, $parkId, $kingdomId, $restrictTo, $includeInactive,
      * $includeSuspended, $limit, $token, $excludeKingdomId, $excludeParkId, $restrictKingdomIds)
-     * is still accepted (SOAP Search/Players + older callers); the include_* flags are ignored
-     * because inactive is now always a tier and banned is auth-gated.
+     * is still accepted (SOAP Search/Players + older callers); its positional $includeInactive /
+     * $includeSuspended args are ignored (inactive is always a tier and banned is auth-gated).
+     * Use the array opts above to narrow tiers.
      */
     public function RankedPlayers($opts = [], $parkId = null, $kingdomId = null, $restrictTo = null, $includeInactive = null, $includeSuspended = null, $limit = null, $token = null, $excludeKingdomId = null, $excludeParkId = null, $restrictKingdomIds = null)
     {

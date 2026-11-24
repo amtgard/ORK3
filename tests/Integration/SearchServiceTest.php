@@ -810,6 +810,8 @@ final class SearchServiceTest extends TestCase
         ]));
         // Fuzzy fallback honours the flags too: a one-edit typo with inactive off finds no inactive player.
         $typo = substr($f['stem'], 0, -1) . (substr($f['stem'], -1) === 'x' ? 'y' : 'x');
+        $fuzzyDefault = array_map('intval', array_column($this->searchService->RankedPlayers(['q' => $typo, 'limit' => 16]), 'MundaneId'));
+        $this->assertContains($f['inactive'], $fuzzyDefault, 'positive control: the typo finds the inactive player by default');
         $fuzzyIds = array_map('intval', array_column($this->searchService->RankedPlayers(['q' => $typo, 'includeInactive' => false, 'limit' => 16]), 'MundaneId'));
         $this->assertNotContains($f['inactive'], $fuzzyIds);
     }
