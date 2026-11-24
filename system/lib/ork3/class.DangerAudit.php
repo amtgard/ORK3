@@ -261,7 +261,7 @@ class Dangeraudit extends Ork3
                         $kingdomIds[(int) $decoded[$key]] = true;
                     }
                 }
-                foreach (['mundane_id', 'given_by_id', 'given_by', 'stripped_from', 'MundaneId', 'RecipientId', 'FromMundaneId', 'ToMundaneId', 'SuspendedById', 'recommended_by_id', 'SupporterMundaneId', 'supporter_mundane_id', 'from_mundane_id', 'to_mundane_id'] as $key) {
+                foreach (['mundane_id', 'given_by_id', 'given_by', 'stripped_from', 'MundaneId', 'RecipientId', 'FromMundaneId', 'ToMundaneId', 'SuspendedById', 'recommended_by_id', 'SupporterMundaneId', 'supporter_mundane_id', 'from_mundane_id', 'to_mundane_id', 'AuthorId', 'LegendId', 'created_by'] as $key) {
                     if (!empty($decoded[$key]) && is_numeric($decoded[$key])) {
                         $mundaneIds[(int) $decoded[$key]] = true;
                     }
