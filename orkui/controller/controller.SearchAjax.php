@@ -19,7 +19,11 @@ class Controller_SearchAjax extends Controller
             'Pid'             => (int)($_GET['pid'] ?? 0),
             'FilterKid'       => (int)($_GET['fk'] ?? 0),
             'FilterPid'       => (int)($_GET['fp'] ?? 0),
-            'IncludeInactive' => !empty($_GET['inactive']),
+            // Player tier include flags (0/1, absent = on); players section only. Banned stays
+            // gated by the viewer's grants server-side.
+            'IncludeActive'   => $this->flagParam('ia'),
+            'IncludeInactive' => $this->flagParam('ii'),
+            'IncludeBanned'   => $this->flagParam('ib'),
             'Focus'           => trim($_GET['focus'] ?? ''),
             'CallerUserId'    => isset($this->session->user_id) ? (int)$this->session->user_id : 0,
             'Token'           => $this->session->token ?? null,
@@ -58,6 +62,10 @@ class Controller_SearchAjax extends Controller
             // Banned scope is derived server-side from the viewer's grants; the client may only
             // narrow it ('kingdom'), never widen it.
             'bannedScope'        => (($_GET['bannedScope'] ?? '') === 'kingdom') ? 'kingdom' : '',
+            // Tier include flags (0/1, absent = on): narrow only; banned stays grant-gated.
+            'includeActive'      => $this->flagParam('includeActive'),
+            'includeInactive'    => $this->flagParam('includeInactive'),
+            'includeBanned'      => $this->flagParam('includeBanned'),
             'limit'              => $limit + 1,
             'offset'             => $offset,
             'token'              => $this->session->token ?? null,
@@ -99,7 +107,8 @@ class Controller_SearchAjax extends Controller
     }
 
     // Filter-pill dropdown data for a search field: {kingdoms:[...]} or, with forKingdom, {parks:[...]}.
-    // Public (names/abbreviations only), so no login is required.
+    // Public (names/abbreviations only), so no login is required. The kingdom-list response also
+    // carries the viewer's status-toggle caps: signedIn and canSeeBanned (0/1, per session).
     public function filteroptions($p = null)
     {
         header('Content-Type: application/json');
@@ -109,7 +118,13 @@ class Controller_SearchAjax extends Controller
         if ($forKingdom > 0) {
             echo json_encode(['parks' => $this->Search->filter_scope_parks($forKingdom, $scope)]);
         } else {
-            echo json_encode(['kingdoms' => $this->Search->filter_scope_kingdoms($scope)]);
+            $signedIn = isset($this->session->user_id) && (int)$this->session->user_id > 0;
+            $bannedKids = $signedIn ? ($this->Search->viewer_caps($this->session->token ?? null)['banned_kids'] ?? []) : [];
+            echo json_encode([
+                'kingdoms'     => $this->Search->filter_scope_kingdoms($scope),
+                'canSeeBanned' => ($bannedKids === 'all' || !empty($bannedKids)) ? 1 : 0,
+                'signedIn'     => $signedIn ? 1 : 0,
+            ]);
         }
         exit;
     }
@@ -122,6 +137,12 @@ class Controller_SearchAjax extends Controller
         $prefix = substr(trim((string)($_GET['prefix'] ?? '')), 0, 16);
         echo json_encode(['match' => $this->Search->resolve_filter_prefix($prefix, $this->filterScopeParams())]);
         exit;
+    }
+
+    // A 0/1 query flag that defaults ON when absent.
+    private function flagParam(string $key): bool
+    {
+        return isset($_GET[$key]) ? ((int)$_GET[$key] !== 0) : true;
     }
 
     // The search field's hard-scope params, as sent by the player-search component.

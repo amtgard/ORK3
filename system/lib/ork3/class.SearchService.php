@@ -1140,6 +1140,14 @@ class SearchService extends Ork3
         $offset             = min(max((int)($o['offset'] ?? 0), 0), 2000);
         $token              = $o['token'] ?? null;
         $banned_scope_req   = in_array(($o['bannedScope'] ?? ''), ['kingdom', 'all'], true) ? $o['bannedScope'] : '';
+        // Tier include flags (default on). They only NARROW: banned rows stay gated by the viewer's
+        // grants below, so includeBanned=true never widens visibility.
+        $inc_active   = array_key_exists('includeActive', $o) ? !empty($o['includeActive']) : true;
+        $inc_inactive = array_key_exists('includeInactive', $o) ? !empty($o['includeInactive']) : true;
+        $inc_banned   = array_key_exists('includeBanned', $o) ? !empty($o['includeBanned']) : true;
+        if (!$inc_active && !$inc_inactive && !$inc_banned) {
+            return [];
+        }
 
         $restrict_kids = [];
         if (!empty($o['restrictKingdomIds']) && is_array($o['restrictKingdomIds'])) {
@@ -1269,16 +1277,27 @@ class SearchService extends Ork3
             $where[] = "m.mundane_id NOT IN (" . implode(',', $exclude_ids) . ")";
         }
 
-        // Tier visibility: active + inactive always; banned only when authorised, capped to its scope.
-        if ($can_see_banned) {
+        // Tier visibility: active / inactive per their include flags; banned only when requested AND
+        // authorised, capped to its scope. The fuzzy fallback reuses $where, so it honours this too.
+        $tier_ok = [];
+        if ($inc_active) {
+            $tier_ok[] = "(m.suspended = 0 AND m.penalty_box = 0 AND m.active != 0)";
+        }
+        if ($inc_inactive) {
+            $tier_ok[] = "(m.suspended = 0 AND m.penalty_box = 0 AND m.active = 0)";
+        }
+        if ($inc_banned && $can_see_banned) {
             $banned_ok = "(m.suspended = 1 OR m.penalty_box = 1)";
             if (!empty($banned_family_kids)) {
                 $banned_ok .= " AND m.kingdom_id IN (" . implode(',', $banned_family_kids) . ")";
             }
-            $where[] = "((m.suspended = 0 AND m.penalty_box = 0) OR ({$banned_ok}))";
-        } else {
-            $where[] = "(m.suspended = 0 AND m.penalty_box = 0)";
+            $tier_ok[] = "({$banned_ok})";
         }
+        if (empty($tier_ok)) {
+            // e.g. banned-only for a viewer without banned grants.
+            return [];
+        }
+        $where[] = "(" . implode(' OR ', $tier_ok) . ")";
 
         $match_rank = $tokens ? $this->nameRankSql($search, $tokens) : '3';
         $select = function (string $nameSql, string $order, int $lim, int $off) use ($where, $ring, $tier, $match_rank): string {
@@ -1654,7 +1673,7 @@ class SearchService extends Ork3
     }
 
     /**
-     * @param array{Query?: string, Kid?: int, Pid?: int, FilterKid?: int, FilterPid?: int, IncludeInactive?: bool, Focus?: string, CallerUserId?: int, Token?: string} $request
+     * @param array{Query?: string, Kid?: int, Pid?: int, FilterKid?: int, FilterPid?: int, IncludeActive?: bool, IncludeInactive?: bool, IncludeBanned?: bool, Focus?: string, CallerUserId?: int, Token?: string} $request
      * @return array{players: list<array<string, mixed>>, parks: list<array<string, mixed>>, kingdoms: list<array<string, mixed>>, units: list<array<string, mixed>>}
      */
     public function UniversalSearch(array $request): array
@@ -1666,7 +1685,10 @@ class SearchService extends Ork3
 
         $kid             = (int)($request['Kid'] ?? 0);
         $pid             = (int)($request['Pid'] ?? 0);
-        $includeInactive = !empty($request['IncludeInactive']);
+        // Player tier include flags (default on); applied to the players section only.
+        $incActive   = array_key_exists('IncludeActive', $request) ? !empty($request['IncludeActive']) : true;
+        $incInactive = array_key_exists('IncludeInactive', $request) ? !empty($request['IncludeInactive']) : true;
+        $incBanned   = array_key_exists('IncludeBanned', $request) ? !empty($request['IncludeBanned']) : true;
         $focus           = trim($request['Focus'] ?? '');
         $callerUserId    = (int)($request['CallerUserId'] ?? 0);
         // RankedPlayers resolves the banned-tier auth gate from a session token, not a user id.
@@ -1814,6 +1836,9 @@ class SearchService extends Ork3
                 'filterParkId'    => $optFilterPid,
                 'limit'           => $playerBudget,
                 'bannedScope'     => 'all',
+                'includeActive'   => $incActive,
+                'includeInactive' => $incInactive,
+                'includeBanned'   => $incBanned,
                 'token'           => $token,
             ]);
             foreach ($rows as $row) {

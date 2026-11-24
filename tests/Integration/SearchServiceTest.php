@@ -728,6 +728,111 @@ final class SearchServiceTest extends TestCase
         }
     }
 
+    /**
+     * One active, one inactive, one suspended and one penalty-box player sharing a persona stem.
+     *
+     * @return array{stem: string, active: int, inactive: int, suspended: int, penalty: int, parkId: int}
+     */
+    private function tierFixture(): array
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $stem = 'Tier' . bin2hex(random_bytes(3));
+        $ids = [];
+        foreach (['active' => [1, 0, 0], 'inactive' => [0, 0, 0], 'suspended' => [1, 1, 0], 'penalty' => [1, 0, 1]] as $label => [$a, $s, $pb]) {
+            $p = $this->fixture->createPlayer($parkId, 'tier' . $label, 'T11SRC ' . $stem . ' ' . ucfirst($label));
+            $this->fixture->setMembership($p['mundane_id'], $a, $s, $pb);
+            $ids[$label] = $p['mundane_id'];
+        }
+
+        return ['stem' => $stem, 'parkId' => $parkId] + $ids;
+    }
+
+    /** @return list<int> */
+    private function rankedIds(array $opts): array
+    {
+        return array_map('intval', array_column($this->searchService->RankedPlayers($opts + ['limit' => 50, 'fuzzy' => false]), 'MundaneId'));
+    }
+
+    public function testTierFlagsExcludeInactive(): void
+    {
+        $f = $this->tierFixture();
+        $this->assertContains($f['inactive'], $this->rankedIds(['q' => $f['stem']]), 'inactive shown by default');
+
+        $ids = $this->rankedIds(['q' => $f['stem'], 'includeInactive' => false]);
+        $this->assertContains($f['active'], $ids);
+        $this->assertNotContains($f['inactive'], $ids);
+    }
+
+    public function testTierFlagsExcludeActive(): void
+    {
+        $f = $this->tierFixture();
+
+        $ids = $this->rankedIds(['q' => $f['stem'], 'includeActive' => false]);
+        $this->assertNotContains($f['active'], $ids);
+        $this->assertContains($f['inactive'], $ids);
+    }
+
+    public function testIncludeBannedCannotExceedCaps(): void
+    {
+        $f = $this->tierFixture();
+
+        // No token: includeBanned=true must not surface suspended or penalty-box players.
+        $rows = $this->searchService->RankedPlayers(['q' => $f['stem'], 'includeBanned' => true, 'limit' => 50, 'fuzzy' => false]);
+        $ids = array_map('intval', array_column($rows, 'MundaneId'));
+        $this->assertNotContains($f['suspended'], $ids);
+        $this->assertNotContains($f['penalty'], $ids);
+        foreach ($rows as $row) {
+            $this->assertSame(0, (int) $row['Suspended']);
+            $this->assertSame(0, (int) $row['PenaltyBox']);
+        }
+        // Banned-only for an unauthorised viewer is empty, not a widening.
+        $this->assertSame([], $this->rankedIds(['q' => $f['stem'], 'includeActive' => false, 'includeInactive' => false, 'includeBanned' => true]));
+
+        // Sanity: a global admin does see them, and includeBanned=false hides them again.
+        $admin = $this->fixture->createPlayer($f['parkId'], 'tieradmin');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
+        $adminIds = $this->rankedIds(['q' => $f['stem'], 'token' => $admin['token']]);
+        $this->assertContains($f['suspended'], $adminIds);
+        $this->assertContains($f['penalty'], $adminIds);
+        $noBanned = $this->rankedIds(['q' => $f['stem'], 'token' => $admin['token'], 'includeBanned' => false]);
+        $this->assertNotContains($f['suspended'], $noBanned);
+        $this->assertNotContains($f['penalty'], $noBanned);
+        $this->assertContains($f['active'], $noBanned);
+    }
+
+    public function testAllTierFlagsOffReturnsEmpty(): void
+    {
+        $f = $this->tierFixture();
+
+        $this->assertSame([], $this->searchService->RankedPlayers([
+            'q' => $f['stem'], 'includeActive' => false, 'includeInactive' => false, 'includeBanned' => false,
+        ]));
+        // Fuzzy fallback honours the flags too: a one-edit typo with inactive off finds no inactive player.
+        $typo = substr($f['stem'], 0, -1) . (substr($f['stem'], -1) === 'x' ? 'y' : 'x');
+        $fuzzyIds = array_map('intval', array_column($this->searchService->RankedPlayers(['q' => $typo, 'includeInactive' => false, 'limit' => 16]), 'MundaneId'));
+        $this->assertNotContains($f['inactive'], $fuzzyIds);
+    }
+
+    public function testUniversalSearchHonorsTierFlags(): void
+    {
+        $f = $this->tierFixture();
+
+        $default = array_column($this->searchService->UniversalSearch(['Query' => $f['stem'], 'Focus' => 'player'])['players'], 'id');
+        $this->assertContains($f['inactive'], $default);
+
+        $ids = array_column($this->searchService->UniversalSearch([
+            'Query' => $f['stem'], 'Focus' => 'player', 'IncludeInactive' => false,
+        ])['players'], 'id');
+        $this->assertContains($f['active'], $ids);
+        $this->assertNotContains($f['inactive'], $ids);
+
+        $none = $this->searchService->UniversalSearch([
+            'Query' => $f['stem'], 'Focus' => 'player', 'IncludeActive' => false, 'IncludeInactive' => false, 'IncludeBanned' => true,
+        ]);
+        $this->assertSame([], $none['players'], 'IncludeBanned without caps yields no players');
+    }
+
     // The header pill strips its prefix, so FilterKid/FilterPid must narrow parks and hide kingdoms
     // exactly as a typed "KD:PK" prefix does.
     public function testUniversalSearchFilterNarrowsParksAndHidesKingdoms(): void

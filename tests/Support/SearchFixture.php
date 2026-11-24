@@ -191,6 +191,17 @@ final class SearchFixture
     }
 
     /**
+     * Set a fixture player's membership tier flags (active / suspended / penalty_box).
+     */
+    public function setMembership(int $mundaneId, int $active, int $suspended = 0, int $penaltyBox = 0): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE ' . DB_PREFIX . 'mundane SET active = ?, suspended = ?, penalty_box = ? WHERE mundane_id = ?'
+        );
+        $stmt->execute([$active, $suspended, $penaltyBox, $mundaneId]);
+    }
+
+    /**
      * @return array{unit_id: int, name: string}
      */
     public function createUnit(string $suffix = 'unit'): array
