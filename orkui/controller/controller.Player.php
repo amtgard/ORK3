@@ -691,7 +691,7 @@ class Controller_Player extends Controller
         $kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
         if (is_array($kingdomOfficers)) {
             foreach ($kingdomOfficers as $officer) {
-                if (in_array(strtolower($officer['OfficerRole']), ['monarch', 'regent', 'prime_minister']) && $officer['MundaneId'] > 0) {
+                if (in_array(strtolower(str_replace('_', ' ', $officer['OfficerRole'])), ['monarch', 'regent', 'prime minister']) && $officer['MundaneId'] > 0) {
                     $preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . ucwords(str_replace('_', ' ', $officer['OfficerRole']))];
                 }
             }
@@ -700,7 +700,7 @@ class Controller_Player extends Controller
             $parkOfficers = $this->Park->get_officers($playerParkId, $this->session->token);
             if (is_array($parkOfficers)) {
                 foreach ($parkOfficers as $officer) {
-                    if (in_array(strtolower($officer['OfficerRole']), ['monarch', 'regent', 'prime_minister']) && $officer['MundaneId'] > 0) {
+                    if (in_array(strtolower(str_replace('_', ' ', $officer['OfficerRole'])), ['monarch', 'regent', 'prime minister']) && $officer['MundaneId'] > 0) {
                         $preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . ucwords(str_replace('_', ' ', $officer['OfficerRole']))];
                     }
                 }

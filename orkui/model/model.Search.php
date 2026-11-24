@@ -12,6 +12,12 @@ class Model_Search extends Model
         return $this->_search_service()->RankedPlayers($opts);
     }
 
+    // Advanced Search page: paged, filterable player rows with last-attendance columns.
+    public function advanced_players(array $opts): array
+    {
+        return $this->_search_service()->advanced_players($opts);
+    }
+
     // Grant-derived search capabilities (officer / admin / banned scope) for the viewer's token.
     public function viewer_caps($token): array
     {

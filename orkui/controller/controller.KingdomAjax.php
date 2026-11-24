@@ -831,8 +831,8 @@ class Controller_KingdomAjax extends Controller
         $q                = trim($_GET['q']               ?? '');
         $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'all' | 'exclude'
         $park_id          = (int)($_GET['park_id']        ?? 0);
-        $include_inactive  = !empty($_GET['include_inactive']);
-        $include_suspended = !empty($_GET['include_suspended']);
+        // include_inactive / include_suspended are no longer read: inactive is always a ranked
+        // tier and banned visibility comes from the viewer's grants (RankedPlayers).
         if (strlen($q) < 2) {
             echo json_encode([]);
             exit;
@@ -851,14 +851,17 @@ class Controller_KingdomAjax extends Controller
         }
         // scope=all -> no restrict, no exclude (global ranking)
 
-        $svc     = new SearchService();
-        $results = $svc->RankedPlayers([
+        $this->load_model('Search');
+        $results = $this->Search->ranked_players([
             'q'                  => $q,
             'parkId'             => valid_id($park_id) ? $park_id : null,
             'kingdomId'          => $kingdom_id,
             'restrictTo'         => $restrictTo,
             'restrictKingdomIds' => $restrictKingdomIds,
             'excludeKingdomId'   => $excludeKingdomId,
+            // own/exclude + park_id narrow to that park (the old ScopeParkId behaviour); for
+            // scope=all the park is only the ranking centre.
+            'filterParkId'       => ($scope !== 'all' && valid_id($park_id)) ? $park_id : 0,
             'limit'              => 15,
             'token'              => $this->session->token ?? null,
         ]);

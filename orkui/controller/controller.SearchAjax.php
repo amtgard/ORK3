@@ -45,9 +45,9 @@ class Controller_SearchAjax extends Controller
         $limit  = min(max((int)($_GET['limit'] ?? 15), 1), 100);
         $offset = min(max((int)($_GET['offset'] ?? 0), 0), 2000);
 
-        $svc  = new SearchService();
+        $this->load_model('Search');
         // Probe one extra row to know whether a "Load more…" page exists, without a second COUNT query.
-        $rows = $svc->RankedPlayers([
+        $rows = $this->Search->ranked_players([
             'q'                  => $_GET['q'] ?? '',
             'parkId'             => (int)($_GET['parkId']    ?? 0) ?: null,
             'kingdomId'          => (int)($_GET['kingdomId'] ?? 0) ?: null,
@@ -67,6 +67,7 @@ class Controller_SearchAjax extends Controller
             'includeInactive'    => $this->flagParam('includeInactive'),
             'includeBanned'      => $this->flagParam('includeBanned'),
             'limit'              => $limit + 1,
+            'probe'              => true,   // the +1 row above is a has-more probe
             'offset'             => $offset,
             'token'              => $this->session->token ?? null,
         ]);
@@ -89,8 +90,8 @@ class Controller_SearchAjax extends Controller
             echo json_encode(['rows' => [], 'hasMore' => false, 'offset' => 0, 'canSeeRealName' => 0, 'canSeeBanned' => 0, 'needLogin' => 1]);
             exit;
         }
-        $svc = new SearchService();
-        echo json_encode($svc->AdvancedPlayers([
+        $this->load_model('Search');
+        echo json_encode($this->Search->advanced_players([
             'q'                  => $_GET['q'] ?? '',
             'kingdomId'          => (int)($_GET['kingdomId'] ?? 0) ?: null,
             'parkId'             => (int)($_GET['parkId'] ?? 0) ?: null,

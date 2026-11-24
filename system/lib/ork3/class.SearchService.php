@@ -1090,6 +1090,8 @@ class SearchService extends Ork3
      *   excludeIds         (int[])  omit specific mundane ids    (already-added / opposite merge field)
      *   limit              (int, default 15, clamped 1..101 — 101 leaves room for a caller's
      *                      +1 "has more" probe), offset (int, default 0, capped 2000) — paging
+     *   probe              (bool, default false) the caller asked for limit+1 to detect a next
+     *                      page; typo-tolerant close matches then stop one row short of it
      *   token              (string) session token — gates banned visibility + real-name matching
      *   bannedScope        ('kingdom'|'all') may only NARROW the banned scope; 'all' is honoured
      *                      only for viewers already entitled to Amtgard-wide banned visibility
@@ -1364,9 +1366,10 @@ class SearchService extends Ork3
         }
 
         // Typo tolerance: when the strict search finds fewer than 5 people, add "close matches"
-        // below them. Capped at $limit - 1 in total so it never fakes a "has more" probe row
-        // (callers ask for limit+1), and never on later pages, so paging stays stable.
-        $room = $limit - 1 - count($out);
+        // below them, and never on later pages, so paging stays stable. Callers that ask for
+        // limit+1 to detect a next page pass 'probe' => true, so close matches never fill (and
+        // fake) that probe row; everyone else gets the full $limit.
+        $room = $limit - (!empty($o['probe']) ? 1 : 0) - count($out);
         if ($offset === 0 && $numeric_id <= 0 && count($out) < 5 && $room > 0 && !empty($o['fuzzy'] ?? true)) {
             $fuzzy_match = $this->nameMatchFuzzy($tokens, $is_officer, $is_admin);
             if ($fuzzy_match !== '') {
@@ -1406,13 +1409,16 @@ class SearchService extends Ork3
      *
      * $opts: q, kingdomId, parkId, includeActive(bool=true), includeInactive(bool=true),
      *        includeBanned(bool — honoured only for officers), lastAttendanceFrom/To ('YYYY-MM-DD'),
-     *        limit(=50, max 200), offset, token.
+     *        limit(=50, max 1000), offset, token.
      * Real names: officers see given/surname; for players flagged restricted, only global admins do.
      * Banned: within the viewer's grant-derived banned scope (viewerCaps). A pure-numeric q is a
      * direct mundane_id lookup.
      * Requires at least one of {q/id, kingdomId, parkId} or returns needFilter (avoids a full scan).
+     * The underscore keeps it off the JSON service's public-method surface: the UI endpoint
+     * (SearchAjax/advanced) requires a login, and last-attendance data must not be reachable
+     * anonymously through orkservice/Json.
      */
-    public function AdvancedPlayers($opts = [])
+    public function advanced_players($opts = [])
     {
         $o = is_array($opts) ? $opts : [];
         $q          = trim((string)($o['q'] ?? ''));

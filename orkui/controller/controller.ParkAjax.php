@@ -178,9 +178,8 @@ class Controller_ParkAjax extends Controller
         } elseif ($action === 'playersearch') {
             $q                = trim($_GET['q']               ?? '');
             $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
-            $prioritize       = !empty($_GET['prioritize']);
-            $include_inactive  = !empty($_GET['include_inactive']);
-            $include_suspended = !empty($_GET['include_suspended']);
+            // prioritize / include_inactive / include_suspended are no longer read: results are
+            // always ring-ranked, inactive is a tier and banned is grant-gated (RankedPlayers).
             if (strlen($q) < 2) {
                 echo json_encode([]);
                 exit;
@@ -200,8 +199,8 @@ class Controller_ParkAjax extends Controller
             }
             // scope=all -> no restrict, no exclude; ring still centers on park/kingdom
 
-            $svc     = new SearchService();
-            $results = $svc->RankedPlayers([
+            $this->load_model('Search');
+            $results = $this->Search->ranked_players([
                 'q'            => $q,
                 'parkId'       => $pid,
                 'kingdomId'    => $pkKingdom ?: null,

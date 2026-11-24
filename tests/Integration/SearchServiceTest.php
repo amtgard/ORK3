@@ -212,6 +212,22 @@ final class SearchServiceTest extends TestCase
         $this->assertNotContains($player['mundane_id'], $ids);
     }
 
+    public function testCloseMatchesUseFullLimitUnlessCallerProbes(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $m = bin2hex(random_bytes(3));
+        $player = $this->fixture->createPlayer($parkId, 'probe', "Thornquill{$m}");
+
+        // limit 1, no probe: the single slot may hold a close match (UniversalSearch budget 1).
+        $ids = array_column($this->searchService->RankedPlayers(['q' => "Thronquill{$m}", 'limit' => 1]), 'MundaneId');
+        $this->assertSame([$player['mundane_id']], $ids);
+
+        // limit 1 with a has-more probe: close matches stop one short, so nothing fakes the probe row.
+        $ids = array_column($this->searchService->RankedPlayers(['q' => "Thronquill{$m}", 'limit' => 1, 'probe' => true]), 'MundaneId');
+        $this->assertSame([], $ids);
+    }
+
     public function testRankedPlayersKdPrefixOrdersActiveBeforeInactive(): void
     {
         $kid = $this->fixture->firstKingdomId();
