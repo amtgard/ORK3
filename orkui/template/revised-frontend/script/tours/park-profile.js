@@ -144,7 +144,9 @@
                     }
                 },
                 {
-                    element: sidebarCard('.ork-pin-map'),
+                    // The sidebar map is a Google embed iframe today; it was a ".ork-pin-map"
+                    // JS map before and may be again, so find either.
+                    element: sidebarCard(':is(.ork-pin-map, iframe[src*="maps.google.com/maps"])'),
                     popover: {
                         title: 'Where it is',
                         description: 'A map of where this park usually plays.'
