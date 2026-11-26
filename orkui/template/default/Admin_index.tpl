@@ -31,6 +31,7 @@
 		<li><a href='<?=UIR ?>Reports/class_masters'>Class Masters/Paragons</a></li>
 		<li><a href='<?=UIR ?>Unit/unitlist'>Companies and Households</a></li>
 		<li><a href='<?=UIR ?>Admin/topparks'>Top Parks by Attendance</a></li>
+		<li><a href='<?=UIR ?>Admin/parkactivity'>Park Activity</a></li>
 		<li><a href='<?=UIR ?>Admin/new_player_attendance'>New Player Attendance</a></li>
 		<li><a href='<?=UIR ?>Reports/release_utilization'>Release Feature Utilization</a></li>
 	</ul>

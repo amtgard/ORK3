@@ -66,7 +66,7 @@ class VotingRules
                 'MinMembershipMonths' => 0,
                 'AttendanceMode' => 'days',
                 'ProvinceMode' => false,
-                'ExcludeOnline' => true,
+                // Online exclusion is the kingdom's CountOnlineAttendance setting (seeded "0").
                 'WeekSnap' => true,
             ],
             40 => [

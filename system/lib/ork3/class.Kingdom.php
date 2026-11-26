@@ -8,6 +8,7 @@ class Kingdom extends Ork3
     // redundant DB hits — most notably for ordinary kingdoms that have no children.
     private $childPrincipalityCache = array();
     private $statsIncludesPrincipalityCache = array();
+    private $countsOnlineAttendanceCache = array();
 
     public function __construct()
     {
@@ -415,6 +416,7 @@ class Kingdom extends Ork3
             $c->add_config($mundane_id, CFG_KINGDOM, 'color', $this->kingdom->kingdom_id, 'AtlasColor', 'FE7569');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AwardRecsPublic', '1');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'IncludePrincipalityInStatistics', '0');
+            $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'CountOnlineAttendance', '1');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'QualTestReeveEnabled', '0');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'QualTestCorporaEnabled', '0');
 
@@ -761,6 +763,21 @@ class Kingdom extends Ork3
         return $enabled;
     }
 
+    // False iff the CountOnlineAttendance config flag for $kingdomId is off; a missing
+    // row counts online sign-ins (true). Read only by Voting Eligibility: online
+    // attendance counts everywhere else. Values may be stored bare (1) or JSON-quoted ("1").
+    public function CountsOnlineAttendance(int $kingdomId): bool
+    {
+        if (isset($this->countsOnlineAttendanceCache[$kingdomId])) {
+            return $this->countsOnlineAttendanceCache[$kingdomId];
+        }
+        $configs = Common::get_configs($kingdomId, CFG_KINGDOM);
+        $counts = !isset($configs['CountOnlineAttendance'])
+            || (int)$configs['CountOnlineAttendance']['Value'] === 1;
+        $this->countsOnlineAttendanceCache[$kingdomId] = $counts;
+        return $counts;
+    }
+
     // GetFamilyKingdomIds($kingdomId) when StatsIncludesPrincipalities is true AND
     // there are children; otherwise [$kingdomId]. STATS/REPORT scoping uses THIS.
     public function GetStatsKingdomIds($kingdomId)
@@ -834,6 +851,9 @@ class Kingdom extends Ork3
         $mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+            if (Legend::isLegend((int)$request['MundaneId'])) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if ($mundane['KingdomId'] == $request['KingdomId']) {
                 // Look up prior holder so the audit can show before/after,
                 // and so we can suppress no-op re-saves of the same assignment.

@@ -34,6 +34,9 @@ class Controller_AdminAjax extends Controller
             $results = $this->Search->scoped_player_search([
                 'Query' => $q,
                 'Scope' => 'global',
+                // Already behind the global-admin gate above; Legends only on explicit opt-in.
+                'IncludeLegend' => $_GET['include_legend'] ?? '',
+                'CallerUserId'  => $uid,
                 'Limit' => 20,
                 'Format' => 'admin',
             ]);
@@ -114,7 +117,10 @@ class Controller_AdminAjax extends Controller
             fn ($id) => $id > 0 && $id < 100000
         ));
 
-        $payload = $this->AdminDashboard->state_of_amtgard_chart_section(trim($section ?? ''), $start, $end, $kingdom_ids);
+        // In-Person / Online / All; anything else (or an array) is All.
+        $attendance_type = is_string($_GET['AttendanceType'] ?? null) ? $_GET['AttendanceType'] : 'all';
+
+        $payload = $this->AdminDashboard->state_of_amtgard_chart_section(trim($section ?? ''), $start, $end, $kingdom_ids, $attendance_type);
         if ($payload === null) {
             echo json_encode(['error' => 'Unknown section.']);
         } else {

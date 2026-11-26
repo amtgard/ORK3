@@ -5,6 +5,8 @@
 	   ----------------------------------------------- */
 	$parkList         = is_array($park_summary['KingdomParkAveragesSummary']) ? $park_summary['KingdomParkAveragesSummary'] : array();
 	$parkCounts       = []; // loaded via AJAX (park_averages_json)
+	// Avg / Week + Avg / Month attendance-type filter: kingdom officers + ORK admins (kingdom EDIT).
+	$knAvgFilter      = !empty($CanEditKingdom);
 	$eventList        = is_array($event_summary) ? $event_summary : array();
 	// [TOURNAMENTS HIDDEN] $tournamentList = [];
 	$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
@@ -222,15 +224,19 @@
 		<div class="kn-stat-number"><?= count($eventList) ?></div>
 		<div class="kn-stat-label">Events</div>
 	</div>
-	<div class="kn-stat-card">
+	<div class="kn-stat-card<?= $knAvgFilter ? ' orn-avgf-host' : '' ?>">
+		<?php if ($knAvgFilter): ?><span class="orn-avgf-corner"><button type="button" class="orn-avgf-btn" aria-label="Filter averages by attendance type" data-tip="In-Person / Online / All"><i class="fas fa-filter"></i></button></span><?php endif; ?>
 		<div class="kn-stat-icon"><i class="fas fa-users"></i></div>
 		<div class="kn-stat-number" id="kn-stat-avgwk">—</div>
 		<div class="kn-stat-label">Avg / Week <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per week across all parks in this Kingdom, averaged over the past 6 months. A player attending multiple parks in one week counts once.</span></span></div>
+		<?php if ($knAvgFilter): ?><div class="orn-avgf-status" hidden></div><?php endif; ?>
 	</div>
-	<div class="kn-stat-card">
+	<div class="kn-stat-card<?= $knAvgFilter ? ' orn-avgf-host' : '' ?>">
+		<?php if ($knAvgFilter): ?><span class="orn-avgf-corner"><button type="button" class="orn-avgf-btn" aria-label="Filter averages by attendance type" data-tip="In-Person / Online / All"><i class="fas fa-filter"></i></button></span><?php endif; ?>
 		<div class="kn-stat-icon"><i class="fas fa-chart-line"></i></div>
 		<div class="kn-stat-number" id="kn-stat-avgmo">—</div>
 		<div class="kn-stat-label">Avg / Month <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per month across all parks in this Kingdom, averaged over the past 12 months. A player attending multiple parks in one month counts once.</span></span></div>
+		<?php if ($knAvgFilter): ?><div class="orn-avgf-status" hidden></div><?php endif; ?>
 	</div>
 	<?php if (!empty($IsLoggedIn) && is_array($week_recap ?? null)): ?>
 	<a class="kn-stat-card kn-stat-card-link" href="<?= UIR ?>Recap/kingdom/<?= (int)$kingdom_id ?>" style="text-decoration:none;color:inherit;" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
@@ -322,6 +328,16 @@
 			</ul>
 		</div>
 
+		<?php
+		// Available Surveys: this kingdom's and Amtgard-wide ones the viewer is
+		// eligible for (SurveyAvailable is empty for a logged-out visitor).
+		$_svcRows = array_values(array_filter($SurveyAvailable ?? [], function ($s) use ($kingdom_id) {
+			$t = (string) ($s['scope_type'] ?? '');
+			return $t === 'ork' || ($t === 'kingdom' && (int) ($s['scope_id'] ?? 0) === (int) $kingdom_id);
+		}));
+		if ($_svcRows) { $_svcWrap = 'kn-card'; $_svcHead = 'kn'; include __DIR__ . '/_survey_available_card.tpl'; }
+		?>
+
 	</div>
 
 	<!-- ========== MAIN CONTENT (Tabbed) ========== -->
@@ -383,6 +399,7 @@
 
 					<!-- Toolbar -->
 					<div class="kn-parks-toolbar">
+						<div class="kn-avg-type"><span class="kn-avg-type-note" id="kn-avg-type-note" aria-live="polite"></span></div>
 						<button class="kn-view-btn" id="kn-view-tiles" title="Tile view">
 							<i class="fas fa-th-large"></i>
 						</button>
@@ -393,7 +410,7 @@
 							<i class="fas fa-map"></i>
 						</button>
 						<?php if ($CanAddPark ?? false): ?>
-						<button onclick="knOpenAddParkModal()" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
+						<button onclick="knOpenAddParkModal()" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Park
 						</button>
 						<?php endif; ?>
@@ -835,6 +852,7 @@
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
+							<li><a href="<?= UIR ?>Legend/kingdom/<?= $kingdom_id ?>"><i class="fas fa-feather-alt"></i> Hall of Legends</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -930,6 +948,12 @@
 					<ul>
 						<li><a href="<?= UIR ?>Admin/permissions/Kingdom/<?= $kingdom_id ?>">Roles &amp; Permissions</a></li>
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
+					</ul>
+				</div>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-poll"></i> Surveys</h5>
+					<ul>
+						<li><a href="<?= UIR ?>Survey/index/Kingdom/<?= $kingdom_id ?>">Manage Surveys</a></li>
 					</ul>
 				</div>
 				<?php endif; ?>
@@ -1051,9 +1075,12 @@
 			</style>
 			<div class="kn-cp-toolbar">
 				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
-				<button class="kn-btn kn-btn-primary" onclick="knCpOpenNewCourt()">
-					<i class="fas fa-plus"></i> Plan a Court
-				</button>
+				<span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+					<a class="kn-cp-btn-link" href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&SmartCourt=1"><i class="fas fa-th"></i> Plan Court from Smart Grid</a>
+					<button class="kn-btn kn-btn-primary" onclick="knCpOpenNewCourt()">
+						<i class="fas fa-plus"></i> Plan a Court
+					</button>
+				</span>
 			</div>
 			<?php
 				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
@@ -2930,33 +2957,61 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 		}
 	}
 
-	// Kingdom's own parks (stat cards + kingdom footer)
-	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
-		.then(function(r) { return r.json(); })
-		.then(function(data) {
-			knFillAverages(data, {
-				scope: document,
-				footer: { avgwk: 'kn-total-avgwk', avgmo: 'kn-total-avgmo', tp: 'kn-total-tp', tm: 'kn-total-tm' },
-				statCards: true
-			});
-		})
-		.catch(function(err) { console.error('Kingdom park_averages_json failed:', err); });
-
-	// Principality parks — one fetch per principality id; park ids are globally unique so
-	// document-scoped fills land on the right tiles/rows, and per-section footer ids keep totals separate.
+	// Kingdom's own parks + principality parks. One fetch per kingdom/principality id;
+	// park ids are globally unique so document-scoped fills land on the right tiles/rows,
+	// and per-section footer ids keep totals separate. The hero Avg / Week + Avg / Month
+	// corner filter (kingdom officers + ORK admins; informational only, default All, never
+	// the kingdom's Count Online Attendance setting) refetches the hero cards and the Parks
+	// tab's figures together.
 	var knPrinzIds = (KnConfig.principalityIds || []);
-	knPrinzIds.forEach(function(prId) {
-		fetch('<?= UIR ?>Kingdom/park_averages_json/' + prId)
-			.then(function(r) { return r.json(); })
-			.then(function(data) {
-				knFillAverages(data, {
-					scope: document,
-					footer: { avgwk: 'kn-prinz-' + prId + '-avgwk', avgmo: 'kn-prinz-' + prId + '-avgmo', tp: 'kn-prinz-' + prId + '-tp', tm: 'kn-prinz-' + prId + '-tm' },
-					statCards: false
-				});
-			})
-			.catch(function(err) { console.error('Principality park_averages_json failed (' + prId + '):', err); });
-	});
+	var knAvgSeq = 0;
+	function knLoadAverages(type) {
+		var seq = ++knAvgSeq;
+		var qs = type && type !== 'all' ? '&AttendanceType=' + encodeURIComponent(type) : '';
+		var panel = document.getElementById('kn-tab-parks');
+		var heroNums = [document.getElementById('kn-stat-avgwk'), document.getElementById('kn-stat-avgmo')];
+		var pending = 1 + knPrinzIds.length;
+		if (panel) panel.classList.add('kn-avg-loading');
+		heroNums.forEach(function(n) { if (n) n.classList.add('pk-avg-loading'); });
+		function done() {
+			if (seq !== knAvgSeq || --pending !== 0) return;
+			if (panel) panel.classList.remove('kn-avg-loading');
+			heroNums.forEach(function(n) { if (n) n.classList.remove('pk-avg-loading'); });
+		}
+		function load(id, opts, label) {
+			fetch('<?= UIR ?>Kingdom/park_averages_json/' + id + qs)
+				.then(function(r) { return r.json(); })
+				.then(function(data) { if (seq === knAvgSeq) knFillAverages(data, opts); })
+				.catch(function(err) { console.error(label + ' park_averages_json failed (' + id + '):', err); })
+				.then(done);
+		}
+		load(kingdomId, {
+			scope: document,
+			footer: { avgwk: 'kn-total-avgwk', avgmo: 'kn-total-avgmo', tp: 'kn-total-tp', tm: 'kn-total-tm' },
+			statCards: true
+		}, 'Kingdom');
+		knPrinzIds.forEach(function(prId) {
+			load(prId, {
+				scope: document,
+				footer: { avgwk: 'kn-prinz-' + prId + '-avgwk', avgmo: 'kn-prinz-' + prId + '-avgmo', tp: 'kn-prinz-' + prId + '-tp', tm: 'kn-prinz-' + prId + '-tm' },
+				statCards: false
+			}, 'Principality');
+		});
+	}
+	knLoadAverages('all');
+
+	var knAvgBtns = document.querySelectorAll('.kn-stats-row .orn-avgf-btn');
+	if (knAvgBtns.length && typeof window.ornAvgFilter === 'function') {
+		window.ornAvgFilter({
+			buttons: knAvgBtns,
+			value: 'all',
+			onChange: function(type) {
+				var note = document.getElementById('kn-avg-type-note');
+				if (note) note.textContent = window.ornAttendanceTypeControl.note(type);
+				knLoadAverages(type);
+			}
+		});
+	}
 
 	// ---- Players tab: lazy-load on first click ----
 	function knHtmlEsc(s) {

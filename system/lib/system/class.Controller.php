@@ -11,6 +11,45 @@ class Controller
     public $session = null;
     public $template = null;
 
+    /** Session slot + lifetime for the memoised survey promotion banner. */
+    public const SURVEY_BANNER_CACHE_KEY = 'survey_banner_cache';
+    public const SURVEY_BANNER_TTL = 300;
+
+    /** Drop the memoised banner so the next page load recomputes it. */
+    protected function bust_survey_banner_cache(): void
+    {
+        unset($this->session->{self::SURVEY_BANNER_CACHE_KEY});
+    }
+
+    /**
+     * The viewer's survey promotion banner and "Available Surveys" list, from
+     * one memoised entry (one candidate pass on a miss, zero queries on a hit).
+     * Same TTL and bust points as the banner: dismiss, draft save and submit.
+     *
+     * @return array{available: list<array<string, mixed>>, banner: ?array<string, mixed>}
+     */
+    protected function survey_surfaces(int $uid): array
+    {
+        $c = $this->session->{self::SURVEY_BANNER_CACHE_KEY};
+        if (
+            is_array($c)
+            && (int) ($c['uid'] ?? 0) === $uid
+            && array_key_exists('available', $c)
+            && (time() - (int) ($c['at'] ?? 0)) < self::SURVEY_BANNER_TTL
+        ) {
+            return ['available' => $c['available'], 'banner' => $c['banner']];
+        }
+        $this->load_model('Survey');
+        $s = $this->Survey->available_and_banner_for($uid);
+        $this->session->{self::SURVEY_BANNER_CACHE_KEY} = [
+            'uid'       => $uid,
+            'at'        => time(),
+            'banner'    => $s['banner'],
+            'available' => $s['available'],
+        ];
+        return $s;
+    }
+
     // Status 5 is NoAuthorization -- "you are not allowed to do that". It is NOT
     // "your session expired". Controllers uniformly mapped it to a redirect to
     // Login/login/..., so a still-logged-in officer who hit a permission boundary
@@ -31,6 +70,56 @@ class Controller
             : 'You do not have permission to perform that action.';
         $this->data[ 'Error' ] = $message;
         return $message;
+    }
+
+    /**
+     * Gate a page behind login. Logged in: returns true, carry on. Logged out:
+     * remembers $return_route so Login brings the visitor straight back, then
+     * either redirects to Login (no $preview, today's behaviour everywhere)
+     * or, with $preview, renders the LoginRequired template and returns false
+     * (the caller returns at once).
+     *
+     * A preview is what a page can say about itself to someone who is not
+     * logged in: a person deciding whether to log in, or a chat app's link
+     * crawler building an embed (those are never logged in, so without this
+     * every gated link embeds as the login page's generic card). The same
+     * render serves both, so there is no user-agent list to keep current.
+     *
+     * $preview is an array, or a callable returning one so the lookup only
+     * runs for logged-out visitors:
+     *   og      => array for ork_og_meta_tags() (title/description/url/image)
+     *   kicker  => small line above the heading, e.g. 'Park Sign-in'
+     *   heading => the thing itself, e.g. the park or event name
+     *   lines   => short plain-text lines under it (credits, time left, why
+     *              a link is unusable)
+     *   image   => heraldry/photo URL shown beside the heading, or ''
+     *   button  => label for the Log in button (default 'Log in to continue')
+     */
+    public function require_login($return_route, $preview = null)
+    {
+        if (isset($this->session->user_id) && (int)$this->session->user_id > 0) {
+            return true;
+        }
+        $this->session->location = ltrim((string)$return_route, '/');
+        if (is_callable($preview)) {
+            $preview = $preview();
+        }
+        if (!is_array($preview)) {
+            header('Location: ' . UIR . 'Login/login');
+            exit;
+        }
+        $this->data['og']         = is_array($preview['og'] ?? null) ? $preview['og'] : array();
+        $this->data['no_index']   = true;
+        $this->data['page_title'] = (string)($preview['og']['title'] ?? $preview['heading'] ?? 'Login required');
+        $this->data['preview']    = array(
+            'kicker'  => (string)($preview['kicker'] ?? ''),
+            'heading' => (string)($preview['heading'] ?? $this->data['page_title']),
+            'lines'   => array_values(array_filter(array_map('strval', (array)($preview['lines'] ?? [])), 'strlen')),
+            'image'   => (string)($preview['image'] ?? ''),
+            'button'  => (string)($preview['button'] ?? 'Log in to continue'),
+        );
+        $this->template = 'LoginRequired.tpl';
+        return false;
     }
 
     public function __construct($method = null, $action = null)
@@ -59,6 +148,10 @@ class Controller
         } else {
             $this->data[ 'page_title' ] = $this->method;
         }
+        // A Legend's open browser stops working on its next request, including on the
+        // Ajax controllers below that skip the token check.
+        $this->load_model('Legend');
+        $this->Legend->end_session_if_legend($this->session);
         $this->data['LoggedIn'] = isset($this->session->user_id);
 
         // Proactive stale-session check: if the session token no longer matches the DB,
@@ -75,6 +168,7 @@ class Controller
             'Controller_AdminAjax',
             'Controller_WnAjax',
             'Controller_TourAjax',
+            'Controller_DuesAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
@@ -105,6 +199,13 @@ class Controller
         $this->data['ShowWhatsNew']        = false;
         $this->data['WhatsNewRelease']     = null;
         $this->data['TourProgress']        = [];
+        // Dues expiry notice (class.DuesNotice.php): null, or the classified
+        // notice plus its Message and dismiss Key. default.theme renders it as
+        // the site banner on every page; the player's own profile renders it
+        // as an alert. Dismissing hides only the banner, for this session and
+        // this Key, so a renewal or the slide from expiring to lapsed shows again.
+        $this->data['DuesNotice']          = null;
+        $this->data['DuesNoticeDismissed'] = false;
         if ($_uid > 0) {
             $this->load_model('Player');
             $prefs = $this->Player->get_viewer_preferences($_uid);
@@ -123,6 +224,34 @@ class Controller
             }
             // OrkTour progress (tour id => {v, status, at}); default.theme hands it to ork-tour.js
             $this->data['TourProgress'] = $this->Player->get_tour_progress($_uid);
+
+            $_standing = $this->Player->get_dues_standing($_uid);
+            $_notice   = DuesNotice::classify($_standing['DuesUntil'], (bool) $_standing['DuesForLife']);
+            if ($_notice !== null) {
+                $_notice['Message'] = DuesNotice::message($_notice);
+                $_notice['Key']     = DuesNotice::dismissKey($_notice);
+                $this->data['DuesNotice']          = $_notice;
+                $this->data['DuesNoticeDismissed'] = (string) ($this->session->dues_notice_dismissed ?? '') === $_notice['Key'];
+            }
+        }
+
+        // Survey promotion banner — the one show_banner survey the viewer is
+        // eligible for and has not dismissed. This is NOT a single lookup: it
+        // reads the player, fetches up to ten candidate surveys and walks each
+        // one through eligibility (tenure, participation, scope), so it is
+        // memoised per viewer in the session for SURVEY_BANNER_TTL seconds
+        // rather than recomputed on every page load. Controller_SurveyAjax
+        // busts the entry when the viewer dismisses a banner or submits a
+        // response, so those stay immediate. Skipped on Ajax controllers so
+        // the banner never rides along on a JSON response.
+        // The same entry carries the "Available Surveys" list (SurveyAvailable),
+        // which the own-profile sidebar renders server-side.
+        $this->data['SurveyBanner'] = null;
+        $this->data['SurveyAvailable'] = [];
+        if ($_uid > 0 && substr(get_class($this), -4) !== 'Ajax') {
+            $_surveys = $this->survey_surfaces($_uid);
+            $this->data['SurveyBanner'] = $_surveys['banner'];
+            $this->data['SurveyAvailable'] = $_surveys['available'];
         }
 
         $this->data[ 'controller_title' ] = get_class($this);

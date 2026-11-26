@@ -908,11 +908,99 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 })();
 
 
+// Online badge (wifi icon) for attendance rows signed in online. Same markup as
+// ork_online_badge() in system/lib/ork3/common.php; styled in orkui.css.
+function ornOnlineBadge() {
+    return '<span class="orn-online-badge" role="img" aria-label="Signed in online" data-tip="Signed in online">'
+        + '<i class="fa-solid fa-wifi" aria-hidden="true"></i></span>';
+}
+
+// "Online?" switch for attendance-entry forms. Builds (once per container) a
+// role="switch" button with a >=44px hit area plus an optional hint line.
+// opts: { initial:bool, hintEl?:Element, input?:HTMLInputElement,
+// onChange?:function(bool) }. `input` (e.g. a hidden name="Online") is kept at
+// "1"/"0" so FormData-based forms post it. onChange fires only on a user flip,
+// so callers can let a manual choice win over a derived default.
+// Returns { get():bool, set(bool, reason?:string), el }.
+function ornOnlineSwitch(container, opts) {
+    if (!container) return null;
+    if (container._ornOnlineSwitch) return container._ornOnlineSwitch;
+    opts = opts || {};
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'orn-online-switch';
+    btn.setAttribute('role', 'switch');
+    btn.innerHTML = '<span class="orn-online-switch-track" aria-hidden="true"><span class="orn-online-switch-thumb"></span></span>'
+        + '<span class="orn-online-switch-label">Online?</span>';
+    container.appendChild(btn);
+    var hintEl = opts.hintEl || null;
+    var on = false;
+    function render() {
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        if (opts.input) opts.input.value = on ? '1' : '0';
+    }
+    function setHint(reason) {
+        if (!hintEl) return;
+        hintEl.textContent = reason || '';
+        hintEl.style.display = reason ? '' : 'none';
+    }
+    btn.addEventListener('click', function() {
+        on = !on;
+        render();
+        // A manual flip clears the derived hint; it returns only when the rule
+        // re-derives (date change / reopen) via set(val, reason).
+        setHint('');
+        if (typeof opts.onChange === 'function') opts.onChange(on);
+    });
+    var api = {
+        el: btn,
+        get: function() { return on; },
+        set: function(val, reason) { on = !!val; render(); setHint(reason); }
+    };
+    api.set(!!opts.initial);
+    container._ornOnlineSwitch = api;
+    return api;
+}
+
+// Force an element's data-tip tooltip visible for `ms` (default 4s) via the
+// .is-flashing class (revised.css); re-callable, each call restarts the timer.
+function ornFlashTip(el, ms) {
+    if (!el) return;
+    clearTimeout(el._ornFlashTimer);
+    el.classList.remove('is-flashing');
+    void el.offsetWidth; // restart the pulse animation
+    el.classList.add('is-flashing');
+    el._ornFlashTimer = setTimeout(function() { el.classList.remove('is-flashing'); }, ms || 4000);
+}
+
+// Apply a park-day-type lookup (AttendanceAjax/park/{id}/daytype) to an
+// ornOnlineSwitch: online-only day -> on; online + in-person -> off with a
+// hint; anything else (incl. errors) -> off.
+function ornApplyParkDayType(sw, r) {
+    if (!sw) return;
+    if (r && r.status === 0 && r.online && !r.inPerson) {
+        sw.set(true, 'Online park day');
+    } else if (r && r.status === 0 && r.online && r.inPerson) {
+        sw.set(false, 'This park has an online and an in-person park day on this date.');
+    } else {
+        sw.set(false);
+    }
+}
+
+// Drop ornOnlineBadge() markup from exported cell HTML (CSV carries a separate Online column).
+function ornStripOnlineBadge(html) {
+    if (typeof html !== 'string' || html.indexOf('orn-online-badge') < 0) return html;
+    var $d = jQuery('<div>').html(html);
+    $d.find('.orn-online-badge').remove();
+    return $d.html();
+}
+
 // ---- Unified DataTables initializer for player-profile data tables ----
 // Gives every profile grid the same feature set: click-sort, "Show N" length
 // menu, pagination, a search box, and CSV export. Header cells:
 //   - data-sorttype="date" -> that column sorts as a date
 //   - class="pn-nosort"     -> action-button column (no sort/search/export)
+//   - class="pn-export-only" -> hidden on screen, still in the CSV export
 // opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
 function pnInitDataTable(selector, opts) {
     opts = opts || {};
@@ -922,10 +1010,14 @@ function pnInitDataTable(selector, opts) {
     if ($.fn.DataTable.isDataTable($table)) { $table.DataTable().destroy(); }
 
     var colDefs = [];
-    var hasAction = false;
+    // Export columns: every data column; <th class="pn-export-only"> columns are
+    // hidden on screen but still exported (e.g. the attendance Online column).
+    var exportCols = [];
     $table.find('thead th').each(function(i) {
         var $th = $(this);
-        if ($th.hasClass('pn-nosort')) { hasAction = true; colDefs.push({ targets: i, orderable: false, searchable: false }); }
+        if ($th.hasClass('pn-nosort')) colDefs.push({ targets: i, orderable: false, searchable: false });
+        else exportCols.push(i);
+        if ($th.hasClass('pn-export-only')) colDefs.push({ targets: i, visible: false, searchable: false });
         if ($th.data('sorttype') === 'date') colDefs.push({ targets: i, type: 'date' });
     });
 
@@ -936,7 +1028,10 @@ function pnInitDataTable(selector, opts) {
             className: 'pn-dt-csv-btn',
             text: '<i class="fas fa-download"></i> CSV',
             filename: opts.filename || 'Export',
-            exportOptions: { columns: hasAction ? ':not(.pn-nosort)' : ':visible' }
+            exportOptions: {
+                columns: exportCols,
+                format: { body: function(d) { return jQuery.fn.dataTable.Buttons.stripData(ornStripOnlineBadge(d)); } }
+            }
         }],
         columnDefs: colDefs,
         order: opts.order || [],
@@ -984,12 +1079,52 @@ $(document).ready(function() {
     });
 
     // ---- Ladder tile → filter awards ----
-    $('.pn-ladder-item[data-ladname]').on('click', function() {
-        var name = $(this).data('ladname');
-        pnActivateTab('awards');
-        if ($.fn.DataTable && $.fn.DataTable.isDataTable('#pn-awards-table')) {
-            $('#pn-awards-table').DataTable().search(name).draw();
+    // Filters to the exact award rows the tile counted (by award row id), not a
+    // text search: "Dragon" must not match a Garber whose note says Dragonmaster,
+    // and "Rose" must not match every award given by Queen Rose. The search box
+    // stays free and narrows within the tile's rows.
+    var pnAwardTileFilter = null; // { ids: {awardsId: true}, $tile } while active
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.search.push(function(settings, data, dataIndex, rowData, counter) {
+            if (!pnAwardTileFilter || settings.nTable.id !== 'pn-awards-table') return true;
+            var node = settings.aoData[dataIndex] && settings.aoData[dataIndex].nTr;
+            return !!(node && pnAwardTileFilter.ids[node.getAttribute('data-awards-id')]);
+        });
+    }
+    function pnSetAwardTileFilter($tile) {
+        if (!$.fn.DataTable || !$.fn.DataTable.isDataTable('#pn-awards-table')) return;
+        $('.pn-ladder-item[aria-pressed="true"]').attr('aria-pressed', 'false');
+        var $bar = $('#pn-award-filter');
+        if ($tile) {
+            var ids = {};
+            String($tile.attr('data-awards-ids') || '').split(',').forEach(function(id) {
+                if (id) ids[id] = true;
+            });
+            pnAwardTileFilter = { ids: ids, $tile: $tile };
+            $tile.attr('aria-pressed', 'true');
+            $bar.find('.pn-award-filter-name').text($tile.attr('data-ladname') || '');
+            $bar.prop('hidden', false);
+        } else {
+            pnAwardTileFilter = null;
+            $bar.prop('hidden', true);
         }
+        $('#pn-awards-table').DataTable().draw();
+    }
+    $('.pn-ladder-item[data-awards-ids]').on('click', function() {
+        var $tile = $(this);
+        pnActivateTab('awards');
+        var isActive = pnAwardTileFilter && pnAwardTileFilter.$tile.is($tile);
+        pnSetAwardTileFilter(isActive ? null : $tile);
+    }).on('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            $(this).trigger('click');
+        }
+    });
+    $('#pn-award-filter .pn-award-filter-clear').on('click', function() {
+        var $tile = pnAwardTileFilter && pnAwardTileFilter.$tile;
+        pnSetAwardTileFilter(null);
+        if ($tile) $tile.trigger('focus');
     });
 
     // ---- Class Level Calculation (thresholds from ClassLevel via PnConfig) ----
@@ -1014,6 +1149,8 @@ $(document).ready(function() {
                 else if (credits === t - 1 || credits === t - 2) { badge = 'soon'; break; }
             }
         }
+        // A Legend's levels are history: no prompts about levelling up.
+        if (PnConfig.isLegend && badge !== 'max') badge = '';
         var $nameCell = $(this).find('td:first');
         $nameCell.find('.pn-level-badge').remove();
         if (badge === 'max') {
@@ -1754,7 +1891,8 @@ if (PnConfig.recError) {
                 gid('pn-acct-persona').focus();
                 return;
             }
-            if (!username) {
+            // A Legend's username is hidden and can't change, so a blank one must not stop a save.
+            if (!username && !PnConfig.isLegend) {
                 errEl.textContent = 'Username is required.';
                 errEl.style.display = 'block';
                 gid('pn-acct-username').focus();
@@ -2277,7 +2415,10 @@ if (PnConfig.recError) {
         if (gid('pn-award-select')) awInitPicker(gid('pn-award-select'));
 
         // ---- Award Select Change ----
-        var pnNoBadgeAwards = ['griffon', 'griffin', 'hydra', 'jovious', 'jovius', 'mask', 'zodiac', 'walker'];
+        // Ladders that get no "Ladder Award" badge, by award id (not by name, which
+        // kingdoms rename): Jovius 28, Mask 29, Zodiac 30, Walker of the Middle 31,
+        // Hydra 32, Griffin 33.
+        var pnNoBadgeAwardIds = [28, 29, 30, 31, 32, 33];
         gid('pn-award-select').addEventListener('change', function() {
             var opt      = this.options[this.selectedIndex];
             var isLadder = (opt.getAttribute('data-is-ladder') == '1');
@@ -2285,8 +2426,7 @@ if (PnConfig.recError) {
             var isCustomAward = opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award';
             var isCustomTitle = opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title';
             var needsCustomName = isCustomAward || isCustomTitle;
-            var optName  = opt.text.toLowerCase();
-            var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
+            var showBadge = isLadder && pnNoBadgeAwardIds.indexOf(awardId) === -1;
 
             gid('pn-award-custom-row').style.display  = needsCustomName ? '' : 'none';
             var labelEl = gid('pn-award-custom-label');
@@ -2373,7 +2513,7 @@ if (PnConfig.recError) {
             var term = this.value.trim();
             if (term.length < 2) { gid('pn-award-givenby-results').classList.remove('pn-ac-open'); return; }
             givenByTimer = setTimeout(function() {
-                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
                 fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                     var results = gid('pn-award-givenby-results');
                     if (!data || !data.length) {
@@ -2383,8 +2523,9 @@ if (PnConfig.recError) {
                             return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                 + escHtml(p.Persona)
                                 + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
-                                + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                                + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
+                                + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                                + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                                + (p.Suspended && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                 + '</div>';
                         }).join('');
                     }
@@ -3639,14 +3780,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-player-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 el.classList.add('kn-ac-open');
@@ -3692,15 +3834,16 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-givenby-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Suspended && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 el.classList.add('kn-ac-open');
@@ -5727,6 +5870,7 @@ $(document).ready(function() {
             var keyLabels = {
                 'AwardRecsPublic': 'Award Recommendations Visibility',
                 'IncludePrincipalityInStatistics': 'Include Principality in Statistics',
+                'CountOnlineAttendance': 'Count Online Attendance',
                 'QualTestReeveEnabled': "Reeve's Test",
                 'QualTestCorporaEnabled': 'Corpora Test'
             };
@@ -5737,6 +5881,7 @@ $(document).ready(function() {
                 'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
                 'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
                 'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from Principality(ies) such as attendance and player counts.',
+                'CountOnlineAttendance': 'When off, sign-ins marked Online are not counted toward Voting Eligibility for this Kingdom. Class credits, active status, player records, other reports and attendance history are not affected.',
             };
             if (keyHints[cfg.Key]) {
                 var hint = document.createElement('span');
@@ -5794,7 +5939,7 @@ $(document).ready(function() {
                     else optPrivate.selected = true;
                     inp.appendChild(optPublic);
                     inp.appendChild(optPrivate);
-                } else if (cfg.Key === 'IncludePrincipalityInStatistics') {
+                } else if (cfg.Key === 'IncludePrincipalityInStatistics' || cfg.Key === 'CountOnlineAttendance') {
                     inp = document.createElement('input');
                     inp.type = 'checkbox';
                     inp.className = 'kn-admin-config-input';
@@ -7772,14 +7917,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 pkFixedAcPosition(gid('pk-award-player-text'), el);
@@ -7827,15 +7973,16 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Suspended && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 pkFixedAcPosition(gid('pk-award-givenby-text'), el);
@@ -9208,6 +9355,9 @@ $(document).ready(function() {
         if (_evEditSaveBtn) _evEditSaveBtn.disabled = true;
     };
     window.evCloseEditModal = function() {
+        // Escape anywhere on the page calls this; a closed modal has nothing to discard.
+        var editOverlay = document.getElementById('ev-edit-modal');
+        if (!editOverlay || !editOverlay.classList.contains('ev-modal-open')) return;
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
             pnConfirm({ title: 'Unsaved Changes', message: 'You have unsaved changes. Discard them?', confirmText: 'Discard', danger: true }, function() {
                 evRestoreEditForm();
@@ -9243,7 +9393,13 @@ $(document).ready(function() {
         var n = parseFloat(val);
         if (n > 0) localStorage.setItem('ev_credits_default', n);
     }
+    // "Online?" switches on the event add forms: default off, no park-day lookup.
+    var evAddOnline = ornOnlineSwitch(document.getElementById('ev-att-online-switch'),
+        { initial: false, input: document.getElementById('ev-att-online') });
+    var evCheckinOnline = ornOnlineSwitch(document.getElementById('ev-checkin-online-switch'),
+        { initial: false, input: document.getElementById('ev-checkin-online') });
     window.evOpenCheckinModal = function(mundaneId, personaName, classId) {
+        if (evCheckinOnline) evCheckinOnline.set(false);
         document.getElementById('ev-checkin-mundane-id').value = mundaneId;
         document.getElementById('ev-checkin-name').textContent = personaName;
         var creditsInput = document.querySelector('#ev-checkin-form [name="Credits"]');
@@ -9273,6 +9429,8 @@ $(document).ready(function() {
         fd.append('ClassId', classId);
         fd.append('Credits', evGetSavedCredits());
         fd.append('AttendanceDate', new Date().toISOString().slice(0, 10));
+        // Honour the add form's Online? switch.
+        fd.append('Online', evAddOnline && evAddOnline.get() ? '1' : '0');
         fetch(EvConfig.uir + 'EventAjax/add_attendance/' + EvConfig.eventId + '/' + EvConfig.detailId, { method: 'POST', body: fd })
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -9302,8 +9460,9 @@ $(document).ready(function() {
         var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
         var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
         var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
-            '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
+        var isOnline = parseInt(att.Online, 10) === 1;
+        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '" data-online="' + (isOnline ? 1 : 0) + '">' +
+            '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a>' + (isOnline ? ' ' + ornOnlineBadge() : '') + '</td>' +
             '<td>' + kingCell + '</td>' +
             '<td>' + parkCell + '</td>' +
             '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
@@ -9459,6 +9618,52 @@ $(document).ready(function() {
         });
     };
 
+    // ---- Staff changes ----
+    // evOnStaffChanged(fn) registers fn to run after every staff save or removal
+    // with the fresh staff list [{MundaneId, Persona, RoleName, LeadCategories}],
+    // read from the staff table; EvConfig.staffList is replaced with that list.
+    var evStaffChangedFns = [];
+    window.evOnStaffChanged = function(fn) {
+        if (typeof fn === 'function') evStaffChangedFns.push(fn);
+    };
+    function evStaffRowLeads(row) {
+        try {
+            var cats = JSON.parse(row.getAttribute('data-lead-categories') || '[]');
+            return Array.isArray(cats) ? cats : [];
+        } catch (e) { return []; }
+    }
+    function evNotifyStaffChanged() {
+        var list = [];
+        document.querySelectorAll('#ev-staff-tbody tr[id^="ev-staff-row-"]').forEach(function(row) {
+            list.push({
+                MundaneId:      parseInt(row.getAttribute('data-mundane-id'), 10) || 0,
+                Persona:        row.getAttribute('data-persona') || '',
+                RoleName:       row.getAttribute('data-role') || '',
+                LeadCategories: evStaffRowLeads(row)
+            });
+        });
+        EvConfig.staffList = list;
+        evStaffChangedFns.forEach(function(fn) {
+            try { fn(list); } catch (e) { if (window.console) console.error(e); }
+        });
+    }
+    // "Added as lead on 2 items. Removed as lead from 1 item." (empty when nothing changed).
+    function evStaffLeadNote(added, removed) {
+        var el = document.getElementById('ev-staff-lead-note');
+        if (!el) return;
+        var items = function(n) { return n + (n === 1 ? ' item' : ' items'); };
+        var parts = [];
+        if (added > 0)   parts.push('Added as lead on ' + items(added) + '.');
+        if (removed > 0) parts.push('Removed as lead from ' + items(removed) + '.');
+        el.textContent = parts.join(' ');
+        // The Schedule views re-read the page through evOnStaffChanged (evb-view.js).
+    }
+    // A message under the Staff table (no native dialogs).
+    function evStaffNoteText(msg) {
+        var el = document.getElementById('ev-staff-lead-note');
+        if (el) el.textContent = msg;
+    }
+
     // ---- Staff Modal ----
     if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
         var gid = function(id) { return document.getElementById(id); };
@@ -9485,6 +9690,11 @@ $(document).ready(function() {
             gid('ev-staff-can-attendance').checked = editing ? !!prefill.canAttendance : false;
             if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = editing ? !!prefill.canSchedule : false;
             if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = editing ? !!prefill.canFeast    : false;
+            var leads = (editing && prefill.leadCategories) || [];
+            modal.querySelectorAll('#ev-staff-lead-cats .evb-cat-toggle').forEach(function(t) {
+                t.setAttribute('aria-pressed', leads.indexOf(t.getAttribute('data-category')) !== -1 ? 'true' : 'false');
+            });
+            if (gid('ev-staff-lead-note')) gid('ev-staff-lead-note').textContent = '';
             gid('ev-staff-error').style.display = 'none';
             gid('ev-staff-ac').classList.remove('kn-ac-open');
             // Title + submit-button copy switch on mode.
@@ -9510,9 +9720,30 @@ $(document).ready(function() {
                 canManage:     row.getAttribute('data-manage')     === '1',
                 canAttendance: row.getAttribute('data-attendance') === '1',
                 canSchedule:   row.getAttribute('data-schedule')   === '1',
-                canFeast:      row.getAttribute('data-feast')      === '1'
+                canFeast:      row.getAttribute('data-feast')      === '1',
+                leadCategories: evStaffRowLeads(row)
             });
         };
+
+        var leadCatsEl = gid('ev-staff-lead-cats');
+        if (leadCatsEl) {
+            leadCatsEl.addEventListener('click', function(e) {
+                var t = e.target.closest('.evb-cat-toggle');
+                if (!t) return;
+                t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+            });
+        }
+
+        // The "Leads" cell, matching the PHP-rendered one in the staff table.
+        function evStaffLeadsCell(cats) {
+            if (!cats || !cats.length) return '<td class="evb-staff-leads"><span class="evb-staff-none">&mdash;</span></td>';
+            var byName = {};
+            (EvConfig.scheduleCategories || []).forEach(function(c) { byName[c.name] = c; });
+            return '<td class="evb-staff-leads">' + cats.map(function(name) {
+                var bold = (byName[name] && byName[name].bold) || '#616161';
+                return '<span class="evb-cat-chip" data-category="' + escHtmlSt(name) + '" style="--evb-cat:' + escHtmlSt(bold) + '">' + escHtmlSt(name) + '</span>';
+            }).join('') + '</td>';
+        }
 
         window.evCloseStaffModal = function() {
             var modal = gid('ev-staff-modal');
@@ -9685,6 +9916,14 @@ $(document).ready(function() {
             fd.append('CanAttendance', canAtt);
             fd.append('CanSchedule',   canSched);
             fd.append('CanFeast',      canFeast);
+            // Always sent (possibly empty), so the save sets exactly the pressed set.
+            if (leadCatsEl) {
+                var leadCats = [];
+                leadCatsEl.querySelectorAll('.evb-cat-toggle[aria-pressed="true"]').forEach(function(t) {
+                    leadCats.push(t.getAttribute('data-category'));
+                });
+                fd.append('LeadCategories', JSON.stringify(leadCats));
+            }
             // Editing? Send the staff row id so the backend does an UPDATE
             // instead of an INSERT. ork_event_staff has no UNIQUE constraint
             // on (detail_id, mundane_id) yet, so a bare insert-upsert makes
@@ -9709,9 +9948,11 @@ $(document).ready(function() {
                         + ' data-manage="'     + (s.CanManage     ? 1 : 0) + '"'
                         + ' data-attendance="' + (s.CanAttendance ? 1 : 0) + '"'
                         + ' data-schedule="'   + (s.CanSchedule   ? 1 : 0) + '"'
-                        + ' data-feast="'      + (s.CanFeast      ? 1 : 0) + '">' +
+                        + ' data-feast="'      + (s.CanFeast      ? 1 : 0) + '"'
+                        + ' data-lead-categories="' + escHtmlSt(JSON.stringify(s.LeadCategories || [])) + '">' +
                         '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + escHtmlSt(s.Persona || '') + '</a></td>' +
                         '<td>' + escHtmlSt(s.RoleName || '') + '</td>' +
+                        evStaffLeadsCell(s.LeadCategories) +
                         '<td>' + (s.CanManage ? chk : x) + '</td>' +
                         '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
                         '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
@@ -9748,6 +9989,8 @@ $(document).ready(function() {
                             }
                         });
                     }
+                    evStaffLeadNote(data.leadsAdded || 0, data.leadsRemoved || 0);
+                    evNotifyStaffChanged();
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -9769,6 +10012,9 @@ $(document).ready(function() {
         window.evShowScheduleSaveButtons = function(mode) {
             var secondaries = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-secondary');
             secondaries.forEach(function(b) { b.style.display = (mode === 'add') ? '' : 'none'; });
+            // Delete exists only for an item that is already saved.
+            var del = gid('ev-sched-delete-btn');
+            if (del) del.style.display = (mode === 'edit') ? '' : 'none';
         };
 
         window.evRemoveStaff = function(btn, staffId) {
@@ -9813,19 +10059,53 @@ $(document).ready(function() {
                             }
                         }
                     });
+                    evStaffLeadNote(0, data.leadsRemoved || 0);
+                    evNotifyStaffChanged();
                 } else {
-                    alert(data.error || 'Could not remove staff member.');
+                    evStaffNoteText(data.error || 'Could not remove staff member.');
                 }
             })
-            .catch(function(err) { alert('Request failed: ' + err.message); });
+            .catch(function(err) { evStaffNoteText('Request failed: ' + err.message); });
             }, { title: 'Remove Staff Member', okLabel: 'Remove' });
         };
 
         // ---- Schedule modal ----
 
         // --- Schedule leads state & helpers ---
+        // [{MundaneId, Persona, Auto}]: Auto marks a lead filled in from its
+        // category; every save posts it back so the server keeps it.
         var evSchedLeads = [];
         var evSchedLeadAcTimer = null;
+        // MundaneIds of auto-filled leads removed by hand while adding an item: the
+        // category does not fill them in again (the quick line's rule).
+        var evSchedRemovedAuto = {};
+
+        // Add a lead by hand; someone already filled in from the category becomes hand-picked.
+        function evAddSchedLead(mundaneId, persona) {
+            var have = evSchedLeads.filter(function(l) { return l.MundaneId === mundaneId; })[0];
+            if (have) have.Auto = false;
+            else evSchedLeads.push({ MundaneId: mundaneId, Persona: persona, Auto: false });
+            evRenderSchedLeads();
+            evRefreshStaffQuickAdd();
+        }
+
+        // The primary category's leads, the rule on every entry path: the leads
+        // picked by hand stay, and the auto-filled ones are the category's
+        // (EvBoardCore.swapAutoLeads). Adding an item, an auto lead removed by
+        // hand is not filled in again.
+        window.evSchedApplyCategoryLeads = function() {
+            var mode = gid('ev-sched-mode'), cat = gid('ev-sched-category');
+            if (!mode || !cat || !window.EvBoardCore) return;
+            if (mode.value !== 'edit' && mode.value !== 'add') return;
+            var staff = EvConfig.staffList || [], name = cat.value || 'Other';
+            evSchedLeads = EvBoardCore.swapAutoLeads(evSchedLeads, staff, name);
+            if (mode.value === 'add') {
+                evSchedLeads = evSchedLeads.filter(function(l) { return !(l.Auto && evSchedRemovedAuto[+l.MundaneId]); });
+            }
+            evRenderSchedLeads();
+            evRefreshStaffQuickAdd();
+        };
+        if (gid('ev-sched-category')) gid('ev-sched-category').addEventListener('change', window.evSchedApplyCategoryLeads);
 
         function evSchedLeadsCell(leads) {
             if (!leads || !leads.length) return '';
@@ -9844,12 +10124,14 @@ $(document).ready(function() {
             list.innerHTML = evSchedLeads.map(function(l) {
                 return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;color:#2d3748;border-radius:4px;padding:3px 8px;font-size:12px">' +
                     escHtmlSt(l.Persona) +
+                    (l.Auto ? '<span style="font-size:10px;color:#718096" data-tip="Leads this category">auto</span>' : '') +
                     '<button type="button" onclick="evRemoveSchedLead(' + l.MundaneId + ')" style="background:none;border:none;cursor:pointer;color:#718096;font-size:13px;padding:0;margin-left:2px;line-height:1">&times;</button>' +
                     '</span>';
             }).join('');
         }
 
         window.evRemoveSchedLead = function(mundaneId) {
+            evSchedLeads.forEach(function(l) { if (l.MundaneId === mundaneId && l.Auto) evSchedRemovedAuto[+mundaneId] = true; });
             evSchedLeads = evSchedLeads.filter(function(l) { return l.MundaneId !== mundaneId; });
             evRenderSchedLeads();
             evRefreshStaffQuickAdd();
@@ -9861,6 +10143,7 @@ $(document).ready(function() {
         // so feast items opened for edit showed no leads.
         window.evSetSchedLeads = function(leads) {
             evSchedLeads = Array.isArray(leads) ? leads : [];
+            evSchedRemovedAuto = {};
             evRenderSchedLeads();
         };
 
@@ -9892,12 +10175,7 @@ $(document).ready(function() {
         };
 
         window.evStaffQuickAddLead = function(mundaneId, encodedName) {
-            var name = decodeURIComponent(encodedName);
-            if (!evSchedLeads.some(function(l) { return l.MundaneId === mundaneId; })) {
-                evSchedLeads.push({ MundaneId: mundaneId, Persona: name });
-                evRenderSchedLeads();
-                evRefreshStaffQuickAdd();
-            }
+            evAddSchedLead(mundaneId, decodeURIComponent(encodedName));
         };
 
         // Lead player autocomplete
@@ -9967,9 +10245,8 @@ $(document).ready(function() {
                 var name = decodeURIComponent(item.dataset.name);
                 leadAcEl.classList.remove(OPEN_CLASS);
                 leadInputEl.value = '';
-                if (!mid || evSchedLeads.some(function(l) { return l.MundaneId === mid; })) return;
-                evSchedLeads.push({ MundaneId: mid, Persona: name });
-                evRenderSchedLeads();
+                if (!mid) return;
+                evAddSchedLead(mid, name);
             });
 
             leadInputEl.addEventListener('blur', function() {
@@ -9996,23 +10273,21 @@ $(document).ready(function() {
         }
 
 
-        var EV_CATEGORIES = {
-            'Administrative':    { icon: 'fa-clipboard-list', color: '#546e7a', bg: '#eceff1' },
-            'Tournament':        { icon: 'fa-trophy',          color: '#b8860b', bg: '#fffde7' },
-            'Battlegame':        { icon: 'fa-shield-alt',      color: '#c0392b', bg: '#fdecea' },
-            'Arts and Sciences': { icon: 'fa-palette',         color: '#7b1fa2', bg: '#f3e5f5' },
-            'Class':             { icon: 'fa-graduation-cap',  color: '#1565c0', bg: '#e3f2fd' },
-            'Feast and Food':    { icon: 'fa-utensils',        color: '#e65100', bg: '#fff3e0' },
-            'Court':             { icon: 'fa-crown',           color: '#4e342e', bg: '#efebe9' },
-            'Meeting':           { icon: 'fa-users',           color: '#276749', bg: '#f0fff4' },
-            'Other':             { icon: 'fa-star',            color: '#757575', bg: '#fafafa' }
-        };
+        // Category name -> {name, key, icon, color, bg, colorDark, bgDark, bold}, built from the
+        // one PHP source (EventPlanning::ScheduleCategories via EvConfig.scheduleCategories).
+        var EV_CATEGORY_ORDER = [];
+        var EV_CATEGORIES = {};
+        (EvConfig.scheduleCategories || []).forEach(function(c) {
+            EV_CATEGORY_ORDER.push(c.name);
+            EV_CATEGORIES[c.name] = c;
+        });
 
         window.evOpenScheduleModal = function() {
             var modal = gid('ev-schedule-modal');
             if (!modal) return;
             gid('ev-sched-mode').value         = 'add';
             gid('ev-sched-id').value           = '';
+            if (gid('ev-sched-seen')) gid('ev-sched-seen').value = '';
             gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
             gid('ev-sched-save-label').textContent  = 'Save and Close';
             if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
@@ -10023,7 +10298,9 @@ $(document).ready(function() {
             gid('ev-sched-description').value  = '';
             gid('ev-sched-error').style.display = 'none';
             evSchedLeads = [];
+            evSchedRemovedAuto = {};
             evRenderSchedLeads();
+            window.evSchedApplyCategoryLeads();
             // Collapse staff quick-add and refresh
             var qaList = gid('ev-sched-staff-qa-list');
             var qaChevron = gid('ev-sched-staff-qa-chevron');
@@ -10140,6 +10417,9 @@ $(document).ready(function() {
             var row = btn.closest('tr');
             gid('ev-sched-mode').value         = 'edit';
             gid('ev-sched-id').value           = scheduleId;
+            // The item's version as this page has it: the save sends it as Seen, and the
+            // server refuses the save if someone else has changed the item since.
+            if (gid('ev-sched-seen')) gid('ev-sched-seen').value = row.getAttribute('data-modified') || '';
             gid('ev-sched-modal-title').textContent = 'Edit Schedule Item';
             gid('ev-sched-save-label').textContent  = 'Save Changes';
             if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('edit');
@@ -10150,6 +10430,8 @@ $(document).ready(function() {
             gid('ev-sched-description').value  = row.getAttribute('data-description') || '';
             gid('ev-sched-error').style.display = 'none';
             try { evSchedLeads = JSON.parse(row.getAttribute('data-leads') || '[]'); } catch(e) { evSchedLeads = []; }
+            if (!Array.isArray(evSchedLeads)) evSchedLeads = [];
+            evSchedRemovedAuto = {};
             evRenderSchedLeads();
             // Collapse staff quick-add and refresh
             var qaList = gid('ev-sched-staff-qa-list');
@@ -10167,6 +10449,35 @@ $(document).ready(function() {
             document.body.style.overflow = 'hidden';
             setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
         };
+
+        // The legacy update's refusal of a stale Seen (EventPlanning's
+        // SCHEDULE_CHANGED_ELSEWHERE). Its reply has no status or code of its own
+        // (status 1, like any invalid parameter), so it is known by this text, kept here only.
+        var EV_SCHED_CHANGED_ELSEWHERE = 'Someone else changed this item. Close this form and open it again to see their version.';
+
+        // After that refusal, re-read the page's copy in the background while the form
+        // stays open, so the item is current when the person closes and reopens it.
+        // In Edit mode the store re-reads the schedule (and says the schedule was
+        // updated); otherwise the list rows, feast cards and board take a fresh page,
+        // as leaving Edit mode does. If the read fails, everything stays as it is.
+        function evRereadAfterChangedElsewhere() {
+            var edit = window.EvBoardEdit, view = window.EvBoardView;
+            var editing = function() { return !!(edit && typeof edit.isEditing === 'function' && edit.isEditing()); };
+            if (editing()) {
+                if (typeof edit.refresh === 'function') edit.refresh();
+                return;
+            }
+            if (!view || typeof view.swapFromPage !== 'function') return;
+            fetch(location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+                .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+                .then(function(html) {
+                    // Edit mode opened meanwhile: its store read the schedule itself and owns the board.
+                    if (editing()) return;
+                    var items = view.swapFromPage(html);
+                    if (items && typeof view.setItems === 'function') view.setItems(items);
+                })
+                .catch(function() { /* the page stays as it is */ });
+        }
 
         window.evSubmitSchedule = function(postAction) {
             postAction = postAction || 'close';
@@ -10213,7 +10524,10 @@ $(document).ready(function() {
             fd.append('EndTime',     end.replace('T', ' '));
             fd.append('Location',    loc);
             fd.append('Description', desc);
-            fd.append('Leads',       JSON.stringify(evSchedLeads));
+            // Each lead keeps its Auto flag; one added here by hand is false.
+            fd.append('Leads',       JSON.stringify(evSchedLeads.map(function(l) {
+                return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: !!l.Auto };
+            })));
 
             var isEdit = gid('ev-sched-mode').value === 'edit';
             var schedId = gid('ev-sched-id').value;
@@ -10221,6 +10535,8 @@ $(document).ready(function() {
                 ? EvConfig.uir + 'EventAjax/update_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId
                 : EvConfig.uir + 'EventAjax/add_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId;
             if (isEdit) fd.append('ScheduleId', schedId);
+            var seenEl = gid('ev-sched-seen');
+            if (isEdit && seenEl && seenEl.value) fd.append('Seen', seenEl.value);
 
             fetch(url, {
                 method: 'POST', body: fd,
@@ -10251,18 +10567,32 @@ $(document).ready(function() {
                         '<button class="ev-edit-link" data-tip="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
                         '<button class="ev-del-link" data-tip="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
                         '</td>';
+                    // The form, if it stays open, now holds the saved version.
+                    if (seenEl) seenEl.value = s.Modified || '';
                     if (isEdit) {
+                        // Every row of the item (a multi-day item has one per day it covers)
+                        // opens the form with what was just saved, its version included, so
+                        // a second save from any of them is not refused as someone else's change.
+                        var sid = parseInt(s.EventScheduleId, 10) || 0;
+                        document.querySelectorAll('tr[data-schedule-id="' + sid + '"]').forEach(function(r) {
+                            r.setAttribute('data-title',       s.Title);
+                            r.setAttribute('data-start',       (s.StartTime || '').replace(' ', 'T').substring(0, 16));
+                            r.setAttribute('data-end',         (s.EndTime || '').replace(' ', 'T').substring(0, 16));
+                            r.setAttribute('data-location',    s.Location);
+                            r.setAttribute('data-description', s.Description);
+                            r.setAttribute('data-category',           s.Category);
+                            r.setAttribute('data-secondary-category', s.SecondaryCategory || '');
+                            r.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
+                            r.setAttribute('data-menu',      s.Menu == null ? '' : String(s.Menu));
+                            r.setAttribute('data-cost',      s.Cost == null ? '' : String(s.Cost));
+                            r.setAttribute('data-dietary',   s.Dietary == null ? '' : String(s.Dietary));
+                            r.setAttribute('data-allergens', s.Allergens == null ? '' : String(s.Allergens));
+                            r.setAttribute('data-modified',           s.Modified || '');
+                        });
                         var row = gid('ev-schedule-row-' + s.EventScheduleId);
                         if (row) {
-                            row.setAttribute('data-title',       s.Title);
-                            row.setAttribute('data-start',       (s.StartTime || '').replace(' ', 'T').substring(0, 16));
-                            row.setAttribute('data-end',         (s.EndTime || '').replace(' ', 'T').substring(0, 16));
-                            row.setAttribute('data-location',    s.Location);
-                            row.setAttribute('data-description', s.Description);
-                            row.setAttribute('data-category',           s.Category);
-                            row.setAttribute('data-secondary-category', s.SecondaryCategory || '');
-                            row.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
-                            row.style.background = catCfg.bg;
+                            row.style.setProperty('--evb-soft', catCfg.bg);
+                            row.style.setProperty('--evb-soft-dark', catCfg.bgDark);
                             row.cells[0].innerHTML = startCell;
                             row.cells[1].innerHTML = endCell;
                             row.cells[2].innerHTML = glyphHtml + escHtmlSch(s.Title);
@@ -10282,7 +10612,13 @@ $(document).ready(function() {
                             ' data-category="' + escHtmlSch(s.Category) + '"' +
                             ' data-secondary-category="' + escHtmlSch(s.SecondaryCategory || '') + '"' +
                             ' data-leads="' + JSON.stringify(s.Leads || []).replace(/"/g,'&quot;') + '"' +
-                            ' style="background:' + catCfg.bg + '">' +
+                            // The meal fields too, so the row's own edit button opens the form with them.
+                            ' data-menu="'      + escHtmlSch(s.Menu == null ? '' : s.Menu) + '"' +
+                            ' data-cost="'      + escHtmlSch(s.Cost == null ? '' : s.Cost) + '"' +
+                            ' data-dietary="'   + escHtmlSch(s.Dietary == null ? '' : s.Dietary) + '"' +
+                            ' data-allergens="' + escHtmlSch(s.Allergens == null ? '' : s.Allergens) + '"' +
+                            ' data-modified="' + escHtmlSch(s.Modified || '') + '"' +
+                            ' style="--evb-soft:' + catCfg.bg + ';--evb-soft-dark:' + catCfg.bgDark + '">' +
                             '<td style="white-space:nowrap">' + startCell + '</td>' +
                             '<td style="white-space:nowrap">' + endCell + '</td>' +
                             '<td>' + glyphHtml + escHtmlSch(s.Title) + '</td>' +
@@ -10297,8 +10633,10 @@ $(document).ready(function() {
                             // Build a new day section and insert in chronological order
                             var dateStr = s.StartTime.substring(0, 10);
                             var dayLabel = evFmtDayHeader(dateStr);
-                            var delTh = EvConfig.canManageSchedule ? '<th class="ev-del-cell"></th>' : '';
-                            var delCol = EvConfig.canManageSchedule ? '<col style="width:56px">' : '';
+                            // The actions column, as the page renders it (a feast editor's too).
+                            var hasActions = EvConfig.canManageSchedule || EvConfig.canManageFeast;
+                            var delTh = hasActions ? '<th class="ev-del-cell"></th>' : '';
+                            var delCol = hasActions ? '<col style="width:56px">' : '';
                             var newSection = '<div class="ev-sched-day-section" data-date="' + dateStr + '">' +
                                 '<div class="ev-sched-day-header">' + dayLabel + '</div>' +
                                 '<table class="ev-table ev-sched-table" id="ev-schedule-table-' + dateKey + '">' +
@@ -10335,11 +10673,17 @@ $(document).ready(function() {
                         });
                         evBuildScheduleFilters();
                     }
-                    // Keep the server-rendered grid in sync with this list mutation.
-                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+                    // In Edit mode the board's store takes the saved row now, so an edit made
+                    // before the re-read below is checked against this save, not the one before.
+                    if (window.EvBoardEdit && typeof window.EvBoardEdit.noteSaved === 'function') window.EvBoardEdit.noteSaved(s);
+                    // Keep the board in sync with this list mutation: the reply's row is the
+                    // item as saved (leads, auto leads and Modified included), so no re-read.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid({ saved: s });
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
+                    // Their version is fetched now, so reopening the form shows it and can save.
+                    if (isEdit && data.error === EV_SCHED_CHANGED_ELSEWHERE) evRereadAfterChangedElsewhere();
                 }
             })
             .catch(function(err) {
@@ -10368,7 +10712,7 @@ $(document).ready(function() {
                 var sec = row.getAttribute('data-secondary-category') || '';
                 if (sec) present[sec] = true;
             });
-            var order = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Meeting','Other'];
+            var order = EV_CATEGORY_ORDER;
             container.innerHTML = '';
             var count = 0;
             order.forEach(function(cat) {
@@ -10416,37 +10760,55 @@ $(document).ready(function() {
                 var secActive  = secPill  ? secPill.classList.contains('ev-sched-pill-active')  : false;
                 row.style.display = (primActive || secActive) ? '' : 'none';
             });
-            // Grid view shares these pills: hide/show the toggled category's column too.
-            evApplyGridFilter();
+            // These pills filter the list only; the board's legend is its own filter.
         };
 
-        // Grid filter: hide the column (header + body) of any category whose pill is
-        // inactive, then reflow --ev-grid-cols so the remaining columns fill the width.
-        // Categories with no pill (not present that day) stay visible.
-        window.evApplyGridFilter = function() {
-            var pills = document.querySelectorAll('#ev-sched-filters .ev-sched-pill');
-            if (!pills.length) return;
-            var active = {};
-            pills.forEach(function(p) {
-                active[p.getAttribute('data-cat')] = p.classList.contains('ev-sched-pill-active');
-            });
-            document.querySelectorAll('.ev-grid-day').forEach(function(day) {
-                var visible = 0;
-                day.querySelectorAll('.ev-grid-cat-head[data-category]').forEach(function(head) {
-                    var show = active[head.getAttribute('data-category')] !== false;
-                    head.style.display = show ? '' : 'none';
-                    if (show) visible++;
-                });
-                day.querySelectorAll('.ev-grid-col[data-category]').forEach(function(col) {
-                    col.style.display = (active[col.getAttribute('data-category')] !== false) ? '' : 'none';
-                });
-                var inner = day.querySelector('.ev-grid-inner');
-                if (inner) inner.style.setProperty('--ev-grid-cols', Math.max(1, visible));
-            });
-        };
+        // A failed remove says so in the item's own row, under its buttons.
+        function evScheduleRowError(btn, message) {
+            var cell = btn && btn.closest('td');
+            if (!cell) return;
+            var el = cell.querySelector('.evb-row-error');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'evb-row-error';
+                el.setAttribute('role', 'alert');
+                cell.appendChild(el);
+            }
+            el.textContent = message;
+        }
 
         window.evRemoveSchedule = function(btn, scheduleId) {
-            if (!confirm('Remove this schedule item?')) return;
+            orkConfirm('Remove this schedule item?', function() { evRemoveScheduleNow(btn, scheduleId); },
+                { title: 'Remove item', okLabel: 'Remove', danger: true });
+        };
+
+        // The edit form's Delete button: the same remove as the list row's trash icon.
+        // Errors show in the form (which stays open); on success the form closes and
+        // the list, the board and the tab count update as they do for the row's icon.
+        window.evDeleteScheduleFromModal = function() {
+            var scheduleId = parseInt(gid('ev-sched-id') ? gid('ev-sched-id').value : '', 10);
+            if (!scheduleId) return;
+            orkConfirm('Remove this schedule item?', function() {
+                var rowBtn = document.querySelector('tr[data-schedule-id="' + scheduleId + '"] .ev-del-link');
+                evRemoveScheduleNow(rowBtn, scheduleId, {
+                    onDone: function() { if (typeof window.evCloseScheduleModal === 'function') window.evCloseScheduleModal(true); },
+                    onError: function(message) {
+                        var errEl = gid('ev-sched-error');
+                        if (!errEl) return;
+                        errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i>' + message;
+                        errEl.style.display = 'block';
+                    }
+                });
+            }, { title: 'Remove item', okLabel: 'Remove', danger: true });
+        };
+
+        // cb (optional): { onDone, onError(message) }; without onError a failure is
+        // written under the row's buttons.
+        function evRemoveScheduleNow(btn, scheduleId, cb) {
+            cb = cb || {};
+            var fail = function(message) { if (cb.onError) cb.onError(message); else evScheduleRowError(btn, message); };
+            var old = btn && btn.closest('td') && btn.closest('td').querySelector('.evb-row-error');
+            if (old) old.remove();
             var fd = new FormData();
             fd.append('ScheduleId', scheduleId);
             fetch(EvConfig.uir + 'EventAjax/remove_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId, {
@@ -10488,14 +10850,20 @@ $(document).ready(function() {
                         }
                     });
                     evBuildScheduleFilters();
-                    // Keep the server-rendered grid in sync with this removal.
-                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+                    // A feast item's card goes too (evSyncFeastCard drops the card of an
+                    // item that is no longer a feast item).
+                    if (typeof window.evSyncFeastCard === 'function') {
+                        window.evSyncFeastCard({ EventScheduleId: scheduleId, Category: '', SecondaryCategory: '' });
+                    }
+                    // Keep the board in sync with this removal.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid({ removed: scheduleId });
+                    if (cb.onDone) cb.onDone();
                 } else {
-                    alert(data.error || 'Could not remove schedule item.');
+                    fail(data.error || 'Could not remove schedule item.');
                 }
             })
-            .catch(function(err) { alert('Request failed: ' + err.message); });
-        };
+            .catch(function(err) { fail('Request failed: ' + err.message); });
+        }
         // Initialize schedule filters on page load
         evBuildScheduleFilters();
     }
@@ -10813,7 +11181,30 @@ $(document).ready(function() {
 
     var ADD_URL    = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/add';
     var GETDAY_URL = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/getday';
+    var DAYTYPE_URL = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/daytype';
     var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
+
+    // "Online?" switch: derived from the park-day rule for the modal's chosen
+    // (browser-local) date; a manual flip wins until the date changes, and the
+    // whole thing resets on reopen.
+    var pkOnlineManual = false, pkOnlineDate = null, pkOnlineReq = 0;
+    var pkOnline = ornOnlineSwitch(document.getElementById('pk-att-online-switch'), {
+        initial: false,
+        hintEl: document.getElementById('pk-att-online-hint'),
+        onChange: function() { pkOnlineManual = true; }
+    });
+    function pkOnlineVal() { return (pkOnline && pkOnline.get()) ? 1 : 0; }
+    function pkDeriveOnline(date) {
+        if (!pkOnline || date === pkOnlineDate) return;
+        pkOnlineDate = date;
+        pkOnlineManual = false;
+        pkOnline.set(false);
+        var req = ++pkOnlineReq;
+        $.getJSON(DAYTYPE_URL, { date: date }, function(r) {
+            if (req !== pkOnlineReq || pkOnlineManual) return;
+            ornApplyParkDayType(pkOnline, r);
+        });
+    }
 
     // MundaneIds already entered for the selected date
     var pkAttEntered = {};
@@ -10838,6 +11229,7 @@ $(document).ready(function() {
         tr.dataset.mundaneId    = entry.MundaneId || 0;
         tr.dataset.classId      = entry.ClassId || 0;
         tr.dataset.credits      = entry.Credits || 1;
+        tr.dataset.online       = parseInt(entry.Online, 10) === 1 ? 1 : 0;
         var td1 = document.createElement('td');
         var td1Link = document.createElement('a');
         td1Link.href = PkConfig.uir + 'Player/profile/' + (entry.MundaneId || 0);
@@ -10849,6 +11241,7 @@ $(document).ready(function() {
         td1Icon.style.cssText = 'margin-left:5px;font-size:10px;color:#a0aec0;vertical-align:middle';
         td1Link.appendChild(td1Icon);
         td1.appendChild(td1Link);
+        if (parseInt(entry.Online, 10) === 1) td1.insertAdjacentHTML('beforeend', ' ' + ornOnlineBadge());
         var td2 = document.createElement('td'); td2.className = 'pk-att-class-cell';  td2.textContent = className;
         var td3 = document.createElement('td'); td3.className = 'pk-att-credits-cell'; td3.textContent = entry.Credits || 1;
         var td4 = document.createElement('td'); td4.className = 'pk-att-actions-cell';
@@ -10879,6 +11272,7 @@ $(document).ready(function() {
 
         var origClass   = tr.dataset.classId;
         var origCredits = tr.dataset.credits;
+        var origOnline  = tr.dataset.online === '1';
 
         // Replace class cell with select
         var sel = document.createElement('select');
@@ -10896,6 +11290,13 @@ $(document).ready(function() {
         inp.type = 'number'; inp.min = '0.5'; inp.step = '0.5';
         inp.value = origCredits; inp.className = 'pk-att-inline-credits';
         td3.innerHTML = ''; td3.appendChild(inp);
+        var onlineLbl = document.createElement('label');
+        onlineLbl.className = 'orn-online-check';
+        var onlineChk = document.createElement('input');
+        onlineChk.type = 'checkbox'; onlineChk.checked = origOnline;
+        onlineLbl.appendChild(onlineChk);
+        onlineLbl.appendChild(document.createTextNode('Online?'));
+        td3.appendChild(onlineLbl);
 
         // Replace action buttons with save/cancel
         td4.innerHTML = '';
@@ -10929,13 +11330,19 @@ $(document).ready(function() {
             var aid        = tr.dataset.attendanceId;
             var mid        = tr.dataset.mundaneId;
             var date       = gid('pk-att-date').value;
+            var newOnline  = onlineChk.checked ? 1 : 0;
             saveBtn.disabled = true;
             $.post(PkConfig.uir + 'AttendanceAjax/attendance/' + aid + '/edit',
-                { Date: date, Credits: newCredits, ClassId: newClass, MundaneId: mid },
+                { Date: date, Credits: newCredits, ClassId: newClass, MundaneId: mid, Online: newOnline },
                 function(r) {
                     if (r && r.status === 0) {
                         tr.dataset.classId = newClass;
                         tr.dataset.credits = newCredits;
+                        tr.dataset.online  = newOnline;
+                        var nameCell = tr.cells[0];
+                        var oldBadge = nameCell && nameCell.querySelector('.orn-online-badge');
+                        if (oldBadge) oldBadge.remove();
+                        if (newOnline && nameCell) nameCell.insertAdjacentHTML('beforeend', ' ' + ornOnlineBadge());
                         tr.classList.remove('pk-att-editing');
                         td2.innerHTML = ''; td2.textContent = pkClassNames[newClass] || '';
                         td3.innerHTML = ''; td3.textContent = newCredits;
@@ -11174,6 +11581,7 @@ $(document).ready(function() {
             pkBuildQuickAddRows();
         }
         pkUpdateEventNudge(val);
+        pkDeriveOnline(val);
         pkFetchDayEntered(val, cb);
     }
 
@@ -11203,6 +11611,7 @@ $(document).ready(function() {
         if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
+        pkOnlineDate = null; // reopen resets any manual flip; re-derived for the date below
         pkSetDate(today);
         // Drop any stale "no active links" cache so every modal open reflects
         // current DB state. The reset helper lives in the sign-in-link IIFE
@@ -11283,13 +11692,13 @@ $(document).ready(function() {
         if (!classId) { pkAttShowFeedback('Select a class for ' + attendee.Persona + '.', false); return; }
         btn.disabled = true; btn.textContent = '\u2026';
         pkSubmit(
-            { AttendanceDate: gid('pk-att-date').value, MundaneId: attendee.MundaneId, ClassId: classId, Credits: credits },
-            function(ok, err, aid) {
+            { AttendanceDate: gid('pk-att-date').value, MundaneId: attendee.MundaneId, ClassId: classId, Credits: credits, Online: pkOnlineVal() },
+            function(ok, err, aid, reactivated, online) {
                 if (ok) {
                     pkAttEntered[attendee.MundaneId] = true;
                     tr.classList.add('pk-att-done');
                     btn.disabled = true; btn.textContent = '\u2713'; btn.classList.add('pk-att-qa-added');
-                    pkAttRecorded({ AttendanceId: aid, MundaneId: attendee.MundaneId, Persona: attendee.Persona, ClassId: classId, Credits: credits });
+                    pkAttRecorded({ AttendanceId: aid, MundaneId: attendee.MundaneId, Persona: attendee.Persona, ClassId: classId, Credits: credits, Online: online });
                     pkAttHideFeedback();
                 } else {
                     btn.disabled = false; btn.textContent = '+';
@@ -11321,8 +11730,8 @@ $(document).ready(function() {
         btn.disabled = true;
         var wasInactive = pkAttSelectedInactive;
         pkSubmit(
-            { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred },
-            function(ok, err, aid, reactivated) {
+            { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred, Online: pkOnlineVal() },
+            function(ok, err, aid, reactivated, online) {
                 if (ok) {
                     var midInt = parseInt(pid, 10);
                     pkAttEntered[midInt] = true;
@@ -11332,7 +11741,7 @@ $(document).ready(function() {
                     } else {
                         pkAttHideFeedback();
                     }
-                    pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred });
+                    pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred, Online: online });
                     gid('pk-att-player-name').value = '';
                     gid('pk-att-player-id').value   = '';
                     pkAttSelectedInactive = false;
@@ -11348,9 +11757,9 @@ $(document).ready(function() {
     // --- Core AJAX ---
     function pkSubmit(data, cb) {
         $.post(ADD_URL, data, function(r) {
-            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0, !!r.reactivated); }
-            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0, false);
-        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0, false); });
+            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0, !!r.reactivated, parseInt(r.online, 10) === 1 ? 1 : 0); }
+            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0, false, 0);
+        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0, false, 0); });
     }
 
     // --- Feedback helpers ---
@@ -11840,6 +12249,15 @@ $(document).ready(function() {
 
     window.pkCloseQrModal = function() { orkCloseQrModal('pk-qr-overlay'); };
 
+    // Online? switch: park links default to online; flash the tooltip each time
+    // the Sign-in Link tab is opened so officers notice the default.
+    var pkLinkOnline = ornOnlineSwitch(document.getElementById('pk-att-link-online-switch'), { initial: true });
+    if (pkLinkOnline) pkLinkOnline.el.setAttribute('data-tip', 'Not for an online event? Disable this.');
+    var pkLinkTab = document.getElementById('pk-att-tab-link');
+    if (pkLinkTab && pkLinkOnline) {
+        pkLinkTab.addEventListener('click', function() { ornFlashTip(pkLinkOnline.el); });
+    }
+
     genBtn.addEventListener('click', function() {
         var hours   = Math.max(1, Math.min(96, parseInt(document.getElementById('pk-att-link-hours').value, 10) || 3));
         var credits = Math.max(0.5, Math.min(10, parseFloat(document.getElementById('pk-att-link-credits').value) || 1));
@@ -11847,7 +12265,7 @@ $(document).ready(function() {
         genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
         document.getElementById('pk-att-link-result').style.display = 'none';
         $.post(PkConfig.uir + 'AttendanceAjax/link/park/' + PkConfig.parkId + '/create',
-            { Hours: hours, Credits: credits },
+            { Hours: hours, Credits: credits, Online: (pkLinkOnline && pkLinkOnline.get()) ? 1 : 0 },
             function(r) {
                 genBtn.disabled = false;
                 genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
@@ -11968,7 +12386,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="pk-btn pk-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
@@ -12102,6 +12520,9 @@ $(document).ready(function() {
     creditsEl.addEventListener('input', evSyncGenBtn);
     evSyncGenBtn();
 
+    // Online? switch: event links default to in-person (off), no flash.
+    var evLinkOnline = ornOnlineSwitch(document.getElementById('ev-signin-online-switch'), { initial: false });
+
     // Styled in-modal feedback replaces native alert() so server errors
     // ("This event has already ended", etc.) render inline with the same
     // visual treatment as the rest of the modal.
@@ -12126,7 +12547,7 @@ $(document).ready(function() {
         document.getElementById('ev-signin-link-result').style.display = 'none';
         evSigninFeedbackClear();
         $.post(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/create',
-            { Credits: credits, EventCalendarDetailId: EvConfig.detailId },
+            { Credits: credits, EventCalendarDetailId: EvConfig.detailId, Online: (evLinkOnline && evLinkOnline.get()) ? 1 : 0 },
             function(r) {
                 genBtn.innerHTML = origHtml;
                 evSyncGenBtn();
@@ -12210,7 +12631,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
@@ -12295,6 +12716,9 @@ $(document).ready(function() {
 
     window.knCloseQrModal = function() { orkCloseQrModal('kn-qr-overlay'); };
 
+    var knLinkOnline = ornOnlineSwitch(document.getElementById('kn-signinlink-online-switch'), { initial: true });
+    if (knLinkOnline) knLinkOnline.el.setAttribute('data-tip', 'Not for an online event? Disable this.');
+
     var copyBtn = document.getElementById('kn-signinlink-copy-btn');
 
     // Park autocomplete
@@ -12359,7 +12783,9 @@ $(document).ready(function() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
         errEl.style.display = 'none';
         document.getElementById('kn-signinlink-result').style.display = 'none';
-        $.post(postUrl, { Hours: hours, Credits: credits }, function(r) {
+        // The kingdom-modal generator markup was removed (Kingdomnew_index.tpl,
+        // 2026-08-21), so no switch renders; keep the park-link default (online).
+        $.post(postUrl, { Hours: hours, Credits: credits, Online: knLinkOnline ? (knLinkOnline.get() ? 1 : 0) : 1 }, function(r) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-link"></i> Generate';
             if (r && r.status === 0) {
@@ -12439,7 +12865,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.innerHTML =
                     '<td style="padding:4px 6px;color:#4a5568;font-size:11px">' + scope + '</td>' +
-                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="kn-btn kn-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
@@ -13030,6 +13456,35 @@ function setupPronounPicker(cfg) {
         gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = currentRank || '');
     }
 
+    /* Match by identity, never by a substring of the name ("Rose" is also in
+       "Master Rose"; one kingdom lists two different "Walker of the Middle"s).
+       In order: the row's own kingdom award; an option for the same award (the
+       dropdown lists the EDITOR's kingdom, which may not be the player's), with
+       an exact name breaking ties; an exact name. Otherwise nothing, and the
+       editor picks. */
+    function pnFindReconcileOption(select, data) {
+        var opts = [];
+        for (var i = 0; i < select.options.length; i++) {
+            if (select.options[i].value) opts.push(select.options[i]);
+        }
+        /* strip parenthetical suffix e.g. "Warrior (2nd)" → "Warrior" */
+        var name = (data.displayName || data.Name || '').replace(/\s*\(.*\)/, '').trim().toLowerCase();
+        var sameName = function(o) { return name !== '' && o.textContent.trim().toLowerCase() === name; };
+        var kaid = parseInt(data.KingdomAwardId, 10) || 0;
+        var aid  = parseInt(data.AwardId, 10) || 0;
+        var j;
+        if (kaid) {
+            for (j = 0; j < opts.length; j++) if (parseInt(opts[j].value, 10) === kaid) return opts[j];
+        }
+        if (aid) {
+            var sameAward = opts.filter(function(o) { return parseInt(o.getAttribute('data-award-id'), 10) === aid; });
+            for (j = 0; j < sameAward.length; j++) if (sameName(sameAward[j])) return sameAward[j];
+            if (sameAward.length) return sameAward[0];
+        }
+        for (j = 0; j < opts.length; j++) if (sameName(opts[j])) return opts[j];
+        return null;
+    }
+
     window.pnOpenAwardEditModal = function(awardsId, data) {
         console.log('[EditAward] Opening modal — awardsId:', awardsId, 'data:', data);
         currentAwardsId = awardsId;
@@ -13052,19 +13507,10 @@ function setupPronounPicker(cfg) {
         if (rcRankPills) { rcRankPills.innerHTML = ''; }
         if (rcRankVal)   { rcRankVal.value = ''; }
 
-        /* auto-match historical award name to reconcile dropdown */
+        /* pre-select the reconcile target for a historical award */
         if (currentAwardIsHistorical && rcSelect) {
-            /* strip parenthetical suffix e.g. "Warrior (2nd)" → "Warrior" */
-            var histName = (data.displayName || data.Name || '').replace(/\s*\(.*\)/, '').trim();
-            if (histName) {
-                var histLower = histName.toLowerCase();
-                for (var _i = 0; _i < rcSelect.options.length; _i++) {
-                    if (rcSelect.options[_i].textContent.toLowerCase().indexOf(histLower) !== -1) {
-                        rcSelect.value = rcSelect.options[_i].value;
-                        break;
-                    }
-                }
-            }
+            var rcPick = pnFindReconcileOption(rcSelect, data);
+            if (rcPick) rcSelect.value = rcPick.value;
         }
 
         var nameEl = gid('pn-edit-award-name');
@@ -13155,13 +13601,13 @@ function setupPronounPicker(cfg) {
                     // awards to a now-banned officer during reconciliation.
                     // Award giver is intentionally global (cross-kingdom): a noble from another kingdom
                     // can grant an award, so do not scope the giver search by kingdom.
-                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15';
+                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15&IncludeLegend=1';
                     fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                         if (!data || !data.length) {
                             editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
                         } else {
                             function rank(p) {
-                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
+                                var banned   = !parseInt(p.Legend, 10) && !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
                                 var inactive = parseInt(p.Active, 10) === 0;
                                 if (banned)   return 2;
                                 if (inactive) return 1;
@@ -13173,11 +13619,12 @@ function setupPronounPicker(cfg) {
                                 return (a.Persona || '').localeCompare(b.Persona || '');
                             });
                             editGbResults.innerHTML = data.map(function(p) {
-                                var inactive = parseInt(p.Active, 10) === 0;
-                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
+                                var inactive = parseInt(p.Active, 10) === 0 && !parseInt(p.Legend, 10);
+                                var banned   = !parseInt(p.Legend, 10) && !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
                                 return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                     + escHtml(p.Persona)
                                     + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
+                                    + (parseInt(p.Legend, 10) ? ' <span class="legend-pill">Legend</span>' : '')
                                     + (inactive ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
                                     + (banned   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                     + '</div>';
@@ -15385,8 +15832,8 @@ window.pnCloseUnitCreateModal = function() {
             if (term.length < 2) { results.classList.remove('kn-ac-open'); return; }
             clearTimeout(timer);
             timer = setTimeout(function() {
-                var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, kingdom_id: KnConfig.kingdomId });
-                var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 });
+                var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, kingdom_id: KnConfig.kingdomId, IncludeLegend: 1 });
+                var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, IncludeLegend: 1 });
                 $.when(scopedReq, globalReq).done(function(sr, gr) {
                     var local  = sr[0] || [];
                     var global = gr[0] || [];
@@ -15409,7 +15856,7 @@ window.pnCloseUnitCreateModal = function() {
                                 + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                + '>' + escHtml(pl.Persona) + sub + '</div>';
+                                + '>' + escHtml(pl.Persona) + (pl.Legend ? ' <span class="legend-pill">Legend</span>' : '') + sub + '</div>';
                         }).join('')
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                     results.classList.add('kn-ac-open');
@@ -16111,6 +16558,8 @@ window.pnCloseUnitCreateModal = function() {
         var credits  = btn.dataset.credits;
         var classId  = parseInt(btn.dataset.classId, 10);
         var mundaneId = btn.dataset.mundaneId;
+        var onlineChk = gid('pn-att-edit-online');
+        if (onlineChk) onlineChk.checked = btn.dataset.online === '1';
         gid('pn-att-edit-id').value        = attId;
         gid('pn-att-edit-mundane-id').value = mundaneId;
         gid('pn-att-edit-date').value      = date;
@@ -16148,6 +16597,7 @@ window.pnCloseUnitCreateModal = function() {
             var classId   = gid('pn-att-edit-class').value;
             var credits   = gid('pn-att-edit-credits').value;
             var mundaneId = gid('pn-att-edit-mundane-id').value;
+            var onlineChk = gid('pn-att-edit-online');
             var fb        = gid('pn-att-edit-feedback');
             fb.style.display = 'none';
             if (!date)    { fb.textContent = 'Date is required.';         fb.style.display = ''; return; }
@@ -16155,9 +16605,9 @@ window.pnCloseUnitCreateModal = function() {
             var btn = this;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            $.post(BASE_URL + attId + '/edit', {
-                Date: date, Credits: credits, ClassId: classId, MundaneId: mundaneId
-            }, function(r) {
+            var payload = { Date: date, Credits: credits, ClassId: classId, MundaneId: mundaneId };
+            if (onlineChk) payload.Online = onlineChk.checked ? 1 : 0;
+            $.post(BASE_URL + attId + '/edit', payload, function(r) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-save"></i> Save';
                 if (r && r.status === 0) {
@@ -16214,6 +16664,27 @@ window.pnCloseUnitCreateModal = function() {
 
     function gid(id) { return document.getElementById(id); }
 
+    // "Online?" switch: once both park and date are chosen, derive it from the
+    // park-day rule; a manual flip wins until the park or date changes, and it
+    // resets on reopen.
+    var pnOnline = null, pnOnlineManual = false, pnOnlineKey = null, pnOnlineReq = 0;
+    function pnDeriveOnline() {
+        if (!pnOnline) return;
+        var parkId = gid('pn-player-att-park-id').value;
+        var date   = gid('pn-player-att-date').value;
+        var key    = parkId + '|' + date;
+        if (key === pnOnlineKey) return;
+        pnOnlineKey = key;
+        pnOnlineManual = false;
+        pnOnline.set(false);
+        if (!(parseInt(parkId, 10) > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+        var req = ++pnOnlineReq;
+        $.getJSON(ADD_URL + parseInt(parkId, 10) + '/daytype', { date: date }, function(r) {
+            if (req !== pnOnlineReq || pnOnlineManual) return;
+            ornApplyParkDayType(pnOnline, r);
+        });
+    }
+
     function showFb(msg, ok) {
         var el = gid('pn-player-att-feedback');
         el.textContent = msg;
@@ -16241,7 +16712,8 @@ window.pnCloseUnitCreateModal = function() {
     window.pnOpenPlayerAttModal = function() {
         var ov = gid('pn-player-att-overlay');
         if (!ov) return;
-        var today = new Date().toISOString().slice(0, 10);
+        var _n = new Date();
+        var today = _n.getFullYear() + '-' + String(_n.getMonth() + 1).padStart(2, '0') + '-' + String(_n.getDate()).padStart(2, '0');
         gid('pn-player-att-date').value    = today;
         gid('pn-player-att-credits').value = '1';
         gid('pn-player-att-feedback').style.display = 'none';
@@ -16249,6 +16721,8 @@ window.pnCloseUnitCreateModal = function() {
         if (_dw) _dw.style.display = (PnConfig.attendanceDates || []).indexOf(today) !== -1 ? '' : 'none';
         gid('pn-player-att-park-results').classList.remove('pn-ac-open');
         buildClassOptions(PnConfig.lastClassId || 0);
+        pnOnlineKey = null;
+        pnDeriveOnline();
         ov.classList.add('pn-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { gid('pn-player-att-date').focus(); }, 50);
@@ -16260,6 +16734,11 @@ window.pnCloseUnitCreateModal = function() {
 
         var parkInput   = gid('pn-player-att-park-name');
         var parkResults = gid('pn-player-att-park-results');
+        pnOnline = ornOnlineSwitch(gid('pn-player-att-online-switch'), {
+            initial: false,
+            hintEl: gid('pn-player-att-online-hint'),
+            onChange: function() { pnOnlineManual = true; }
+        });
 
         parkInput.addEventListener('input', function() {
             gid('pn-player-att-park-id').value = '';
@@ -16286,6 +16765,7 @@ window.pnCloseUnitCreateModal = function() {
             parkInput.value = decodeURIComponent(item.dataset.name);
             gid('pn-player-att-park-id').value = item.dataset.id;
             parkResults.classList.remove('pn-ac-open');
+            pnDeriveOnline();
         });
 
         document.addEventListener('click', function(e) {
@@ -16301,6 +16781,8 @@ window.pnCloseUnitCreateModal = function() {
         }
         gid('pn-player-att-date').addEventListener('change', checkAttDate);
         gid('pn-player-att-date').addEventListener('input',  checkAttDate);
+        gid('pn-player-att-date').addEventListener('change', pnDeriveOnline);
+        gid('pn-player-att-date').addEventListener('input',  pnDeriveOnline);
 
         gid('pn-player-att-close').addEventListener('click', closeModal);
         gid('pn-player-att-cancel').addEventListener('click', closeModal);
@@ -16325,7 +16807,8 @@ window.pnCloseUnitCreateModal = function() {
                 AttendanceDate: date,
                 MundaneId:      PnConfig.playerId,
                 ClassId:        classId,
-                Credits:        credits
+                Credits:        credits,
+                Online:         (pnOnline && pnOnline.get()) ? 1 : 0
             }, function(r) {
                 btn.disabled = false;
                 if (r && r.status === 0) {
@@ -18176,7 +18659,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
 };
 
 // =============================================================================
-// Google Maps — shared touch gestures, loader, and pin maps
+// Google Maps — shared touch gestures and loader
 // =============================================================================
 // Touch devices pan the map with ONE finger ('greedy') instead of Google's
 // default two-finger 'cooperative' mode. Mouse pointers keep 'auto' so the
@@ -18202,38 +18685,11 @@ window.orkEnsureGoogleMaps = (function() {
     };
 })();
 
-// Single-pin location maps: <div class="ork-pin-map" data-lat data-lng data-zoom>.
-// Built the first time the element is on screen, so a map inside a hidden tab
-// panel waits until the tab opens (Google Maps renders blank at zero size) and
-// pages that never scroll to a map never load the API.
-(function() {
-    function build(el) {
-        var pos = { lat: parseFloat(el.getAttribute('data-lat')), lng: parseFloat(el.getAttribute('data-lng')) };
-        if (isNaN(pos.lat) || isNaN(pos.lng)) return;
-        orkEnsureGoogleMaps(function() {
-            var map = new google.maps.Map(el, {
-                center: pos,
-                zoom: parseInt(el.getAttribute('data-zoom'), 10) || 14,
-                gestureHandling: orkMapGestureHandling(),
-                mapTypeControl: false, streetViewControl: false
-            });
-            new google.maps.Marker({ position: pos, map: map });
-        });
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-        var els = document.querySelectorAll('.ork-pin-map');
-        if (!els.length) return;
-        if (!('IntersectionObserver' in window)) { els.forEach(build); return; }
-        var io = new IntersectionObserver(function(entries) {
-            entries.forEach(function(en) {
-                if (!en.isIntersecting) return;
-                io.unobserve(en.target);
-                build(en.target);
-            });
-        });
-        els.forEach(function(el) { io.observe(el); });
-    });
-})();
+// The single-pin ".ork-pin-map" builder that used to live here (Park sidebar
+// and Event Map tab) was retired on 2026-11-13: every JS-API map load counts
+// against the Dynamic Maps SKU, free only up to 10,000 a month, and the pin maps
+// alone ran ~900 a day. Those surfaces are embed iframes again, which are free.
+// Bring it back from git history once the nonprofit Maps credit is attached.
 
 // =============================================================================
 // Calendar Enhancements R2: RSVP dropdowns, Map view
@@ -20896,3 +21352,434 @@ window.orkEnsureGoogleMaps = (function() {
     }, true);
 })();
 
+
+// ---- Playernew: Legend status (Mark as Legend, Remove Legend Status, year) and the Memory Wall ----
+// Names, labels and memories can hold anything, so everything from the server goes in as text.
+(function() {
+    if (typeof PnConfig === 'undefined' || !(PnConfig.isLegend || PnConfig.canManageLegend)) return;
+
+    var SERVER_ERROR = 'Something went wrong and nothing was changed. Please try again.';
+    function gid(id) { return document.getElementById(id); }
+
+    // A database failure can answer with a page rather than JSON; that counts as a failure, not a hang.
+    function legendRead(resp) {
+        return resp.text().then(function(text) {
+            var data;
+            try { data = JSON.parse(text); } catch (e) { throw new Error(SERVER_ERROR); }
+            if (!data || typeof data.status !== 'number') throw new Error(SERVER_ERROR);
+            if (data.status !== 0) throw new Error(data.error || SERVER_ERROR);
+            return data;
+        });
+    }
+    function legendGet(route, id) {
+        return fetch(PnConfig.uir + 'LegendAjax/' + route + '/' + id, { credentials: 'same-origin' })
+            .then(legendRead, function() { throw new Error(SERVER_ERROR); });
+    }
+    function legendPost(route, id, fields) {
+        return fetch(PnConfig.uir + 'LegendAjax/' + route + '/' + id, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: new URLSearchParams(fields || {})
+        }).then(legendRead, function() { throw new Error(SERVER_ERROR); });
+    }
+    function showError(el, message) {
+        el.textContent = message;
+        el.style.display = 'block';
+    }
+
+    // ---- Officer modal ----
+    (function() {
+        var overlay = gid('pn-legend-overlay');
+        if (!overlay) return;
+        var titleEl = gid('pn-legend-title'), introEl = gid('pn-legend-intro'), errEl = gid('pn-legend-error'),
+            yearRow = gid('pn-legend-year-row'), yearEl = gid('pn-legend-year'), detailEl = gid('pn-legend-detail'),
+            cancelBtn = gid('pn-legend-cancel'), confirmBtn = gid('pn-legend-confirm'), closeBtn = gid('pn-legend-close-btn'),
+            copyBtn = gid('pn-legend-copy'), yearWarnEl = gid('pn-legend-year-warn'),
+            wallRow = gid('pn-legend-wall-row'), wallEl = gid('pn-legend-wall');
+        var onConfirm = null, reloadOnClose = false, previewRun = 0, busy = false, release = null, playerFacts = null;
+
+        function open(opts) {
+            previewRun++;
+            onConfirm = opts.onConfirm;
+            reloadOnClose = false;
+            playerFacts = null;
+            yearWarnEl.textContent = '';
+            titleEl.textContent = opts.title;
+            introEl.textContent = opts.intro;
+            errEl.style.display = 'none';
+            detailEl.textContent = '';
+            yearRow.style.display = opts.year ? '' : 'none';
+            yearEl.value = opts.yearValue || '';
+            // Mark as Legend only: the wall is on unless the officer unticks it.
+            wallRow.style.display = opts.wall ? '' : 'none';
+            wallEl.checked = true;
+            // Mark as Legend only: this is for a person who has died, not a character.
+            var cautionEl = gid('pn-legend-caution');
+            if (cautionEl) cautionEl.style.display = opts.wall ? '' : 'none';
+            cancelBtn.style.display = '';
+            confirmBtn.textContent = opts.confirmText;
+            confirmBtn.className = 'pn-btn ' + (opts.danger ? 'btn-danger-confirm' : 'pn-btn-primary');
+            confirmBtn.style.display = '';
+            confirmBtn.disabled = !!opts.startDisabled;
+            overlay.classList.add('pn-open');
+            document.body.style.overflow = 'hidden';
+            // A phone's keyboard would cover the list and the confirm button.
+            var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+            // Once a result is up, only a button dismisses the list: a stray Escape must not lose it.
+            if (window.orkDialogTrap) release = window.orkDialogTrap(overlay, {
+                onEscape: function() { if (!reloadOnClose) close(); },
+                initialFocus: opts.year && !coarse ? yearEl : closeBtn
+            });
+        }
+        function close() {
+            if (busy) return;
+            previewRun++;
+            if (reloadOnClose) { window.location.reload(); return; }
+            overlay.classList.remove('pn-open');
+            document.body.style.overflow = '';
+            if (release) release();
+            release = null;
+        }
+        function appendList(heading, labels, className) {
+            var h = document.createElement('div');
+            h.className = 'pn-legend-list-title';
+            h.textContent = heading;
+            var ul = document.createElement('ul');
+            ul.className = 'pn-legend-list' + (className ? ' ' + className : '');
+            labels.forEach(function(label) {
+                var li = document.createElement('li');
+                li.textContent = label;
+                ul.appendChild(li);
+            });
+            detailEl.appendChild(h);
+            detailEl.appendChild(ul);
+        }
+        function appendNote(text) {
+            var p = document.createElement('p');
+            p.className = 'pn-legend-note';
+            p.textContent = text;
+            detailEl.appendChild(p);
+        }
+        function labelsOf(items) {
+            return (items || []).map(function(item) { return item.Label; });
+        }
+        function humanDate(iso) {
+            return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+        function markIntro(who) {
+            return 'This marks ' + who + ' as having passed away. Their login stops working, and their profile becomes a memorial.';
+        }
+        // A year earlier than the record shows is often a typo. It warns; it doesn't block.
+        function warnYear() {
+            var raw = yearEl.value.trim(), lines = [];
+            if (playerFacts && /^\d{4}$/.test(raw)) {
+                var attended = parseInt(playerFacts.LastAttendance, 10), awarded = parseInt(playerFacts.LatestAward, 10);
+                if (attended > +raw) lines.push('Attended in ' + attended + ', after the year entered.');
+                if (awarded > +raw) lines.push('Received an award in ' + awarded + ', after the year entered.');
+            }
+            yearWarnEl.textContent = lines.join(' ');
+        }
+        function readYear() {
+            var raw = yearEl.value.trim();
+            if (!/^\d{4}$/.test(raw) || +raw < +yearEl.min || +raw > +yearEl.max) {
+                showError(errEl, 'Enter a year from ' + yearEl.min + ' through ' + yearEl.max + '.');
+                yearEl.focus();
+                return '';
+            }
+            return raw;
+        }
+        // A request in flight can't be walked away from: nothing closes the modal until it answers.
+        function setBusy(on) {
+            busy = on;
+            cancelBtn.disabled = closeBtn.disabled = confirmBtn.disabled = on;
+        }
+        function run(request, done) {
+            errEl.style.display = 'none';
+            setBusy(true);
+            request().then(done).catch(function(err) {
+                setBusy(false);
+                confirmBtn.focus();
+                showError(errEl, err.message);
+            });
+        }
+        function reload() { window.location.reload(); }
+        // The list stays up: it is the officer's to-do list, gone once they reload.
+        function showResult(message, render) {
+            setBusy(false);
+            reloadOnClose = true;
+            introEl.textContent = message;
+            yearRow.style.display = 'none';
+            wallRow.style.display = 'none';
+            detailEl.textContent = '';
+            render();
+            copyBtn.style.display = detailEl.querySelector('li') ? '' : 'none';
+            cancelBtn.style.display = 'none';
+            confirmBtn.className = 'pn-btn pn-btn-primary';
+            confirmBtn.textContent = 'Done';
+            onConfirm = close;
+            confirmBtn.focus();
+        }
+        // Shows what a read-only route reports. Confirm stays off until it has, so nobody confirms blind.
+        function loadDetail(loadingText, route, render) {
+            appendNote(loadingText);
+            var thisRun = previewRun;
+            legendGet(route, PnConfig.playerId).then(function(r) {
+                if (thisRun !== previewRun) return;
+                detailEl.textContent = '';
+                render(r);
+                confirmBtn.disabled = false;
+            }).catch(function(err) {
+                if (thisRun !== previewRun) return;
+                detailEl.textContent = '';
+                // A refusal is the end of it: nothing here to fill in or confirm.
+                if (document.activeElement === yearEl || !overlay.contains(document.activeElement)) closeBtn.focus();
+                yearRow.style.display = 'none';
+                confirmBtn.style.display = 'none';
+                showError(errEl, err.message);
+            });
+        }
+        function appendWhatWasCleared(r) {
+            if (r.clearedOn) appendNote('Cleared on ' + humanDate(r.clearedOn));
+            if (r.cleared && r.cleared.length) {
+                appendList('Cleared at conversion, to restore by hand if needed', labelsOf(r.cleared));
+            } else {
+                appendNote('Nothing was cleared at conversion.');
+            }
+            if (r.warnings && r.warnings.length) appendList('Flagged at conversion', r.warnings, 'pn-legend-warnings');
+        }
+
+        var markBtn = gid('pn-legend-mark-btn');
+        if (markBtn) markBtn.addEventListener('click', function() {
+            open({
+                title: 'Mark as Legend',
+                intro: markIntro(PnConfig.playerPersona),
+                year: true,
+                wall: true,
+                confirmText: 'Mark as Legend',
+                danger: true,
+                startDisabled: true,
+                onConfirm: function() {
+                    var year = readYear();
+                    if (!year) return;
+                    var wall = wallEl.checked ? '1' : '0';
+                    run(function() { return legendPost('convert', PnConfig.playerId, { Year: year, Wall: wall }); }, function(r) {
+                        showResult(PnConfig.playerPersona + ' is now a Legend.', function() {
+                            if (r.cleared && r.cleared.length) {
+                                appendList('Cleared', labelsOf(r.cleared));
+                            } else {
+                                appendNote('Nothing needed to be cleared.');
+                            }
+                            if (r.warnings && r.warnings.length) appendList('Needs filling', r.warnings, 'pn-legend-warnings');
+                        });
+                    });
+                }
+            });
+            loadDetail('Checking what will be cleared…', 'preview', function(r) {
+                playerFacts = r.player || null;
+                if (playerFacts) {
+                    var home = [playerFacts.ParkName, playerFacts.KingdomName].filter(Boolean).join(', ');
+                    introEl.textContent = markIntro(PnConfig.playerPersona + (home ? ' (' + home + ')' : ''));
+                }
+                warnYear();
+                if (r.warnings && r.warnings.length) appendList('Please review', r.warnings, 'pn-legend-warnings');
+                if (r.items && r.items.length) {
+                    appendList('These will be cleared', labelsOf(r.items));
+                    appendNote('Removing Legend status later does not bring these back; they must be restored by hand.');
+                    confirmBtn.textContent = 'Mark as Legend and clear ' + r.items.length + (r.items.length === 1 ? ' item' : ' items');
+                } else {
+                    appendNote('Nothing needs to be cleared.');
+                }
+            });
+        });
+
+        var undoBtn = gid('pn-legend-undo-btn');
+        if (undoBtn) undoBtn.addEventListener('click', function() {
+            open({
+                title: 'Remove Legend Status',
+                intro: 'This returns ' + PnConfig.playerPersona + ' to a regular profile. Login, search and normal editing come back. The Memory Wall is hidden, not deleted. What was cleared at conversion does not return automatically.',
+                confirmText: 'Remove Legend Status',
+                startDisabled: true,
+                onConfirm: function() {
+                    run(function() { return legendPost('undo', PnConfig.playerId); }, function(r) {
+                        showResult('Legend status was removed.', function() { appendWhatWasCleared(r); });
+                    });
+                }
+            });
+            loadDetail('Checking what was cleared…', 'cleared', appendWhatWasCleared);
+        });
+
+        var wallBtn = gid('pn-legend-wall-btn');
+        if (wallBtn) wallBtn.addEventListener('click', function() {
+            var turnOn = !PnConfig.legendWallOpen;
+            open({
+                title: turnOn ? 'Turn On Memory Wall' : 'Turn Off Memory Wall',
+                intro: turnOn
+                    ? 'This opens a Memory Wall on ' + PnConfig.playerPersona + "'s memorial, where members can leave memories. Any memories left before come back."
+                    : 'This takes the Memory Wall off ' + PnConfig.playerPersona + "'s memorial. The memories on it are hidden, not deleted, and come back if the wall is turned on again.",
+                confirmText: turnOn ? 'Turn On Memory Wall' : 'Turn Off Memory Wall',
+                onConfirm: function() {
+                    run(function() { return legendPost('wall', PnConfig.playerId, { Open: turnOn ? '1' : '0' }); }, reload);
+                }
+            });
+        });
+
+        var yearBtn = gid('pn-legend-year-btn');
+        if (yearBtn) yearBtn.addEventListener('click', function() {
+            open({
+                title: 'Edit Year of Passing',
+                intro: 'Correct the year shown on ' + PnConfig.playerPersona + "'s memorial.",
+                year: true,
+                yearValue: PnConfig.legendYear || '',
+                confirmText: 'Save Year',
+                onConfirm: function() {
+                    var year = readYear();
+                    if (!year) return;
+                    run(function() { return legendPost('year', PnConfig.playerId, { Year: year }); }, reload);
+                }
+            });
+        });
+
+        confirmBtn.addEventListener('click', function() { if (onConfirm) onConfirm(); });
+        cancelBtn.addEventListener('click', close);
+        closeBtn.addEventListener('click', close);
+        copyBtn.addEventListener('click', function() {
+            orkCopyToClipboard(introEl.textContent + '\n\n' + detailEl.innerText, copyBtn, 'Copied', 'Copy list');
+            copyBtn.focus();
+        });
+        yearEl.addEventListener('input', warnYear);
+        yearEl.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (!confirmBtn.disabled && onConfirm) onConfirm();
+        });
+        // Once a result is up, only a button dismisses the list: a stray click must not lose it.
+        overlay.addEventListener('click', function(e) { if (e.target === overlay && !reloadOnClose) close(); });
+    })();
+
+    // ---- Memory Wall ----
+    var panel = gid('pn-tab-memories');
+    if (!panel) return;
+
+    var form = gid('pn-lg-form');
+    if (form) {
+        var bodyEl = gid('pn-lg-body'), countEl = gid('pn-lg-count'), errEl = gid('pn-lg-error'),
+            shareBtn = gid('pn-lg-share-btn'), postBtn = gid('pn-lg-post');
+        shareBtn.addEventListener('click', function() {
+            var opening = form.style.display === 'none';
+            form.style.display = opening ? '' : 'none';
+            shareBtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+            if (opening) bodyEl.focus(); else shareBtn.focus();
+        });
+        bodyEl.addEventListener('input', function() {
+            var left = bodyEl.maxLength - bodyEl.value.length;
+            countEl.textContent = left + (left === 1 ? ' character remaining' : ' characters remaining');
+        });
+        postBtn.addEventListener('click', function() {
+            var body = bodyEl.value.trim();
+            if (!body) {
+                showError(errEl, 'Please write a memory first.');
+                bodyEl.focus();
+                return;
+            }
+            errEl.style.display = 'none';
+            postBtn.disabled = true;
+            legendPost('add', PnConfig.playerId, { Body: body }).then(function() {
+                window.location.reload();
+            }).catch(function(err) {
+                showError(errEl, err.message);
+                postBtn.disabled = false;
+            });
+        });
+    }
+
+    // Show more: the next page, built from the same row the server renders (the wall's
+    // <template>), which holds the officer controls only if the viewer may use them.
+    var moreBtn = gid('pn-lg-more');
+    if (moreBtn) {
+        var moreList = gid('pn-lg-list'), moreError = gid('pn-lg-more-error'), rowTpl = gid('pn-lg-row'),
+            moreOffset = moreList.children.length;
+        var memoryRow = function(m) {
+            var row = rowTpl.content.firstElementChild.cloneNode(true),
+                author = row.querySelector('.pn-lg-author'), box = row.querySelector('.pn-lg-remove');
+            row.setAttribute('data-id', m.MemoryId);
+            row.querySelector('p').textContent = m.Body;
+            if (m.AuthorPersona) {
+                author.setAttribute('href', PnConfig.uir + 'Player/profile/' + encodeURIComponent(m.AuthorId));
+                author.querySelector('b').textContent = m.AuthorPersona;
+            } else {
+                var nobody = document.createElement('b');
+                nobody.textContent = 'a community member';
+                author.parentNode.replaceChild(nobody, author);
+            }
+            row.querySelector('.pn-lg-home').textContent = m.AuthorHome ? ' (' + m.AuthorHome + ')' : '';
+            row.querySelector('.pn-lg-date').textContent = m.CreatedOn;
+            if (box) {
+                box.setAttribute('data-id', m.MemoryId);
+                box.setAttribute('data-author', m.AuthorId);
+                box.setAttribute('data-count', m.AuthorMemoryCount);
+            }
+            return row;
+        };
+        moreBtn.addEventListener('click', function() {
+            moreBtn.disabled = true;
+            moreError.style.display = 'none';
+            legendGet('memories', PnConfig.playerId + '&offset=' + moreOffset).then(function(data) {
+                data.memories.forEach(function(m) {
+                    // A memory posted since the page loaded shifts the pages by one.
+                    if (!moreList.querySelector('.pn-lg-memory[data-id="' + Number(m.MemoryId) + '"]')) moreList.appendChild(memoryRow(m));
+                });
+                moreOffset += data.memories.length;
+                moreBtn.disabled = false;
+                if (!data.memories.length || moreOffset >= data.total) moreBtn.style.display = 'none';
+            }).catch(function(err) {
+                moreBtn.disabled = false;
+                showError(moreError, err.message);
+            });
+        });
+    }
+
+    // Inline remove confirmation with its required reason, officers only: one memory, or all by one author.
+    panel.addEventListener('click', function(e) {
+        var box = e.target.closest ? e.target.closest('.pn-lg-remove') : null;
+        if (!box) return;
+        var links = box.querySelector('.pn-lg-remove-links'), confirmEl = box.querySelector('.pn-lg-remove-confirm'),
+            errorEl = box.querySelector('.pn-lg-remove-error'), reasonEl = box.querySelector('.pn-lg-remove-reason');
+        if (e.target.closest('.pn-lg-remove-link, .pn-lg-remove-all-link')) {
+            var all = !!e.target.closest('.pn-lg-remove-all-link'), count = parseInt(box.getAttribute('data-count'), 10) || 0;
+            box.setAttribute('data-all', all ? '1' : '');
+            box.querySelector('.pn-lg-remove-message').textContent = (!all ? 'Remove permanently?'
+                : count === 1 ? 'Remove the 1 memory by this author permanently?'
+                : 'Remove all ' + count + ' memories by this author permanently?') + " This can't be restored.";
+            links.style.display = 'none';
+            confirmEl.style.display = '';
+            box.classList.add('pn-lg-remove-open');
+            reasonEl.focus();
+        } else if (e.target.closest('.pn-lg-remove-no')) {
+            confirmEl.style.display = 'none';
+            errorEl.style.display = 'none';
+            reasonEl.value = '';
+            box.classList.remove('pn-lg-remove-open');
+            links.style.display = '';
+            box.querySelector(box.getAttribute('data-all') ? '.pn-lg-remove-all-link' : '.pn-lg-remove-link').focus();
+        } else if (e.target.closest('.pn-lg-remove-yes')) {
+            var yes = e.target.closest('.pn-lg-remove-yes'), reason = reasonEl.value.trim();
+            if (!reason) {
+                showError(errorEl, 'Please give a reason for the removal.');
+                reasonEl.focus();
+                return;
+            }
+            yes.disabled = true;
+            errorEl.style.display = 'none';
+            (box.getAttribute('data-all')
+                ? legendPost('removeauthor', PnConfig.playerId, { AuthorId: box.getAttribute('data-author'), Reason: reason })
+                : legendPost('remove', box.getAttribute('data-id'), { Reason: reason })
+            ).then(function() {
+                window.location.reload();
+            }).catch(function(err) {
+                yes.disabled = false;
+                yes.focus();
+                showError(errorEl, err.message);
+            });
+        }
+    });
+})();

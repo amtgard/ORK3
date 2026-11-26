@@ -16,6 +16,7 @@ define('HTTP_TEMPLATE', HTTP_UI . 'template/');
 define('HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/assets/');
 define('HTTP_WAIVERS', HTTP_ASSETS . 'waivers/');
 define('HTTP_HERALDRY', HTTP_ASSETS . 'heraldry/');
+define('HTTP_SURVEY_IMAGE', HTTP_ASSETS . 'survey/');
 define('HTTP_PLAYER_IMAGE', HTTP_ASSETS . 'players/');
 define('HTTP_PLAYER_HERALDRY', HTTP_HERALDRY . 'player/');
 define('HTTP_PARK_HERALDRY', HTTP_HERALDRY . 'park/');
@@ -47,6 +48,7 @@ define('DIR_ASSETS', DIR_BASENAME . "assets/");
 define('DIR_TMP', DIR_ASSETS . 'tmp/');
 define('DIR_WAIVERS', DIR_ASSETS . "waivers/");
 define('DIR_HERALDRY', DIR_ASSETS . "heraldry/");
+define('DIR_SURVEY_IMAGE', DIR_ASSETS . "survey/");
 define('DIR_PLAYER_IMAGE', DIR_ASSETS . "players/");
 define('DIR_PLAYER_HERALDRY', DIR_HERALDRY . "player/");
 define('DIR_PARK_HERALDRY', DIR_HERALDRY . "park/");
@@ -122,6 +124,14 @@ define('CARTO_API_KEY', '');
 
 define('IDP_CLIENT_ID', 'ORK_CLIENT_ID');
 define('IDP_CLIENT_SECRET', 'ORK_CLIENT_SECRET');
+
+// Survey "Update my answers": the secret that keys each respondent's private
+// edit link. Used for nothing else, so rotating other credentials never cuts
+// respondents off. At least 32 characters; generate one with
+//   php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+// Empty (or unset, with no SURVEY_EDIT_SECRET environment variable) turns the
+// feature off. Changing it later ends every open survey's edit links.
+define('SURVEY_EDIT_SECRET', '');
 define('IDP_BASE_URL', 'https://idp.amtgard.com');
 define('IDP_API_URL', 'https://idp.amtgard.com');
 

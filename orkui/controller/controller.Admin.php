@@ -32,16 +32,56 @@ class Controller_Admin extends Controller
         unset($this->data['menu']['kingdom']);
         unset($this->data['menu']['park']);
 
-        $this->data['ActiveKingdomSummary'] = $this->Report->GetActiveKingdomsSummary();
+        // Admin > Refresh stats: drop the cached hero/trend figures, then reload clean.
+        $this->load_model('AdminDashboard');
+        if (($this->request->refresh ?? '') === '1') {
+            $this->AdminDashboard->bust_dashboard_cache();
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        // Kingdom Overview In-Person / Online / All; the domain normalizes the value.
+        $this->load_model('Admin');
+        $this->data['AttendanceType'] = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
+        $this->data['ActiveKingdomSummary'] = $this->Admin->get_active_kingdoms_summary($this->data['AttendanceType']);
         $this->data['TotalActivePlayers'] = $this->Report->GetDistinctActivePlayerCount(26);
 
-        $this->load_model('AdminDashboard');
         $dashboard = $this->AdminDashboard->dashboard_stats();
         $this->data['TrendStats'] = $dashboard['TrendStats'];
         $this->data['PrevWeekly'] = $dashboard['PrevWeekly'];
         $this->data['PrevMonthly'] = $dashboard['PrevMonthly'];
+        $this->data['StatsAsOf'] = (int) ($dashboard['AsOf'] ?? 0);
 
         $this->template = '../revised-frontend/Admin_index.tpl';
+    }
+
+    /**
+     * Admin/guide — the ORK Administrator Guide (docs/admin-guide.md) as a
+     * full page with linkable sections. Global admins only, like the panel.
+     */
+    public function guide($duh = null)
+    {
+        $uid = (int) ($this->session->user_id ?? 0);
+        if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+        $this->data['page_title'] = 'ORK Administrator Guide';
+
+        $path = DIR_BASENAME . 'docs/admin-guide.md';
+        if (!is_readable($path)) {
+            $this->data['GuideHtml']    = '';
+            $this->data['GuideToc']     = [];
+            $this->data['GuideUpdated'] = null;
+            $this->data['Error']        = 'The guide is missing from this install (docs/admin-guide.md).';
+        } else {
+            require_once DIR_SYSTEM . 'lib/ork3/class.GuideDoc.php';
+            $doc = GuideDoc::render((string) file_get_contents($path));
+            $this->data['GuideHtml']    = $doc['html'];
+            $this->data['GuideToc']     = $doc['toc'];
+            $this->data['GuideUpdated'] = (int) filemtime($path);
+        }
+        $this->template = '../revised-frontend/Admin_guide.tpl';
     }
 
     public function mergepark($submit = null)
@@ -940,6 +980,12 @@ class Controller_Admin extends Controller
         $_is_self_post = ($_uid === $id
             && isset($action) && $action === 'update'
             && in_array($this->request->Update, ['Update Media', 'Update Details'], true));
+        // A Legend's account and media are editable only by kingdom officers and ORK admins.
+        $this->load_model('Legend');
+        if ($this->Legend->blocks_edit($_uid, $id)) {
+            header('Location: ' . UIR . 'Player/profile/' . $id);
+            exit;
+        }
         if (!$_is_self_post
             && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
             && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {
@@ -1436,6 +1482,9 @@ class Controller_Admin extends Controller
     public function moveplayer($post = null)
     {
         $this->load_model('Player');
+        // Only an ORK admin may move a Legend, so only their Move Player search asks for Legends.
+        $_uid = (int)($this->session->user_id ?? 0);
+        $this->data['IsOrkAdmin'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (strlen($post) > 0) {
             $this->request->save('Admin_moveplayer', true);
             if (!isset($this->session->user_id)) {
@@ -1899,14 +1948,16 @@ class Controller_Admin extends Controller
             ? $this->request->EndDate
             : date('Y-m-d');
 
-        $this->data['form'] = array('StartDate' => $start_date, 'EndDate' => $end_date);
+        // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
+        $this->data['form'] = array('StartDate' => $start_date, 'EndDate' => $end_date, 'AttendanceType' => $attendance_type);
         $this->data['page_title'] = 'New Player Attendance';
 
         if (!isset($this->request->RunReport)) {
             return;
         }
 
-        $result = $this->Admin->get_new_player_attendance_by_kingdom($start_date, $end_date);
+        $result = $this->Admin->get_new_player_attendance_by_kingdom($start_date, $end_date, $attendance_type);
         if (is_array($result)) {
             $this->data['summary'] = $result['Summary'];
         }
@@ -1948,6 +1999,55 @@ class Controller_Admin extends Controller
     }
 
     /**
+     * Park Activity: last attendance and trailing sign-in totals for every park
+     * in a kingdom. Global admins may pick any kingdom or all of them; kingdom
+     * officers with edit rights see their own kingdom. Ported from the jsork
+     * "Freehold Activity" page so it no longer runs one API call per park.
+     */
+    public function parkactivity()
+    {
+        $this->template = 'Admin_parkactivity.tpl';
+        $this->load_model('Admin');
+        $this->load_model('AdminDashboard');
+        $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $is_admin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+
+        $kingdom_id = valid_id($this->request->KingdomId ?? 0) ? (int)$this->request->KingdomId : 0;
+        if (!$kingdom_id && !$is_admin && valid_id($this->session->kingdom_id ?? 0)) {
+            $kingdom_id = (int)$this->session->kingdom_id;
+        }
+        if (!$is_admin && !($kingdom_id && $this->admin_can_edit_kingdom_reports($_uid, $kingdom_id))) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        $months = (int)($this->request->Months ?? 24);
+        if (!in_array($months, array(12, 24, 36, 60), true)) {
+            $months = 24;
+        }
+        $include_retired = !empty($this->request->IncludeRetired);
+
+        $this->data['page_title'] = 'Park Activity';
+        if ($kingdom_id) {
+            $this->kingdom_route($kingdom_id);
+        } else {
+            unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
+        }
+
+        $result = $this->Admin->get_park_activity($kingdom_id, $months, $include_retired);
+        $this->data['Parks']          = $result['Parks'] ?? [];
+        $this->data['ReportDate']     = $result['ReportDate'] ?? date('Y-m-d');
+        $this->data['WindowStart']    = $result['WindowStart'] ?? '';
+        $this->data['Months']         = $months;
+        $this->data['IncludeRetired'] = $include_retired;
+        $this->data['KingdomId']      = $kingdom_id;
+        $this->data['IsAdmin']        = $is_admin;
+        $this->data['Kingdoms']       = $is_admin
+            ? $this->AdminDashboard->list_all_kingdom_names()
+            : array($kingdom_id => $this->Kingdom->get_kingdom_name($kingdom_id));
+    }
+
+    /**
      * Legacy menu target from Tournament worksheets. No admin tournament editor
      * exists here — send callers to the live Tournament UI instead of 500'ing.
      */
@@ -1974,7 +2074,9 @@ class Controller_Admin extends Controller
         $week_count = max(1, ceil((strtotime($end_date) - strtotime($start_date)) / (7 * 86400)));
         $native_populace = !empty($this->request->NativePopulace);
         $waivered = !empty($this->request->Waivered);
-        $result = $this->Admin->get_top_parks_by_attendance($limit, $start_date, $end_date, $native_populace, $waivered);
+        // In-Person / Online / All; passed through unchanged, the domain normalizes it.
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
+        $result = $this->Admin->get_top_parks_by_attendance($limit, $start_date, $end_date, $native_populace, $waivered, $attendance_type);
         $this->data['TopParks'] = $result['TopParksSummary'];
         $this->data['StartDate'] = $start_date;
         $this->data['EndDate'] = $end_date;
@@ -1982,6 +2084,7 @@ class Controller_Admin extends Controller
         $this->data['Limit'] = $limit;
         $this->data['NativePopulace'] = $native_populace;
         $this->data['Waivered'] = $waivered;
+        $this->data['AttendanceType'] = $attendance_type;
     }
 
     public function auditlog()

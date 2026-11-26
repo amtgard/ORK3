@@ -111,6 +111,19 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	#ork-offline-banner { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999; background:#92400e; color:#fff; text-align:center; padding:10px 16px; font-size:0.85rem; font-weight:600; box-shadow:0 -2px 8px rgba(0,0,0,0.25); }
 	html[data-theme="dark"] #ork-offline-banner { background:#78350f; }
 
+	/* Dues expiry banner (Controller::$data['DuesNotice'], class.DuesNotice.php) */
+	.ork-dues-banner { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 16px; font-size:0.9rem; line-height:1.4; background:#fffbeb; color:#744210; border-bottom:1px solid #f6e05e; }
+	.ork-dues-banner-lapsed { background:#fff5f5; color:#742a2a; border-bottom-color:#fc8181; }
+	.ork-dues-banner > i { font-size:1rem; flex:0 0 auto; }
+	.ork-dues-banner-text { flex:1 1 auto; min-width:220px; }
+	.ork-dues-banner-text strong { font-weight:600; }
+	.ork-dues-banner-link { color:inherit; font-weight:600; text-decoration:underline; white-space:nowrap; }
+	.ork-dues-banner-link:hover { color:inherit; }
+	.ork-dues-banner-close { background:none; border:0; color:inherit; font-size:1.3rem; line-height:1; cursor:pointer; padding:0 4px; opacity:0.7; flex:0 0 auto; }
+	.ork-dues-banner-close:hover { opacity:1; }
+	html[data-theme="dark"] .ork-dues-banner { background:#744210; color:#fbd38d; border-bottom-color:#975a16; }
+	html[data-theme="dark"] .ork-dues-banner-lapsed { background:#742a2a; color:#feb2b2; border-bottom-color:#9b2c2c; }
+
 	/* What's New modal */
 	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
 	.wn-overlay.wn-open { display:flex; }
@@ -177,6 +190,7 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 
 	/* Dark mode global overrides */
 	html[data-theme="dark"] body { background-color: #1a202c; color: #e2e8f0; }
+	#theme_container:focus { outline: none; }
 	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
 	html[data-theme="dark"] .information-table { background-color: #2d3748; border-color: #4a5568; }
 	html[data-theme="dark"] .information-table th { background-color: #374151; color: #e2e8f0; }
@@ -184,6 +198,32 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
+
+	/* Survey promotion banner (site-wide, dismissable) */
+	#ork-survey-banner { display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; background:#ebf8ff; border-bottom:1px solid #bee3f8; color:#2b6cb0; padding:10px 16px; font-size:0.85rem; }
+	.svb-icon { font-size:16px; flex-shrink:0; }
+	.svb-text { flex:1; min-width:200px; }
+	.svb-title { font-weight:700; }
+	.svb-desc { font-weight:400; opacity:0.9; }
+	/* box-sizing is load-bearing: the <=600px rule below sets width:100% and the
+	   18px padding + 1px border would otherwise push the CTA 16px past the
+	   viewport. The id-scoped selectors are load-bearing too: the banner lives
+	   inside #theme_container, where the dark rule above repaints every <a>
+	   #63b3ed - 1.94:1 on the CTA's own blue fill. */
+	#ork-survey-banner .svb-cta { flex-shrink:0; box-sizing:border-box; background:#2b6cb0; color:#fff; border:1px solid #2b6cb0; border-radius:7px; padding:9px 18px; min-height:44px; display:inline-flex; align-items:center; font-size:0.85rem; font-weight:600; text-decoration:none; }
+	#ork-survey-banner .svb-cta:hover { background:#2c5282; border-color:#2c5282; color:#fff; }
+	#ork-survey-banner .svb-close { flex-shrink:0; box-sizing:border-box; background:none; border:none; color:#2b6cb0; font-size:20px; line-height:1; cursor:pointer; padding:10px; min-width:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
+	#ork-survey-banner .svb-close:hover { color:#1a4971; }
+	/* Phones: the close button is a 44px corner icon, not a full-width row; the
+	   side padding keeps the centred text clear of it. */
+	@media (max-width:600px) { #ork-survey-banner { position:relative; flex-direction:column; align-items:stretch; text-align:center; padding:10px 52px; } #ork-survey-banner .svb-cta { width:100%; justify-content:center; } #ork-survey-banner .svb-close { position:absolute; top:0; right:0; width:44px; height:44px; padding:0; } }
+	html[data-theme="dark"] #ork-survey-banner { background:#1e3a5f; border-color:#2c5282; color:#bee3f8; }
+	html[data-theme="dark"] #ork-survey-banner .svb-close { color:#bee3f8; }
+	html[data-theme="dark"] #ork-survey-banner .svb-close:hover { color:#fff; }
+	/* #2b6cb0 rather than #3182ce: white on #3182ce is 4.03:1, under AA for this
+	   13.6px label; #2b6cb0 is 5.43:1. */
+	html[data-theme="dark"] #ork-survey-banner .svb-cta { background:#2b6cb0; border-color:#2b6cb0; color:#fff; }
+	html[data-theme="dark"] #ork-survey-banner .svb-cta:hover { background:#2c5282; border-color:#2c5282; color:#fff; }
 
 	/* Site footer: sits on the page ground in light; keeps its band in dark. */
 	.ork-site-footer { background: transparent; color: var(--ork-text-on-ground, #5f6b7a); }
@@ -212,6 +252,41 @@ $downtime_note  = 'ORK Down Briefly for an update';
 		<div id="ork-env-banner" style="background:<?= $ork_env_label === 'STAGING' ? '#6d28d9' : '#0f766e' ?>;color:#fff;text-align:center;padding:5px 12px;font-size:0.78rem;font-weight:700;letter-spacing:0.06em;">
 			<i class="fas fa-flask" style="margin-right:6px;opacity:0.85"></i><?= $ork_env_label ?> &mdash; test copy of the ORK; nothing here affects the real site
 		</div>
+<?php endif; ?>
+<?php
+	// No banner on the runner (Survey/take, Survey/s) for the very survey it promotes.
+	$_svbPath = $this->__data['path'] ?? [];
+	$_svbOnRunner = !empty($SurveyBanner)
+		&& ($_svbPath[0] ?? '') === 'Controller_Survey'
+		&& in_array($_svbPath[1] ?? '', ['take', 's'], true)
+		&& (int) ($this->__data['SurveyId'] ?? 0) === (int) $SurveyBanner['survey_id'];
+?>
+<?php if (!empty($SurveyBanner) && !$_svbOnRunner): ?>
+		<div id="ork-survey-banner" data-survey-id="<?= (int)$SurveyBanner['survey_id'] ?>">
+			<i class="fas fa-poll svb-icon" aria-hidden="true"></i>
+			<span class="svb-text"><span class="svb-title"><?= htmlspecialchars($SurveyBanner['title']) ?></span><?php if (!empty($SurveyBanner['description'])): ?> <span class="svb-desc">&mdash; <?= htmlspecialchars($SurveyBanner['description']) ?></span><?php endif; ?></span>
+			<a class="svb-cta" href="<?= UIR ?>Survey/take/<?= (int)$SurveyBanner['survey_id'] ?>"><?= !empty($SurveyBanner['in_progress']) ? 'Continue' : 'Take survey' ?></a>
+			<button type="button" class="svb-close" aria-label="Dismiss" onclick="svBannerDismiss(<?= (int)$SurveyBanner['survey_id'] ?>)">&times;</button>
+		</div>
+		<div id="ork-survey-banner-status" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;"></div>
+		<script>
+		function svBannerDismiss(surveyId) {
+			var el = document.getElementById('ork-survey-banner');
+			if (el) {
+				// Move focus to a stable ancestor BEFORE removing the banner, otherwise
+				// the focused close button disappears and focus collapses to <body>.
+				var container = document.getElementById('theme_container');
+				if (container && el.contains(document.activeElement)) {
+					container.setAttribute('tabindex', '-1');
+					container.focus();
+				}
+				el.remove();
+				var status = document.getElementById('ork-survey-banner-status');
+				if (status) status.textContent = 'Survey banner dismissed.';
+			}
+			$.post('<?=UIR?>SurveyAjax/dismiss_banner', { SurveyId: surveyId });
+		}
+		</script>
 <?php endif; ?>
 <?php if (!empty($downtime_start)): ?>
 		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;text-align:center;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;" onclick="(function(){var d=document.getElementById('nm-mobile-detail');d.style.display=d.style.display==='none'?'block':'none';})()" >
@@ -601,6 +676,27 @@ document.addEventListener('keydown', function (e) {
 		</div>
 	</nav>
 
+<?php
+// --- Dues expiry banner ---
+// DuesNotice + DuesNoticeDismissed are set on Controller::$data for the logged-in viewer.
+$__dn = $this->__data['DuesNotice'] ?? null;
+if (is_array($__dn) && empty($this->__data['DuesNoticeDismissed'])): ?>
+	<div id="ork-dues-banner" class="ork-dues-banner<?= $__dn['State'] === 'lapsed' ? ' ork-dues-banner-lapsed' : '' ?>" role="status">
+		<i class="fas <?= $__dn['State'] === 'lapsed' ? 'fa-exclamation-circle' : 'fa-receipt' ?>"></i>
+		<span class="ork-dues-banner-text"><strong><?= htmlspecialchars($__dn['Message']) ?></strong> See your Prime Minister to renew.</span>
+		<a class="ork-dues-banner-link" href="<?= UIR ?>Player/profile/<?= (int)$this->__session->user_id ?>">View my dues</a>
+		<button type="button" class="ork-dues-banner-close" aria-label="Dismiss dues notice" onclick="orkDuesBannerDismiss(this)" data-key="<?= htmlspecialchars($__dn['Key']) ?>">&times;</button>
+	</div>
+	<script>
+	function orkDuesBannerDismiss(btn) {
+		var b = document.getElementById('ork-dues-banner');
+		if (b) b.style.display = 'none';
+		var fd = new FormData();
+		fd.append('key', btn.getAttribute('data-key') || '');
+		fetch('<?= UIR ?>DuesAjax/dismiss', { method: 'POST', body: fd, credentials: 'same-origin' }).catch(function(){});
+	}
+	</script>
+<?php endif; ?>
 
 	<script>
 	// ---- Search toggle ----
@@ -649,7 +745,7 @@ document.addEventListener('keydown', function (e) {
 			var $dd = $('#nav-search-dropdown');
 			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
 			if (nsXhr) nsXhr.abort();
-			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid,
+			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid + '&include_legend=1',
 				function(res) { nsRender(res || {}); }
 			).fail(function(xhr) {
 				if (xhr.statusText !== 'abort')
@@ -671,6 +767,7 @@ document.addEventListener('keydown', function (e) {
 				$.each(players, function(i, p) {
 					var lbl = p.name ? nsEsc(p.name) : '<em class="nsdd-no-value">No Persona</em>';
 					var sub = nsEsc((p.abbr || '') + ' \u00b7 ' + (p.park || ''));
+					if (p.Legend) lbl += ' <span class="legend-pill">Legend</span>';
 					html += '<a class="nsdd-item" href="?Route=Player/profile/' + p.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-user fa-fw"></i></span>' +
 						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + lbl + '</div>' +

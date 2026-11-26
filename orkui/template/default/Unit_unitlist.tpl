@@ -23,7 +23,7 @@ $_scope_pid  = (int)($ScopeParkId    ?? 0);
 .ul-badge-inactive  { background: #fee2e2; color: #991b1b; }
 html[data-theme="dark"] .ul-badge-inactive { background: #450a0a; color: #fca5a5; }
 .ul-badge-retired  { background: #e5e7eb; color: #4b5563; }
-html[data-theme="dark"] .ul-badge-retired { background: #374151; color: #d1d5db; }
+html[data-theme="dark"] .ul-badge-retired { background: var(--ork-bg-tertiary); color: #d1d5db; }
 .ul-name-link { font-weight: 600; color: var(--rp-accent); text-decoration: none; }
 .ul-name-link:hover { color: var(--rp-accent-mid); text-decoration: underline; }
 #ul-table td:first-child, #ul-table th:first-child { width: 50px; padding-right: 4px; }

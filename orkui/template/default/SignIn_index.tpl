@@ -151,6 +151,13 @@
 	border-color: #3182ce;
 	box-shadow: 0 0 0 3px rgba(49,130,206,0.15);
 }
+.si-online-line {
+	margin: 0 0 16px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #4a5568;
+}
+.si-online-line .orn-online-badge { margin-right: 4px; }
 .si-invalid {
 	text-align: center;
 	padding: 40px 32px;
@@ -189,6 +196,7 @@ html[data-theme="dark"] .si-class-picker select:focus {
 	border-color: var(--ork-link, #63b3ed);
 	box-shadow: 0 0 0 3px rgba(99,179,237,0.2);
 }
+html[data-theme="dark"] .si-online-line { color: var(--ork-text-secondary, #cbd5e0); }
 html[data-theme="dark"] .si-invalid { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .si-invalid h3 { color: var(--ork-text, #e2e8f0) !important; }
 html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !important; }
@@ -210,6 +218,7 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 	html:not([data-theme="light"]) .si-class-picker select:focus {
 		border-color: #63b3ed; box-shadow: 0 0 0 3px rgba(99,179,237,0.2);
 	}
+	html:not([data-theme="light"]) .si-online-line { color: #cbd5e0; }
 	html:not([data-theme="light"]) .si-invalid { color: #a0aec0; }
 	html:not([data-theme="light"]) .si-invalid h3 { color: #e2e8f0 !important; }
 	html:not([data-theme="light"]) .si-invalid a { color: #63b3ed !important; }
@@ -282,6 +291,10 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 				?>
 				<i class="fas fa-clock"></i> Expires <span class="si-expires" data-iso="<?= $_expIso ?>"><?= $_expServerTz ?></span>
 			</div>
+		<?php endif; ?>
+
+		<?php if (!empty($link_online)): ?>
+			<div class="si-online-line"><?= ork_online_badge() ?> Online sign-in</div>
 		<?php endif; ?>
 
 		<form method="post" action="<?= UIR ?>SignIn/index/<?= htmlspecialchars($link_token) ?>" id="si-form">

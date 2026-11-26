@@ -113,6 +113,11 @@ class Model_Court extends Model
         return $this->_court()->getCourtAwards($court_id, $caller_uid);
     }
 
+    public function get_player_planned_court_lines($mundane_id, $caller_uid)
+    {
+        return $this->_court()->getPlayerPlannedCourtLines((int)$mundane_id, (int)$caller_uid);
+    }
+
     public function add_award($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true, $caller_uid = 0)
     {
         return $this->_court()->addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich, $caller_uid);
@@ -299,6 +304,20 @@ class Model_Court extends Model
     public function get_ungranted_from_last_court($kingdom_id, $park_id)
     {
         return $this->_court()->getUngrantedFromLastCourt($kingdom_id, $park_id);
+    }
+
+    // -----------------------------------------------------------------------
+    // Smart Planning Grid
+    // -----------------------------------------------------------------------
+
+    public function get_smart_grid_columns($kingdom_id, array $ladder_awards)
+    {
+        return $this->_court()->getSmartGridColumns($kingdom_id, $ladder_awards);
+    }
+
+    public function get_smart_grid_state($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token, $fresh = false)
+    {
+        return $this->_court()->getSmartGridState($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token, $fresh);
     }
 
     // -----------------------------------------------------------------------

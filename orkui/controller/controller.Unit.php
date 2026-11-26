@@ -244,6 +244,11 @@ class Controller_Unit extends Controller
 
         // Current user's place in the active roster.
         $_roster   = $this->data['Unit']['Members']['Roster'] ?? array();
+        // A Legend stays on the roster as a marked name but is not someone the unit can
+        // hand things to, so the "who can act" views below work from the living members.
+        $_living   = array_values(array_filter($_roster, function ($_rm) {
+            return empty($_rm['IsLegend']);
+        }));
         $_my_role  = null;
         $_is_member = false;
         foreach ($_roster as $_rm) {
@@ -254,7 +259,7 @@ class Controller_Unit extends Controller
         }
         $this->data['IsRosterMember'] = $_is_member;
         $this->data['IsManager']      = $_uid > 0 && in_array($_uid, $_manager_ids, true);
-        $this->data['IsSoleMember']   = $_uid > 0 && count($_roster) === 1 && $_is_member;
+        $this->data['IsSoleMember']   = $_uid > 0 && count($_living) === 1 && $_is_member;
         // Self-claim: no managers exist and the user holds a leadership roster role.
         $this->data['CanClaim']       = $_uid > 0 && count($_manager_ids) === 0
             && in_array($_my_role, array('captain', 'lord', 'organizer'), true);
@@ -288,7 +293,7 @@ class Controller_Unit extends Controller
 
         // Transfer targets: active members other than the actor, managers first.
         $_targets = array();
-        foreach ($_roster as $_rm) {
+        foreach ($_living as $_rm) {
             $_mid = (int)$_rm['MundaneId'];
             if ($_mid === $_uid) {
                 continue;
@@ -309,7 +314,7 @@ class Controller_Unit extends Controller
 
         // Active, non-manager members — the head-of-list shortcut in Add Manager.
         $_nonmgr = array();
-        foreach ($_roster as $_rm) {
+        foreach ($_living as $_rm) {
             $_mid = (int)$_rm['MundaneId'];
             if (in_array($_mid, $_manager_ids, true)) {
                 continue;

@@ -7,6 +7,15 @@
  * canonical tree whose values are all ints / validated dates, or an error.
  * CompileTree() / ColumnSelectSql() turn a canonical tree into a SQL boolean
  * over alias `m` (ork_mundane). Only ints and validated dates ever reach SQL.
+ *
+ * Attendance type (In-Person / Online / All) is a page-level setting, not a rule:
+ * (Player since is a first-seen anchor and always reads all attendance.)
+ * Run() reads request key AttendanceType, normalizes it with
+ * Attendance::NormalizeType and passes it in ctx['attendanceType']. Every
+ * sign-in expression (criteria and columns, all built by _attSub) then reads only
+ * that type's ork_attendance rows via Attendance::TypeClause. All (the default,
+ * and any unknown value) adds nothing, so the SQL is exactly the pre-change SQL.
+ * Status criteria (Active, dues, awards) never look at sign-ins and are unchanged.
  */
 class PopulationExplorer extends Ork3
 {
@@ -54,9 +63,22 @@ class PopulationExplorer extends Ork3
     public const MAX_DAYS_AGO = 36500;
     public const DAYS_AGO_NOTE = 'Players who have never signed in are not matched. Use Total sign-ins = 0 to find them.';
 
+    /**
+     * Attendance type the sign-in expressions are built for: 'all' | 'in_person' |
+     * 'online'. Set from ctx['attendanceType'] on entry to CompileTree() and
+     * ColumnSelectSql(), the only paths that build _attSub() SQL.
+     */
+    private string $attendanceType = 'all';
+
     public function __construct()
     {
         parent::__construct();
+    }
+
+    /** Normalize ctx['attendanceType'] into the type _attSub() filters by. */
+    private function _useAttendanceType(array $ctx): void
+    {
+        $this->attendanceType = Attendance::NormalizeType($ctx['attendanceType'] ?? 'all');
     }
 
     public function Registry(): array
@@ -91,6 +113,9 @@ class PopulationExplorer extends Ork3
             // whose negated operands treat "no value" specially carries a neg_note
             // (shown by the UI on those operands) saying exactly what happens.
             'nullable' => false,
+            // signins: read from ork_attendance (_attSub), so the page-level attendance
+            // type (In-Person / Online / All) applies. The help guide tags these.
+            'signins'  => false,
             'sql'      => null,
         ], $extra);
     }
@@ -120,11 +145,12 @@ class PopulationExplorer extends Ork3
     private function _staticCriteriaDefs(): array
     {
         return [
-            'last_signin'           => $this->_crit('Last sign-in date', 'Activity', 'date', ['nullable' => true, 'neg_note' => 'Players who have never signed in are not matched.']),
+            'last_signin'           => $this->_crit('Last sign-in date', 'Activity', 'date', ['signins' => true, 'nullable' => true, 'neg_note' => 'Players who have never signed in are not matched.']),
             // DATEDIFF over the same expression (owner decision 2026-10-01): never signed
             // in is NULL, which no operand matches, so the note is shown on every operand
             // rather than as a neg_note on the negated ones only.
             'last_signin_days_ago'  => $this->_crit('Last sign-in days ago', 'Activity', 'number', [
+                'signins'  => true,
                 'min'      => 0,
                 'max'      => self::MAX_DAYS_AGO,
                 'nullable' => true,
@@ -135,18 +161,19 @@ class PopulationExplorer extends Ork3
                 'neg_note' => 'Players with no sign-in dated 1988 or later are not matched.',
                 'note'     => 'First sign-in dated 1988 or later, as on the player profile. Earlier dates (such as 0000-00-00) are data-entry errors and are ignored.',
             ]),
-            'signins_last_n_months' => $this->_crit('Sign-ins in last N months', 'Activity', 'number', ['param' => true]),
-            'total_signins'         => $this->_crit('Total sign-ins', 'Activity', 'number'),
-            'last_class'            => $this->_crit('Last class played', 'Activity', 'enum_set', ['set' => 'class', 'nullable' => true, 'neg_note' => 'Players with no sign-in that recorded a class are not matched.']),
+            'signins_last_n_months' => $this->_crit('Sign-ins in last N months', 'Activity', 'number', ['signins' => true, 'param' => true]),
+            'total_signins'         => $this->_crit('Total sign-ins', 'Activity', 'number', ['signins' => true]),
+            'last_class'            => $this->_crit('Last class played', 'Activity', 'enum_set', ['signins' => true, 'set' => 'class', 'nullable' => true, 'neg_note' => 'Players with no sign-in that recorded a class are not matched.']),
             // Negated: "did not play these classes in the window", so no sign-ins at all also matches (spec §3.4).
-            'classes_last_n_months' => $this->_crit('Classes played in last N months', 'Activity', 'enum_set', ['set' => 'class', 'param' => true, 'neg_note' => 'Players with no sign-ins in the last N months also match (they did not play these classes).']),
+            'classes_last_n_months' => $this->_crit('Classes played in last N months', 'Activity', 'enum_set', ['signins' => true, 'set' => 'class', 'param' => true, 'neg_note' => 'Players with no sign-ins in the last N months also match (they did not play these classes).']),
             'home_kingdom'          => $this->_crit('Home kingdom', 'Location', 'enum_set', ['set' => 'kingdom']),
             'home_park'             => $this->_crit('Home park', 'Location', 'enum_set', ['set' => 'park']),
-            'last_signin_park'      => $this->_crit('Last sign-in park', 'Location', 'enum_set', ['set' => 'park', 'nullable' => true, 'neg_note' => 'Players with no last sign-in park are not matched: they never signed in, or last signed in at an event with no park.']),
+            'last_signin_park'      => $this->_crit('Last sign-in park', 'Location', 'enum_set', ['signins' => true, 'set' => 'park', 'nullable' => true, 'neg_note' => 'Players with no last sign-in park are not matched: they never signed in, or last signed in at an event with no park.']),
             'dues_paid'             => $this->_crit('Dues paid', 'Status', 'bool', ['note' => 'Same as the Dues report: dues paid to this scope that run through today or later, or lifetime dues.']),
             'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['nullable' => true, 'neg_note' => 'Players with no dues paid to this scope are not matched.', 'note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
             'waivered'              => $this->_crit('Waivered', 'Status', 'bool'),
             'active'                => $this->_crit('Active', 'Status', 'bool'),
+            'legend'                => $this->_crit('Legend (In Memoriam)', 'Status', 'bool', ['note' => 'Legends are left out of every report unless a rule here asks for them.']),
             // restricted: officers of the scope only (spec §3.3). Hidden from everyone
             // else by PublicCriteria and rejected for them by NormalizeTree.
             'suspended'             => $this->_crit('Suspended', 'Status', 'bool', ['restricted' => true]),
@@ -601,9 +628,15 @@ class PopulationExplorer extends Ork3
         return $n;
     }
 
-    private function _attSub(string $select, string $extraWhere = '', string $tail = ''): string
+    /**
+     * Scalar subquery over the player's ork_attendance rows. $typed = true (counted
+     * and displayed sign-ins) applies the page's attendance type; false reads ALL
+     * attendance (first-seen anchors such as Player since).
+     */
+    private function _attSub(string $select, string $extraWhere = '', string $tail = '', bool $typed = true): string
     {
         return '(SELECT ' . $select . ' FROM ' . $this->_t('attendance') . ' a WHERE a.mundane_id = m.mundane_id'
+            . ($typed ? Attendance::TypeClause($this->attendanceType, 'a') : '')
             . ($extraWhere !== '' ? ' AND ' . $extraWhere : '') . ($tail !== '' ? ' ' . $tail : '') . ')';
     }
 
@@ -638,7 +671,8 @@ class PopulationExplorer extends Ork3
     private function _playerSinceExpr(): string
     {
         // MIN(a.date) as the oldest index entry at or after the floor (see _lastSigninExpr).
-        return $this->_attSub('a.date', "a.date >= '" . self::FIRST_SIGNIN_FLOOR . "'", 'ORDER BY a.date LIMIT 1');
+        // Untyped: a first-seen anchor always reads all attendance (online is real participation).
+        return $this->_attSub('a.date', "a.date >= '" . self::FIRST_SIGNIN_FLOOR . "'", 'ORDER BY a.date LIMIT 1', false);
     }
 
     private function _signinsInMonthsExpr(int $n): string
@@ -934,6 +968,8 @@ class PopulationExplorer extends Ork3
                     return 'm.waivered = ' . ((int)$v === 1 ? 1 : 0);
                 case 'active':
                     return 'm.active = ' . ((int)$v === 1 ? 1 : 0);
+                case 'legend':
+                    return 'm.is_legend = ' . ((int)$v === 1 ? 1 : 0);
                 case 'suspended':
                     return 'm.suspended = ' . ((int)$v === 1 ? 1 : 0);
                 case 'banned':
@@ -962,6 +998,7 @@ class PopulationExplorer extends Ork3
     /** SQL expression (no alias) for a result column; `m`, `k`, `p` are joined by the caller. */
     public function ColumnSelectSql(string $colId, array $ctx): string
     {
+        $this->_useAttendanceType($ctx);
         return $this->_columnSql($colId, $ctx);
     }
 
@@ -1026,9 +1063,11 @@ class PopulationExplorer extends Ork3
      * ctx['duesScope'] is a SQL boolean over alias `d` (ork_dues) for dues rules;
      * ctx['ladders'] is the scope's ladder set (LoadLadders), the same one the tree
      * was validated against. A ladder rule outside it does not compile.
+     * ctx['attendanceType'] limits every sign-in criterion to that type (default all).
      */
     public function CompileTree(array $normalizedTree, array $ctx = []): string
     {
+        $this->_useAttendanceType($ctx);
         $registry = $this->_criteria(['ladders' => $ctx['ladders'] ?? []]);
         if (empty($normalizedTree['children'])) {
             return '1=1';
@@ -1040,6 +1079,19 @@ class PopulationExplorer extends Ork3
     private const COST_COLUMN = 0;    // a column of m
     private const COST_PROBE = 1;     // one index probe / one index entry
     private const COST_AGGREGATE = 2; // reads all of the player's rows in an index, or several probes
+
+    private function _treeUsesCriterion(array $node, string $criterion): bool
+    {
+        if (isset($node['children'])) {
+            foreach ($node['children'] as $child) {
+                if ($this->_treeUsesCriterion($child, $criterion)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return ($node['c'] ?? '') === $criterion;
+    }
 
     private function _leafCost(array $leaf, array $registry): int
     {
@@ -1053,6 +1105,7 @@ class PopulationExplorer extends Ork3
             case 'home_park':
             case 'waivered':
             case 'active':
+            case 'legend':
             case 'suspended':
             case 'banned':
             case 'reeve_qualified':
@@ -1572,7 +1625,17 @@ class PopulationExplorer extends Ork3
             return ['Status' => InvalidParameter('That park could not be found in a kingdom, so it cannot be reported on.')];
         }
         list($scopeSql, $duesScope) = $clauses;
-        $ctx = ['duesScope' => $duesScope, 'ladders' => $known['ladders'] ?? []];
+        // A Legend is not a current player, so the scope leaves them out unless the filter
+        // has a Legend rule of its own. The scope total ("% of scope") follows the same rule.
+        if (!$this->_treeUsesCriterion($norm['tree'], 'legend')) {
+            $scopeSql .= ' AND m.is_legend = 0'; // the scope clauses are plain AND chains, so appending is safe
+        }
+        $ctx = [
+            'duesScope' => $duesScope,
+            'ladders' => $known['ladders'] ?? [],
+            // Page-level In-Person / Online / All: every sign-in criterion and column.
+            'attendanceType' => Attendance::NormalizeType($request['AttendanceType'] ?? 'all'),
+        ];
         if (isset($known['peerage']) && is_array($known['peerage'])) {
             $ctx['peerageIds'] = $known['peerage']; // peerage criteria and columns probe these ids
         }
@@ -1716,6 +1779,12 @@ class PopulationExplorer extends Ork3
             $cap = count($r['Rows']);
             $rows[] = [['v' => 'Showing first ' . number_format($cap) . ' of ' . number_format((int)$r['Total']) . ' matches', 's' => SimpleXlsx::S_LABEL]];
         }
+        // In-Person / Online: say so in the file and its name (All: unchanged).
+        $type = Attendance::NormalizeType($request['AttendanceType'] ?? 'all');
+        if ($type !== 'all') {
+            $rows[] = [];
+            $rows[] = [['v' => 'Sign-in rules and columns use ' . ($type === 'online' ? 'online' : 'in-person') . ' sign-ins only.', 's' => SimpleXlsx::S_LABEL]];
+        }
 
         $path = tempnam(sys_get_temp_dir(), 'population-explorer-');
         if ($path === false) {
@@ -1730,7 +1799,7 @@ class PopulationExplorer extends Ork3
             @unlink($path);
             return ['Status' => ProcessingError('The export file could not be created.')];
         }
-        return ['Status' => Success(), 'Path' => $path, 'Filename' => 'population-explorer-' . date('Y-m-d') . '.xlsx'];
+        return ['Status' => Success(), 'Path' => $path, 'Filename' => 'population-explorer-' . ($type === 'all' ? '' : str_replace('_', '-', $type) . '-') . date('Y-m-d') . '.xlsx'];
     }
 
     /**
@@ -1755,7 +1824,7 @@ class PopulationExplorer extends Ork3
         return (string)$v;
     }
 
-    /** Encode {tree, columns} as a base64url JSON share-link payload. */
+    /** Encode {tree, columns[, attendanceType]} as a base64url JSON share-link payload. */
     public static function EncodeLink(array $state): string
     {
         return rtrim(strtr(base64_encode((string)json_encode($state)), '+/', '-_'), '=');
@@ -1767,7 +1836,7 @@ class PopulationExplorer extends Ork3
      * filtered to known column ids. Pass LoadKnownForScope() for the viewer's
      * scope; with no $known the viewer is treated as a non-officer.
      *
-     * @return array ['ok'=>bool,'state'=>?array{tree:array,columns:string[]},'error'=>?string]
+     * @return array ['ok'=>bool,'state'=>?array{tree:array,columns:string[],attendanceType?:string},'error'=>?string]
      */
     public static function DecodeLink(string $q, ?array $known = null): array
     {
@@ -1805,7 +1874,14 @@ class PopulationExplorer extends Ork3
                 $cols[] = $c;
             }
         }
-        return ['ok' => true, 'state' => ['tree' => $norm['tree'], 'columns' => $cols], 'error' => null];
+        $state = ['tree' => $norm['tree'], 'columns' => $cols];
+        // Attendance type rides in the link only when not All, so older links (and
+        // All links) decode exactly as before; anything unknown is All.
+        $type = Attendance::NormalizeType($data['attendanceType'] ?? 'all');
+        if ($type !== 'all') {
+            $state['attendanceType'] = $type;
+        }
+        return ['ok' => true, 'state' => $state, 'error' => null];
     }
 
     /**

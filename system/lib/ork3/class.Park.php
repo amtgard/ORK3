@@ -725,6 +725,32 @@ class Park extends Ork3
         return $response;
     }
 
+    /**
+     * Which kinds of park day (online / in-person) fall on a date for a park.
+     * Park days are public data. Uses the canonical recurrence math.
+     */
+    public function GetParkDayTypeForDate(int $parkId, string $date): array
+    {
+        $out = ['Status' => Success(), 'Online' => false, 'InPerson' => false];
+        $dt = DateTime::createFromFormat('!Y-m-d', $date);
+        if (!$dt || $dt->format('Y-m-d') !== $date || !valid_id($parkId)) {
+            $out['Status'] = InvalidParameter();
+            return $out;
+        }
+        $days = $this->GetParkDays(['ParkId' => $parkId]);
+        foreach ($days['ParkDays'] ?? [] as $pd) {
+            if (ork_parkday_next_occurrences($pd, $date, 1, 1) !== [$date]) {
+                continue;
+            }
+            if ((int)($pd['Online'] ?? 0) === 1) {
+                $out['Online'] = true;
+            } else {
+                $out['InPerson'] = true;
+            }
+        }
+        return $out;
+    }
+
     public function PlayAmtgard($request)
     {
         $key = Ork3::$Lib->ghettocache->key($request);
@@ -1098,6 +1124,9 @@ class Park extends Ork3
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
             && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT)
         ) {
+            if (Legend::isLegend((int)($request['MundaneId'] ?? 0))) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if (!isset($request['KingdomId'])) {
                 if (!isset($request['ParkId'])) {
                     return InvalidParameter('Either ParkId or KingdomId must be set to update officers.');

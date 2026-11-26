@@ -7,7 +7,12 @@
 
 	$can_delete_recommendation = !empty($canDeleteRecommendation);
 
-	$isSuspended = ($Player['Suspended'] == 1);
+	$isLegend = !empty($IsLegend);
+	// A Legend's Memory Wall can be closed (Legend::setWall): then there is no tab, and the
+	// profile opens as any other player's does. The In Memoriam card stays either way.
+	$hasWall  = $isLegend && !empty($LegendWallOpen);
+	// A Legend's suspension data stays on the record; the Legend status takes priority in the display.
+	$isSuspended = ($Player['Suspended'] == 1) && !$isLegend;
 	$isActive = ($Player['Active'] == 1 && !$isSuspended);
 	$pronounDisplay = (!empty($Player['PronounCustomText'])) ? $Player['PronounCustomText'] : $Player['PronounText'];
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
@@ -72,11 +77,52 @@
 	// Auth helpers (precomputed in Controller_Player::profile)
 	$isOwnProfile  = !empty($IsOwnProfile);
 	$canEditAdmin  = !empty($canEditAdmin);
+	// Same as $canEditAdmin except on a Legend, where a park officer keeps read access only.
+	$canViewAdmin  = !empty($canViewAdmin);
+
+	// Awards Planned on Future Courts. $PlannedCourtLines is only ever set for a logged-in viewer
+	// who is not on their own profile, already filtered to courts they manage and recs they can
+	// see (Court::getPlayerPlannedCourtLines), so an empty list means no card at all.
+	$_pnPlannedLines = (!$isOwnProfile && is_array($PlannedCourtLines ?? null)) ? $PlannedCourtLines : array();
+	$pnPlannedCourtsCard = function () use ($_pnPlannedLines) {
+		if (!$_pnPlannedLines) { return; }
+		$courts = array();   // keyed by court id; lines arrive date-ascending, undated last
+		foreach ($_pnPlannedLines as $_l) {
+			$cid = (int)$_l['CourtId'];
+			if (!isset($courts[$cid])) { $courts[$cid] = array('Line' => $_l, 'Awards' => array()); }
+			$nm = trim(preg_replace('/^Order of (the )?/i', '', (string)$_l['AwardName']));
+			$courts[$cid]['Awards'][] = $nm . ((int)$_l['Rank'] > 0 ? ' ' . (int)$_l['Rank'] : '');
+		}
+		?>
+		<details class="pn-card pn-planned-courts">
+			<summary class="pn-planned-summary"><i class="fas fa-clipboard" aria-hidden="true"></i> Awards Planned on Future Courts</summary>
+			<ul class="pn-planned-list">
+				<?php foreach ($courts as $cid => $c): $l = $c['Line']; ?>
+				<li class="pn-planned-court">
+					<a class="pn-planned-court-name" href="<?= UIR ?>Court/detail/<?= (int)$cid ?>"><?= htmlspecialchars((string)$l['CourtName']) ?></a>
+					<span class="pn-planned-meta">
+						<span class="pn-planned-date"><?= $l['CourtDate'] ? htmlspecialchars((string)$l['CourtDate']) : 'No date set' ?></span>
+						<span class="pn-planned-level"><?= (int)$l['ParkId'] > 0 ? 'Park: ' . htmlspecialchars((string)$l['ParkName']) : 'Kingdom' ?></span>
+					</span>
+					<span class="pn-planned-awards"><?= htmlspecialchars(implode(', ', $c['Awards'])) ?></span>
+				</li>
+				<?php endforeach; ?>
+			</ul>
+		</details>
+		<?php
+	};
+	// Slim copy for the Recommendations table icon (court name, date, and what each line matches on).
+	$_pnPlannedForJs = array_map(function ($l) {
+		return array('CourtId' => (int)$l['CourtId'], 'CourtName' => (string)$l['CourtName'], 'CourtDate' => $l['CourtDate'],
+			'KingdomAwardId' => (int)$l['KingdomAwardId'], 'Rank' => (int)$l['Rank'], 'RecommendationsId' => (int)$l['RecommendationsId']);
+	}, $_pnPlannedLines);
 	// Moving a player is a park CREATE power, not EDIT -- see Admin_permissions.tpl
 	// and Player::MovePlayer, which checks AUTH_CREATE over either end.
 	$canMovePlayer = !empty($canMovePlayer);
 	$pnCanManageBanner = !empty($pnCanManageBanner);
 	$canManageAwards = !empty($canManageAwards);
+	// Add Award stays on $canManageAwards; changing an award already given also needs this.
+	$canEditAwards = !empty($canEditAwards);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$callerIsOrkAdmin = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_EDIT);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
@@ -84,14 +130,18 @@
 
 	// Display privacy: monarchy/admin always see; others see if player opted in
 	$isLoggedIn = isset($this->__session->user_id) && (int)$this->__session->user_id > 0;
-	$canSeePrivate = $isOwnProfile || $canEditAdmin;
+	$canSeePrivate = $isOwnProfile || $canViewAdmin;
+	// Hides a modal field that does not apply to a Legend. The inputs stay in the DOM so a
+	// save resubmits their values unchanged; the server refuses a change to most of them.
+	$_lgHide = $isLegend ? ' style="display:none"' : '';
 	// "Restrict Mundane Name Visibility" hard-overrides the per-field toggles —
 	// if the player flipped that, none of the per-field opt-ins should leak info
 	// to ordinary logged-in viewers (only admins / the player themselves see it).
 	$_isRestricted = (int)($Player['Restricted'] ?? 0) === 1;
 	$showFirstName = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneFirst'] ?? 0));
 	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
-	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
+	// No public mailto on a memorial: mail must not be invited to a Legend's address.
+	$showEmail     = $canSeePrivate || (!$isLegend && !$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
 	// Account-security details (username, password expiry) -- never public.
 	// $canSeePrivate alone is not enough here: $canEditAdmin is a park-scoped
@@ -103,7 +153,7 @@
 			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN));
 
 	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
-	$hasHistorical = !empty($HasHistorical);
+	$hasHistorical = !empty($HasHistorical) && $canEditAwards;
 	$hasHistoricalTip = !empty($HasHistoricalTip);
 
 	// Kingdom dues period config
@@ -115,6 +165,8 @@
 
 	// Dues for Life flag (needed for badge + alerts)
 	$_duesForLife = is_array($Dues) && count(array_filter($Dues, function($d) { return $d['DuesForLife'] == 1; })) > 0;
+	// Expiring-soon / recently-lapsed classification (class.DuesNotice.php); null outside the window.
+	$_pnDuesNotice = DuesNotice::classify(($Player['LastDuesThrough'] ?? '') ?: ($Player['DuesThrough'] ?? ''), $_duesForLife);
 
 	// Last class used (for attendance modal default)
 	$_lastClassId = 0;
@@ -175,8 +227,12 @@
 		));
 		// Alerts
 		$_maAlerts = [];
-		$_duesThrough = $Player['DuesThrough'] ?? '';
-		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
+		// Dues: DuesThrough is the furthest *active* row so it is '' once dues lapse;
+		// LastDuesThrough is the furthest row of any age. Classify the latter.
+		$_duesThrough = ($Player['LastDuesThrough'] ?? '') ?: ($Player['DuesThrough'] ?? '');
+		if ($_pnDuesNotice !== null)
+			$_maAlerts[] = ['type'=>$_pnDuesNotice['State'] === 'lapsed' ? 'danger' : 'warning','icon'=>$_pnDuesNotice['State'] === 'lapsed' ? 'fa-exclamation-circle' : 'fa-receipt','msg'=>htmlspecialchars(DuesNotice::message($_pnDuesNotice)) . ' See your Prime Minister to renew.'];
+		elseif (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-exclamation-circle','msg'=>'Your dues have lapsed.'];
 		if (empty($Player['Waivered']))
 			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
@@ -185,6 +241,14 @@
 		elseif ($passwordSoon) {
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
+		}
+		if ($isOwnProfile && !empty($SurveyAvailable)) {
+			// Open surveys the player can answer; the card itself sits at the foot
+			// of the sidebar so it does not outrank their own data.
+			// The link scrolls to that card and pulses it (pnaJumpToSurveys).
+			$_svCredit = count(array_filter($SurveyAvailable, function ($s) { return !empty($s['credit_available']); })) > 0;
+			$_maAlerts[] = ['type'=>'info','icon'=>'fa-poll','msg'=>'Make your feedback known,','actionLabel'=>'take an Amtgard survey today','actionOnclick'=>'pnaJumpToSurveys();return false;',
+				'actionAfter'=>$_svCredit ? ' and you can even earn a bonus credit when you share your profile details!' : '.'];
 		}
 		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
@@ -284,6 +348,11 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:var(--ork-bg-dark);color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
+/* Survey alert link → the Available Surveys card pulses twice to say "here". */
+@keyframes pna-survey-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ork-link) 75%,transparent)}45%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ork-link) 40%,transparent)}100%{box-shadow:0 0 0 14px color-mix(in srgb,var(--ork-link) 0%,transparent)}}
+/* ID-scoped so it beats the themed .pna-card border in light and dark. */
+#pna-surveys-body .pna-survey-pulse{animation:pna-survey-pulse 1s ease-out 2;border-color:var(--ork-link);transition:border-color .2s}
+@media (prefers-reduced-motion:reduce){#pna-surveys-body .pna-survey-pulse{animation:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ork-link) 45%,transparent)}}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
 .pna-class-row{margin-bottom:10px}
 .pna-class-row:last-child{margin-bottom:0}
@@ -307,7 +376,28 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-feed-label a{color:#2d3748;text-decoration:none}
 .pna-feed-label a:hover{text-decoration:underline}
 .pna-feed-sub{flex-shrink:0;color:var(--ork-text-muted);font-size:11px}
+/* Survey rows carry a full kingdom name in .pna-feed-sub, which the other feeds
+   never do; on one baseline row that un-shrinkable subtitle crushes the title
+   (the only flexible child) to 0-28px. Stack them instead. */
+.pna-survey-row{flex-direction:column;align-items:stretch;gap:2px}
+.pna-survey-row .pna-feed-label{flex:0 0 auto;white-space:normal;overflow:visible;text-overflow:clip}
+.pna-survey-meta{display:flex;align-items:center;gap:8px;min-height:44px}
+.pna-survey-meta .pna-feed-sub{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+/* The close date is the only token in the subtitle that drives a decision, so
+   it never ellipsizes: the scope name (which the player already knows) is the
+   one allowed to truncate at 320px. */
+.pna-survey-meta .pna-survey-scope{flex:0 1 auto}
+.pna-survey-meta .pna-survey-close{flex:0 0 auto;overflow:visible;text-overflow:clip}
+/* The generic .pna-feed-sub is display:none under 420px; the survey row is the
+   mobile entry point for the module and its scope + close date is the whole
+   subtitle, so it stays visible (two-class rule wins the cascade). */
+.pna-survey-cta{margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;font-size:12px;color:var(--ork-link);text-decoration:none}
+.pna-survey-cta:hover{text-decoration:underline}
 .pna-feed-rank{display:inline-block;background:#e9d8fd;color:#553c9a;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;vertical-align:middle}
+/* The row is a column flex box, so the chip sits on its own line under the
+   title and must not stretch to the full width. Hover surface + border
+   tokens both swap in dark mode, so the pill edge shows on either card. */
+.pna-survey-credit{display:inline-flex;align-self:flex-start;align-items:center;gap:4px;padding:1px 8px;border:1px solid var(--ork-border);border-radius:8px;font-size:11px;font-weight:600;background:var(--ork-surface-hover);color:var(--ork-text-secondary)}
 .pna-feed-more{font-size:11px;color:var(--ork-text-muted);padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
@@ -331,7 +421,13 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-ev-park{color:var(--ork-text-muted);font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
 .pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
-@media(max-width:700px){
+/* Profile tab layouts switch on the TAB PANEL's width, not the viewport: a
+   4:3 foldable or small tablet keeps the profile's 300px sidebar beside the
+   tabs, leaving a ~480px panel that a viewport query still split in two
+   (2026-11-22, Galaxy Z Fold inner screen). The panel is the container
+   (the rule right below). */
+.pn-tab-panel{container:pn-tab / inline-size}
+@container pn-tab (max-width:560px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
@@ -386,7 +482,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
+html[data-theme="dark"] .pn-badge-gray { background: var(--ork-bg-tertiary); color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
@@ -408,14 +504,22 @@ html[data-theme="dark"] .pn-acct-field input[type="url"],
 html[data-theme="dark"] .pn-acct-field input[type="password"],
 html[data-theme="dark"] .pn-acct-field select,
 html[data-theme="dark"] .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-html[data-theme="dark"] .pna-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+/* Profile cards (My Amtgard dashboard, About tab sidebar + My Story quote):
+   light mode sets them off the white panel with --ork-bg-inset, which is the
+   panel colour in dark mode; --ork-bg-tertiary is dark mode's one-step-up
+   layer (the same token every other nested dark surface uses). */
+html[data-theme="dark"] .pna-card,
+html[data-theme="dark"] .pn-belt-card,
+html[data-theme="dark"] .pn-cms-card { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-tertiary); } /* keeps its accent left border */
 html[data-theme="dark"] .pna-card-title { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-tenure-years { color: var(--ork-link); }
 html[data-theme="dark"] .pna-tenure-label,
 html[data-theme="dark"] .pna-tenure-since { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-class-name { color: var(--ork-text); }
 html[data-theme="dark"] .pna-class-level { color: #68d391; }
-html[data-theme="dark"] .pna-bar-wrap { background: var(--ork-bg-tertiary); }
+/* On the raised (bg-tertiary) cards, tracks and empty cells recess to the panel colour. */
+html[data-theme="dark"] .pna-bar-wrap { background: var(--ork-card-bg); }
 html[data-theme="dark"] .pna-bar { background: linear-gradient(90deg,#48bb78,#38a169) !important; }
 html[data-theme="dark"] .pna-bar-max { background: linear-gradient(90deg,#f6ad55,#c05621) !important; }
 html[data-theme="dark"] .pna-class-credits { color: var(--ork-text-muted); }
@@ -433,7 +537,8 @@ html[data-theme="dark"] .pna-alert-warning { background: var(--ork-alert-warning
 html[data-theme="dark"] .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
 html[data-theme="dark"] .pna-alert-info { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); color: var(--ork-alert-info-text, #90cdf4); }
 html[data-theme="dark"] .pna-spark-off,
-html[data-theme="dark"] .pna-spark-swatch-off { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-spark-swatch-off { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-card .pna-survey-credit { background: var(--ork-card-bg); }
 html[data-theme="dark"] .pna-spark-legend { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-congrats-banner { background: linear-gradient(90deg,#3d3300,#4a3c00); border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .pna-anni-banner { color: #fbd38d; }
@@ -529,7 +634,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-icons-option-body{flex:1;min-width:0}
 .pn-icons-option-title{font-size:13px;font-weight:600;color:#2d3748;margin-bottom:2px}
 .pn-icons-option-desc{font-size:11px;color:#718096;line-height:1.35}
-@media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
+@container pn-tab (max-width:560px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
 /* ===== Milestones Timeline ===== */
 .pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid var(--ork-divider)}
 .pn-timeline-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 20px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;display:flex;align-items:center;gap:8px}
@@ -550,7 +655,30 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-tl-item:nth-child(even) .pn-tl-right{order:1;text-align:right;padding-right:16px;padding-left:0}
 .pn-tl-item:nth-child(even) .pn-tl-node{order:2}
 .pn-tl-empty{text-align:center;padding:24px 16px;color:#a0aec0;font-size:13px}
+@container pn-tab (max-width:560px){
+.pn-timeline::before{left:18px}
+.pn-tl-item{flex-wrap:nowrap}
+.pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
+.pn-tl-left{display:none}
+.pn-tl-right{order:2!important;width:auto;flex:1;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-item:nth-child(even) .pn-tl-left{display:none}
+.pn-tl-item:nth-child(even) .pn-tl-right{order:2!important;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
+}
+@container pn-tab (min-width:561px){.pn-tl-date-mobile{display:none}}
+/* Browsers without container queries (Safari/iOS before 16, 2022) ignore every
+   @container block above and would keep the desktop layout on a phone. They do
+   understand @supports, so repeat the four rules on the old viewport
+   breakpoint (700px, what this page used before the container switch). */
+@supports not (container-type:inline-size){
 @media(max-width:700px){
+.pna-layout{flex-direction:column;align-items:stretch}
+.pna-sidebar{flex:none;width:100%}
+.pna-ev-cols{flex-direction:column}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-divider)}
+.pna-card{padding:12px 13px}
+.pna-tenure-years{font-size:36px}
+.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}
 .pn-timeline::before{left:18px}
 .pn-tl-item{flex-wrap:nowrap}
 .pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
@@ -561,6 +689,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
 }
 @media(min-width:701px){.pn-tl-date-mobile{display:none}}
+}
 /* ===== Milestones Config (Design Modal) ===== */
 .pn-ms-toggle-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .pn-ms-toggle{display:flex;align-items:center;gap:10px;font-size:13px;color:#4a5568}
@@ -830,11 +959,10 @@ html[data-theme="dark"] .pn-about-content h3,
 html[data-theme="dark"] .pn-about-content h4,
 html[data-theme="dark"] .pn-about-content h5,
 html[data-theme="dark"] .pn-about-content h6 { color: var(--ork-text); }
-html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-secondary); color: var(--ork-text-muted); /* --pn-accent flows through from light rule */ }
+html[data-theme="dark"] .pn-about-content blockquote { color: var(--ork-text-muted); /* background: the profile-cards rule; --pn-accent flows through from the light rule */ }
 html[data-theme="dark"] .pn-about-content code { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-about-content pre { background: #1a202c; color: #e2e8f0; }
 html[data-theme="dark"] .pn-about-empty { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pn-belt-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-belt-card-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-belt-group { color: var(--ork-text-muted); border-top-color: var(--ork-border); }
 html[data-theme="dark"] .pn-belt-title { color: var(--ork-text-muted); }
@@ -972,7 +1100,6 @@ html[data-theme="dark"] .pn-dm-hint i { color: var(--ork-link-bright); }
 html[data-theme="dark"] .pn-dm-hint strong { color: var(--ork-text); }
 
 /* Currently-active milestones summary card */
-html[data-theme="dark"] .pn-cms-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
@@ -1041,8 +1168,8 @@ html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
 .dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
 #dp-prefs-body{transition:opacity .15s}
 #dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
-html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
-html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
+html[data-theme="dark"] .dp-no-restrict-row{background:var(--ork-bg-tertiary);border-color:var(--ork-border)}
+html[data-theme="dark"] .dp-no-restrict-row:hover{background:var(--ork-border)}
 .pna-notif-card { padding: 0; overflow: hidden; }
 .pna-notif-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; }
 .pna-notif-title { font-weight: 700; font-size: 14px; color: #2d3748; }
@@ -1083,6 +1210,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
 	if ($_pnHeroGradientKey)           $_heroClasses .= ' pn-hero-pride';
 	if (!empty($Player['NameShadow']))  $_heroClasses .= ' pn-hero-name-shadow';
+	if ($isLegend)                     $_heroClasses .= ' pn-legend';
 	$_bgStyle = '';
 	if ($_heroBgUrl) {
 		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
@@ -1162,6 +1290,9 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php endif; ?>
 			</div>
 			<div class="pn-badges">
+				<?php if ($isLegend): ?>
+					<span class="pn-badge legend-pill">&#10022; Legend</span>
+				<?php else: ?>
 				<?php if ($isActive): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-check-circle"></i> Active</span>
 				<?php else: ?>
@@ -1179,7 +1310,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
 				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
-					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
+					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid<?php if ($_pnDuesNotice !== null && $_pnDuesNotice['State'] === 'expiring'): ?><span class="pn-badge-sub"><?= $_pnDuesNotice['Days'] === 0 ? 'ends today' : ($_pnDuesNotice['Days'] . ' day' . ($_pnDuesNotice['Days'] === 1 ? '' : 's') . ' left') ?></span><?php endif; ?></span>
 				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Expired</span>
 				<?php else: ?>
@@ -1199,6 +1330,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if ($IsOrkAdmin): ?>
 					<span class="pn-badge pn-badge-purple"><i class="fas fa-cog"></i> ORK Administrator</span>
 				<?php endif; ?>
+				<?php endif; // $isLegend ?>
 			</div>
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
@@ -1220,7 +1352,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<button class="pn-btn pn-btn-white" id="pn-design-btn" onclick="pnOpenDesignModal()"><i class="fas fa-palette"></i> <?= $isOwnProfile ? 'Design My Profile' : 'Edit Profile Design' ?></button>
 			<?php endif; ?>
 			<?php if ($LoggedIn): ?>
-				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
+				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> <?= $isLegend ? 'Recommend Posthumous Award' : 'Recommend Award' ?></button>
 			<?php endif; ?>
 		</div>
 	</div>
@@ -1232,6 +1364,8 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 <?php if (strlen($Message) > 0): ?>
 	<div class='success-message' style="margin-bottom: 14px;"><?= $Message ?></div>
 <?php endif; ?>
+
+<?php if ($isLegend) include __DIR__ . '/_legend_memorial.tpl'; ?>
 
 <!-- =============================================
      ZONE 2: Dashboard Stats
@@ -1303,7 +1437,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			   correctly gated; these two rows had no gate at all, so an anonymous
 			   visitor was handed a valid login name plus the fact that its password had
 			   expired. Gated to the player themselves and their monarchy/admin. */ ?>
-			<?php if ($canSeeAccount): ?>
+			<?php if ($canSeeAccount && !$isLegend): ?>
 			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:var(--ork-alert-warning-bg,#fffbe6);border-left:3px solid var(--ork-alert-warning-border,#f6ad55);padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
@@ -1317,10 +1451,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<span class="pn-detail-label">Player Since</span>
 				<span class="pn-detail-value"><?= $Player['PlayerSinceDate'] ? htmlspecialchars($Player['PlayerSinceDate']) : 'N/A' ?></span>
 			</div>
+			<?php if (!$isLegend || $canViewAdmin): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Last Sign-In</span>
 				<span class="pn-detail-value"><?= $Player['LastSignInDate'] ? htmlspecialchars($Player['LastSignInDate']) : 'N/A' ?></span>
 			</div>
+			<?php endif; ?>
 		</div>
 
 		<!-- Heraldry -->
@@ -1338,6 +1474,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			</div>
 		</div>
 
+		<?php if (!$isLegend): // Tests and dues no longer apply to a Legend, for any viewer. ?>
 		<!-- Qualifications -->
 		<div class="pn-card">
 			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn pn-qual-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications" aria-label="Edit qualifications"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button><?php endif; ?></h4>
@@ -1436,6 +1573,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div class="pn-empty">No dues records</div>
 			<?php endif; ?>
 		</div>
+		<?php endif; // !$isLegend ?>
 
 		<!-- Event RSVPs — hidden from logged-out viewers so a player's
 		     upcoming plans aren't exposed to search engines / anonymous
@@ -1476,7 +1614,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 		<div class="pn-card">
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-users"></i> Companies &amp; Households</span>
-				<?php if ($canEditAdmin || $isOwnProfile): ?>
+				<?php if (($canEditAdmin || $isOwnProfile) && !$isLegend): ?>
 				<button class="pn-card-edit-btn" id="pn-unit-create-btn" title="Create new unit" onclick="pnOpenUnitCreateModal()">
 					<i class="fas fa-plus"></i>
 				</button>
@@ -1490,7 +1628,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<div class="pn-unit-row">
 						<a class="pn-unit-link" href="<?= UIR ?>Unit/index/<?= $unit['UnitId'] ?>&from_player=<?= (int)$Player['MundaneId'] ?>"><?= htmlspecialchars($unit['Name'] ?? '') ?: '(Unnamed)' ?></a>
 						<span class="pn-unit-type"><?= htmlspecialchars(ucfirst($unit['Type'] ?? '')) ?></span>
-						<?php if ($canEditAdmin || $isOwnProfile): ?>
+						<?php if (($canEditAdmin || $isOwnProfile) && !$isLegend): ?>
 						<span class="pn-delete-cell pn-unit-quit-cell">
 							<a class="pn-delete-link pn-confirm-quit-unit" href="#" title="Leave unit">&times;</a>
 							<span class="pn-delete-confirm">
@@ -1507,12 +1645,49 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			<?php endif; ?>
 		</div>
 
+		<?php if (!empty($CanManageLegend)): ?>
+		<!-- Legend status: officers only. Modals and handlers below and in revised.js. -->
+		<div class="pn-card" id="pn-legend-admin">
+			<h4><i class="fas fa-feather-alt"></i> Legend Status<?php if ($isLegend): ?><button type="button" class="pn-card-edit-btn" id="pn-legend-year-btn" data-tip="Edit year of passing" aria-label="Edit year of passing"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
+			<?php if ($isLegend): ?>
+				<div class="pn-detail-row">
+					<span class="pn-detail-label">Year of Passing</span>
+					<span class="pn-detail-value"><?= (int)$LegendYear ?></span>
+				</div>
+				<div class="pn-detail-row">
+					<span class="pn-detail-label">Memory Wall</span>
+					<span class="pn-detail-value"><?= $hasWall ? 'On' : 'Off' ?></span>
+				</div>
+				<?php if (!empty($LegendMarkedBy) && !empty($LegendMarkedOn)): ?>
+				<p class="pn-legend-note">Marked by <?= htmlspecialchars($LegendMarkedBy, ENT_QUOTES) ?> on <?= date('F j, Y', strtotime($LegendMarkedOn)) ?></p>
+				<?php endif; ?>
+				<div class="pn-legend-actions">
+					<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-wall-btn"><?= $hasWall ? 'Turn Off Memory Wall' : 'Turn On Memory Wall' ?></button>
+					<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-undo-btn">Remove Legend Status</button>
+				</div>
+			<?php else: ?>
+				<p class="pn-legend-note pn-legend-note-top">For a player who has passed away in real life. Not for a retired persona or a character.</p>
+				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-mark-btn">Mark as Legend</button>
+			<?php endif; ?>
+		</div>
+		<?php elseif ($isLegend && $canViewAdmin): ?>
+		<div class="pn-card">
+			<h4><i class="fas fa-feather-alt"></i> Legend Status</h4>
+			<p class="pn-legend-note">This memorial's record is kept by kingdom officers.</p>
+		</div>
+		<?php endif; ?>
+
 	</div>
 
 	<!-- ========== MAIN CONTENT (Tabbed) ========== -->
 	<div class="pn-main">
 		<div class="pn-tabs">
 			<ul class="pn-tab-nav">
+				<?php if ($hasWall): ?>
+				<li class="pn-tab-active" data-tab="memories">
+					<i class="fas fa-feather-alt"></i><span class="pn-tab-label"> Memory Wall</span> <span class="pn-tab-count">(<?= is_array($Memories ?? null) ? count($Memories) : 0 ?>)</span>
+				</li>
+				<?php endif; ?>
 				<?php if ($isOwnProfile): ?>
 				<li class="pn-tab-active" data-tab="myamtgard">
 					<i class="fas fa-home"></i><span class="pn-tab-label"> My Amtgard</span>
@@ -1544,14 +1719,18 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					// filled in their About content (Persona/Story text). Otherwise default to
 					// Awards as before. Auto-derived stuff like milestones/beltline doesn't
 					// count — only deliberate text content from the design modal.
-					$_aboutIsDefault = !$isOwnProfile && ($_hasAboutPersona || $_hasAboutStory);
+					// A Legend's profile opens on the Memory Wall when it has one; without one it
+					// opens on About whenever that tab exists (milestones and beltline count here:
+					// who they were, ahead of the awards table).
+					$_aboutIsDefault = !$isOwnProfile && !$hasWall && ($_hasAboutPersona || $_hasAboutStory || ($isLegend && $_showAboutTab));
+					$_awardsIsDefault = !$isOwnProfile && !$hasWall && !$_aboutIsDefault;
 				?>
 				<?php if ($_showAboutTab): ?>
 				<li<?= $_aboutIsDefault ? ' class="pn-tab-active"' : '' ?> data-tab="about">
 					<i class="fas fa-scroll"></i><span class="pn-tab-label"> About</span>
 				</li>
 				<?php endif; ?>
-				<li<?= ($isOwnProfile || $_aboutIsDefault) ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
+				<li<?= $_awardsIsDefault ? ' class="pn-tab-active"' : '' ?> data-tab="awards">
 					<i class="fas fa-medal"></i><span class="pn-tab-label"> Awards</span> <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
 				</li>
 				<li data-tab="titles">
@@ -1564,7 +1743,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			<?php if ($_showRecs): ?><li data-tab="recommendations">
 					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count" id="pn-recs-tab-count"></span>
 				</li><?php endif; ?>
-				<?php if (($canEditAdmin && !$isOwnProfile) || ($LoggedIn && $isOwnProfile && !empty($HasNotes))): ?>
+				<?php if (($canViewAdmin && !$isOwnProfile) || ($LoggedIn && $isOwnProfile && !empty($HasNotes))): ?>
 				<li data-tab="history">
 					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count" id="pn-notes-tab-count"></span>
 				</li>
@@ -1573,7 +1752,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
 			</ul>
-			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards') ?></div>
+			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $hasWall ? 'Memory Wall' : ($isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards')) ?></div>
+
+			<?php if ($hasWall): ?>
+			<div class="pn-tab-panel" id="pn-tab-memories">
+				<?php include __DIR__ . '/_legend_wall.tpl'; ?>
+			</div>
+			<?php endif; ?>
 
 			<!-- My Amtgard Tab (own profile default) -->
 			<?php if ($isOwnProfile): ?>
@@ -1602,7 +1787,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div class="pna-alerts">
 					<?php foreach ($_maAlerts as $_al): ?>
 					<div class="pna-alert pna-alert-<?= $_al['type'] ?>">
-						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?php endif; ?></span>
+						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?= htmlspecialchars($_al['actionAfter'] ?? '') ?><?php endif; ?></span>
 					</div>
 					<?php endforeach; ?>
 				</div>
@@ -1655,6 +1840,44 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							</div>
 							<?php endforeach; ?>
 						</div>
+						<?php endif; ?>
+
+						<!-- Available Surveys: last in the column so it never pushes the
+						     player's own data down; the alerts strip above points here. -->
+						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* shared card, see _survey_available_card.tpl */
+							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
+							include __DIR__ . '/_survey_available_card.tpl';
+						endif; ?></div>
+						<?php if ($isOwnProfile && !empty($SurveyAvailable)): ?>
+						<script>
+						/* The alerts strip's survey link: bring the Available Surveys card
+						   into view, then pulse it once the scroll has settled. */
+						function pnaJumpToSurveys() {
+							var body = document.getElementById('pna-surveys-body');
+							var card = body && (body.querySelector('.pna-card') || body);
+							if (!card) { return; }
+							var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+							var done = false;
+							function pulse() {
+								if (done) { return; }
+								done = true;
+								window.removeEventListener('scrollend', pulse);
+								card.classList.remove('pna-survey-pulse');
+								void card.offsetWidth; /* restart the animation on a repeat click */
+								card.classList.add('pna-survey-pulse');
+								window.setTimeout(function () { card.classList.remove('pna-survey-pulse'); }, 2400);
+							}
+							var r = card.getBoundingClientRect();
+							var vh = window.innerHeight || document.documentElement.clientHeight;
+							if (r.top >= 0 && r.bottom <= vh) { pulse(); return; }  /* already on screen */
+							if (!still && 'onscrollend' in window) { window.addEventListener('scrollend', pulse); }
+							/* A card taller than the screen (many surveys) shows its top, clear of the sticky header. */
+							card.style.scrollMarginTop = '72px';
+							card.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: r.height > vh - 96 ? 'start' : 'center' });
+							/* Fallback: no scrollend support, or the scroll ended early. */
+							window.setTimeout(pulse, still ? 0 : 1200);
+						}
+						</script>
 						<?php endif; ?>
 
 					</div><!-- /.pna-sidebar -->
@@ -2077,7 +2300,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								// Feast Preferences sidebar card (opt-in via Show My Feast Preferences).
 								// Only rendered when the toggle is on AND the player has meaningful data.
 								// NoRestrictions=1 counts as meaningful — "I have none" is intentional.
-								$_showFeastPrefs = (int)($Player['ShowFeastPrefs'] ?? 0);
+								$_showFeastPrefs = $isLegend ? 0 : (int)($Player['ShowFeastPrefs'] ?? 0);
 								$_fp = $FeastPrefs ?? null;
 								if ($_showFeastPrefs && is_array($_fp)) {
 									$_fpDiets = array_filter([
@@ -2165,7 +2388,8 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php endif; ?>
 
 				<!-- Awards Tab -->
-			<div class="pn-tab-panel" id="pn-tab-awards"<?= ($isOwnProfile || $_aboutIsDefault) ? ' style="display:none"' : '' ?>>
+			<div class="pn-tab-panel" id="pn-tab-awards"<?= $_awardsIsDefault ? '' : ' style="display:none"' ?>>
+				<?php $pnPlannedCourtsCard(); ?>
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 				?>
@@ -2178,7 +2402,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<i class="fas fa-history"></i> Reconcile Historical Awards
 				</a>
 				<?php endif; ?>
-				<?php if (!empty($awardsList)): ?>
+				<?php if (!empty($awardsList) && $canEditAwards): ?>
 				<button class="pn-btn pn-btn-sm btn-danger-confirm" style="margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
 				</div>
@@ -2209,7 +2433,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<?php foreach ($LadderProgress as $lp): ?>
 								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+								<div class="pn-ladder-item" role="button" tabindex="0" aria-pressed="false" aria-controls="pn-awards-table"
+								     title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>"
+								     data-ladname="<?= htmlspecialchars($lp['Name']) ?>"
+								     data-awards-ids="<?= htmlspecialchars(implode(',', array_map('intval', $lp['AwardsIds'] ?? []))) ?>">
 									<div class="pn-ladder-header">
 										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
 										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
@@ -2237,6 +2464,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
+				<div class="pn-award-filter" id="pn-award-filter" hidden>
+					<span>Showing <strong class="pn-award-filter-name"></strong></span>
+					<button type="button" class="pn-award-filter-clear" aria-label="Show all awards"><i class="fas fa-times"></i> Show all</button>
+				</div>
 				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
@@ -2247,12 +2478,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+							<?php if ($canEditAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
 						<?php foreach ($filteredAwards as $detail): ?>
-							<tr>
+							<tr data-awards-id="<?= (int)$detail['AwardsId'] ?>">
 								<td class="pn-col-nowrap">
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 									<?= htmlspecialchars($displayName) ?>
@@ -2265,7 +2496,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; elseif (trimlen($detail['ParkName']) > 0) echo $detail['ParkName'] . (trimlen($detail['KingdomName']) > 0 ? ', ' . $detail['KingdomName'] : ''); else echo $detail['KingdomName']; ?></td>
 								<td><?= $detail['Note'] ?></td>
 								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-								<?php if ($canManageAwards): ?>
+								<?php if ($canEditAwards): ?>
 								<td class="pn-award-actions-cell">
 									<?php $awardData = json_encode([
 										'AwardsId'      => (int)$detail['AwardsId'],
@@ -2320,7 +2551,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
-								<th class="pn-nosort"></th>
+								<?php if ($canEditAwards): ?><th class="pn-nosort"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2332,9 +2563,11 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<?php if ($canEditAwards): ?>
 								<td class="pn-col-nowrap">
 									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this award"><i class="fas fa-undo"></i> Reactivate</button>
 								</td>
+								<?php endif; ?>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -2369,7 +2602,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canEditAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2414,7 +2647,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									</td>
 									<td><?= $detail['Note'] ?></td>
 									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-									<?php if ($canManageAwards): ?>
+									<?php if ($canEditAwards): ?>
 									<td class="pn-award-actions-cell">
 										<?php $titleData = json_encode([
 											'AwardsId'       => (int)$detail['AwardsId'],
@@ -2472,7 +2705,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
-								<th class="pn-nosort"></th>
+								<?php if ($canEditAwards): ?><th class="pn-nosort"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2484,9 +2717,11 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<?php if ($canEditAwards): ?>
 								<td class="pn-col-nowrap">
 									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this title"><i class="fas fa-undo"></i> Reactivate</button>
 								</td>
+								<?php endif; ?>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -2497,7 +2732,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 			<!-- Attendance Tab (populated by attendance AJAX) -->
 			<div class="pn-tab-panel" id="pn-tab-attendance" style="display:none">
-				<?php if ($canEditAdmin): ?>
+				<?php if ($canEditAdmin && !$isLegend): ?>
 				<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
 					<button class="pn-btn pn-btn-primary" onclick="pnOpenPlayerAttModal()"><i class="fas fa-plus"></i> Add Attendance</button>
 				</div>
@@ -2508,9 +2743,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 			<!-- Recommendations Tab -->
 			<?php if ($_showRecs): ?><div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
+				<?php $pnPlannedCourtsCard(); ?>
 				<?php if ($this->__session->user_id): ?>
 				<div class="pn-tab-toolbar">
-					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> Recommend an Award</button>
+					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> <?= $isLegend ? 'Recommend Posthumous Award' : 'Recommend an Award' ?></button>
 				</div>
 				<?php endif; ?>
 				<div id="pn-recs-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
@@ -2541,7 +2777,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
 					// ClassParagonMap and $pnHeldAwardIds come from controller / preamble
 				?>
-				<?php if ($canManageAwards): ?>
+				<?php if ($canEditAwards): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-sm pn-btn-secondary" onclick="pnOpenReconcileModal()"><i class="fas fa-sliders-h"></i> Edit Reconciliation</button>
 				</div>
@@ -2591,7 +2827,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					$pnViewerId = (int)($ViewerId ?? 0);
 					// Whoever gave a credit may take it back, so the column shows if any row is theirs.
 					$pnMine = $pnViewerId > 0 ? array_filter($pnBonus, function ($b) use ($pnViewerId) { return (int)($b['GrantedBy'] ?? 0) === $pnViewerId; }) : [];
-					$pnCanRevokeBonus = !empty($CanRevokeBonus) || count($pnMine) > 0;
+					$pnCanRevokeBonus = (!empty($CanRevokeBonus) || count($pnMine) > 0) && empty($BonusRevokeBlocked);
 				?>
 				<?php if (count($pnBonus) > 0): ?>
 				<div class="pn-bonus-section" id="pn-bonus-section">
@@ -2626,7 +2862,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<?php if ($pnCanRevokeBonus): ?>
 								<td class="pn-col-numeric pn-bonus-actions">
 									<?php if (!empty($CanRevokeBonus) || (int)($bc['GrantedBy'] ?? 0) === $pnViewerId): ?>
-									<button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button>
+									<?php if (!empty($BonusEditable)): ?><button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button><?php endif; ?>
 									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['CategoryName'], ENT_QUOTES) ?>">Remove</button>
 									<?php endif; ?>
 								</td>
@@ -2733,7 +2969,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<label for="pn-acct-persona">Persona <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-persona" name="Persona" value="<?= htmlspecialchars($Player['Persona']) ?>" />
 			</div>
-			<div class="pn-acct-field">
+			<div class="pn-acct-field"<?= $_lgHide ?>>
 				<label for="pn-acct-email">Email</label>
 				<input type="email" id="pn-acct-email" name="Email" value="<?= htmlspecialchars($Player['Email'] ?? '') ?>" />
 				<div id="pn-acct-email-warn" style="display:none;color:#e53e3e;font-size:0.82rem;margin-top:4px;">Double check the format of your email address.</div>
@@ -2744,12 +2980,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
 				</div>
 			</div>
-			<div class="pn-acct-field">
+			<div class="pn-acct-field"<?= $_lgHide ?>>
 				<label for="pn-acct-username">Username <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-username" name="UserName" value="<?= htmlspecialchars($Player['UserName']) ?>" />
 					<div class="pn-acct-hint" id="pn-acct-username-status" style="display:none"></div>
 			</div>
-			<div class="pn-acct-two-col">
+			<div class="pn-acct-two-col"<?= $_lgHide ?>>
 				<div class="pn-acct-field">
 					<label for="pn-acct-password">New Password</label>
 					<input type="password" id="pn-acct-password" name="Password" autocomplete="new-password" />
@@ -2820,6 +3056,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			</div>
 
 			<!-- Preferences (own + admin) -->
+			<div<?= $_lgHide ?>>
 			<div class="pn-acct-section-title"><i class="fas fa-sliders-h" style="margin-right:5px"></i>Preferences</div>
 
 			<div class="pn-acct-field">
@@ -2837,12 +3074,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<span class="pn-acct-help-tip" data-tip="When enabled, the ORK uses Lexend &mdash; a typeface designed to improve reading proficiency for people with reading difficulties such as Dyslexia &mdash; site-wide for your account." aria-label="Help">?</span>
 				</label>
 			</div>
+			</div>
 
 			<?php if ($canEditAdmin): ?>
 			<!-- Admin-only fields -->
 			<div class="pn-acct-section-title"><i class="fas fa-shield-alt" style="margin-right:5px"></i>Administrative</div>
 
-			<div class="pn-acct-two-col">
+			<div class="pn-acct-two-col"<?= $_lgHide ?>>
 				<div class="pn-acct-field">
 					<label>Status</label>
 					<div class="pn-acct-radio-group">
@@ -2879,7 +3117,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
      Add Dues Modal
      ============================================= -->
 <?php if ($canEditAdmin): ?>
-<div class="pn-overlay" id="pn-dues-overlay">
+<div class="pn-overlay" id="pn-dues-overlay"<?= $isLegend ? ' inert' : '' ?>>
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i>Add Dues Entry</h3>
@@ -2931,7 +3169,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 <!-- =============================================
      Dues History Modal (read-only, logged-in users)
      ============================================= -->
-<?php if (isset($this->__session->user_id) && !$canEditAdmin): ?>
+<?php if (isset($this->__session->user_id) && !$canEditAdmin && !$isLegend): ?>
 <div class="pn-overlay" id="pn-dues-history-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
@@ -2976,7 +3214,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 	}
 }
 </style>
-<div class="pn-overlay" id="pn-qual-overlay">
+<div class="pn-overlay" id="pn-qual-overlay"<?= $isLegend ? ' inert' : '' ?>>
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-certificate pn-modal-title-icon"></i>Edit Qualifications</h3>
@@ -3894,7 +4132,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 <div class="pn-overlay" id="pn-rec-overlay">
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-award pn-modal-title-icon"></i>Recommend an Award</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-award pn-modal-title-icon"></i><?= $isLegend ? 'Recommend Posthumous Award' : 'Recommend an Award' ?></h3>
 			<button class="pn-modal-close-btn" id="pn-modal-close-btn" type="button">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -3932,7 +4170,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 						<input type="checkbox" name="MonarchyOnly" id="pn-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
 						<span>Monarchy Only</span>
 					</label>
-					<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+					<div class="mo-check-hint"><?= $isLegend ? 'Only officers will see this recommendation.' : 'Only officers will see this recommendation; the player will not.' ?></div>
 				</div>
 				<?php endif; ?>
 			</form>
@@ -3940,6 +4178,40 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-rec-cancel" type="button">Cancel</button>
 			<button class="pn-btn pn-btn-primary" id="pn-rec-submit" type="button"><i class="fas fa-paper-plane"></i> Submit Recommendation</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($CanManageLegend)): ?>
+<!-- =============================================
+     Legend Status Modal: Mark as Legend, Remove Legend Status, Edit Year.
+     revised.js fills it per action, all of it as text.
+     ============================================= -->
+<div class="pn-overlay" id="pn-legend-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-legend-title">
+	<div class="pn-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-feather-alt pn-modal-title-icon"></i><span id="pn-legend-title"></span></h3>
+			<button class="pn-modal-close-btn" id="pn-legend-close-btn" type="button" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div class="pn-form-error" id="pn-legend-error" role="alert"></div>
+			<div class="pn-legend-caution" id="pn-legend-caution" role="note"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> <span>This is only for a real person who has passed away. It is not for a retired persona or a character.</span></div>
+			<p class="pn-legend-intro" id="pn-legend-intro" role="status"></p>
+			<div class="pn-rec-field" id="pn-legend-year-row">
+				<label for="pn-legend-year">Year of Passing <span class="required-indicator">*</span></label>
+				<input type="number" id="pn-legend-year" min="<?= (int)$LegendMinYear ?>" max="<?= (int)date('Y') ?>" step="1" />
+				<div class="pn-legend-warnings pn-legend-year-warn" id="pn-legend-year-warn" aria-live="polite"></div>
+			</div>
+			<div class="pn-rec-field" id="pn-legend-wall-row">
+				<label class="pn-legend-wall-label" for="pn-legend-wall"><input type="checkbox" id="pn-legend-wall" checked /> Open a Memory Wall, where members can leave memories</label>
+			</div>
+			<div id="pn-legend-detail"></div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-legend-copy" type="button" aria-live="polite" style="display:none">Copy list</button>
+			<button class="pn-btn pn-btn-secondary" id="pn-legend-cancel" type="button">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-legend-confirm" type="button"></button>
 		</div>
 	</div>
 </div>
@@ -4121,6 +4393,10 @@ var PnConfig = {
 	canEditAccount: <?= !empty($canEditAccount) ? 'true' : 'false' ?>,
 	canEditAdmin:   <?= !empty($canEditAdmin)   ? 'true' : 'false' ?>,
 	canManageAwards:<?= !empty($canManageAwards) ? 'true' : 'false' ?>,
+	isLegend:       <?= $isLegend ? 'true' : 'false' ?>,
+	canManageLegend:<?= !empty($CanManageLegend) ? 'true' : 'false' ?>,
+	legendYear:     <?= (int)($LegendYear ?? 0) ?>,
+	legendWallOpen: <?= $hasWall ? 'true' : 'false' ?>,
 	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
 	heldAwardIds:        <?= json_encode(array_values($playerHeldAwardIds)) ?>,
@@ -4134,7 +4410,7 @@ var PnConfig = {
 	playerPersona:    <?= json_encode($Player['Persona'] ?? '') ?>,
 	duesPeriodType:   <?= json_encode($_duesPeriodType) ?>,
 	duesPeriod:       <?= (int)$_duesPeriod ?>,
-	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
+	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) && !$isLegend ? 'true' : 'false' ?>,
 	lastClassId:      <?= $_lastClassId ?>,
 	attendanceDates:  [],  // populated async by PlayerAjax/attendance
 	canEditAnyAttendance: <?= !empty($canEditAdmin) ? 'true' : 'false' ?>,
@@ -4148,6 +4424,7 @@ var PnConfig = {
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
+	plannedCourtLines: <?= json_encode(array_values($_pnPlannedForJs)) ?>,
 	recsHiddenNotice: <?= json_encode(htmlspecialchars(ork_recs_hidden_notice(isset($this->__session->user_id)))) ?>,
 	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
 	aboutPersona:   <?= json_encode($Player['AboutPersona'] ?? '') ?>,
@@ -7300,6 +7577,10 @@ function pnOpenTestChooser() {
 				<label>Class</label>
 				<select id="pn-player-att-class" style="width:100%"></select>
 			</div>
+			<div class="pn-acct-field">
+				<span id="pn-player-att-online-switch"></span>
+				<span class="orn-online-hint" id="pn-player-att-online-hint" style="display:none"></span>
+			</div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-player-att-cancel">Cancel</button>
@@ -7334,6 +7615,9 @@ function pnOpenTestChooser() {
 					<input type="number" id="pn-att-edit-credits" value="1" min="0.5" max="4" step="0.5" style="width:100%">
 				</div>
 			</div>
+			<label class="orn-online-check" for="pn-att-edit-online">
+				<input type="checkbox" id="pn-att-edit-online" value="1"> Online?
+			</label>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-att-edit-cancel">Cancel</button>
@@ -7527,7 +7811,7 @@ function pnOpenTestChooser() {
 <script>
 $(function() {
 	// Voting eligibility badge — loaded async so it doesn't block page render
-	if (PnConfig.playerId) {
+	if (PnConfig.playerId && !PnConfig.isLegend) {
 		$.getJSON(PnConfig.uir + 'PlayerAjax/voting_eligible/' + PnConfig.playerId, function(r) {
 			if (r.status === 0 && r.eligible) {
 				var sub = '';
@@ -7536,6 +7820,10 @@ $(function() {
 				else if (r.active_member === false) sub = 'Contributing';
 				var $sub = $('#pn-voting-badge-sub');
 				if (sub) { $sub.html(sub).show(); }
+				if (r.exclude_online) {
+					var $vb = $('#pn-voting-badge');
+					$vb.attr('data-tip', (($vb.attr('data-tip') || '') + ' Online sign-ins are not counted (Kingdom setting).').trim());
+				}
 				$('#pn-voting-badge').show();
 			}
 		});
@@ -7721,6 +8009,7 @@ $(function() {
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
 						+ '<th data-sorttype="text">By</th>'
+						+ '<th class="pn-export-only">Online</th>'
 						+ (canEditAny ? '<th class="pn-nosort" style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
@@ -7732,6 +8021,7 @@ $(function() {
 							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
 						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
 						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						var isOnline = parseInt(d.Online, 10) === 1;
 						// "By" cell: show the entry source. signin_link / self_reg
 						// surface as labels (not a link to the player themselves —
 						// that would be redundant and look like "John entered
@@ -7749,11 +8039,12 @@ $(function() {
 						html += '<tr>'
 							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
 							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
-							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
+							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a>' + (isOnline ? ' ' + ornOnlineBadge() : '') + '</td>'
 							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
 							+ '<td>' + classLabel + '</td>'
 							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>'
-							+ '<td>' + byCell + '</td>';
+							+ '<td>' + byCell + '</td>'
+							+ '<td>' + (isOnline ? 'Yes' : '') + '</td>';
 						if (canEditAny) {
 							html += '<td class="pn-award-actions-cell">';
 							if (canEditThis) {
@@ -7763,6 +8054,7 @@ $(function() {
 									+ ' data-credits="' + parseFloat(d.Credits) + '"'
 									+ ' data-class-id="' + parseInt(d.ClassId) + '"'
 									+ ' data-mundane-id="' + parseInt(d.MundaneId) + '"'
+									+ ' data-online="' + (isOnline ? 1 : 0) + '"'
 									+ ' title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>'
 									+ ' <button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"'
 									+ ' data-att-id="' + parseInt(d.AttendanceId) + '"'
@@ -7780,6 +8072,8 @@ $(function() {
 
 			// ---- My Amtgard sections (own profile only) ----
 			if (!PnConfig.isOwnProfile) return;
+
+			// Available Surveys: rendered server-side into #pna-surveys-body (no fetch).
 
 			// Class Progress
 			var cpBody = document.getElementById('pna-class-progress-body');
@@ -7975,6 +8269,21 @@ $(function() {
 					+ '<span class="pk-rec-notes-full" style="display:none">' + esc(txt.substring(50)) + ' <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span>'
 					+ '</span>';
 			};
+			// Clipboard icon beside an award that sits on a planned court: by rec id, or the same
+			// award and rank. Text lives in data-tip only (no cell text, so sort/filter/CSV are untouched).
+			var plannedIcon = function(rec) {
+				var seen = {}, names = [];
+				(PnConfig.plannedCourtLines || []).forEach(function(l) {
+					var hit = (l.RecommendationsId > 0 && l.RecommendationsId === (parseInt(rec.RecommendationsId) || 0))
+						|| (l.KingdomAwardId === (parseInt(rec.KingdomAwardId) || 0) && l.Rank === (parseInt(rec.Rank) || 0));
+					if (!hit || seen[l.CourtId]) return;
+					seen[l.CourtId] = true;
+					names.push(l.CourtName + (l.CourtDate ? ' on ' + l.CourtDate : ''));
+				});
+				if (!names.length) return '';
+				var tip = attr('This award is planned for Court: ' + names.join(', '));
+				return ' <span class="pn-rec-planned" tabindex="0" role="img" data-tip="' + tip + '" aria-label="' + tip + '"><i class="fas fa-clipboard" aria-hidden="true"></i></span>';
+			};
 			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
 				+ '<th>Award</th><th>Rank</th><th data-sorttype="date">Date</th><th>Sent By</th><th>Reason</th>'
 				+ (hasActions ? '<th class="pn-nosort" style="white-space:nowrap;width:1%">Actions</th>' : '')
@@ -8019,7 +8328,7 @@ $(function() {
 				}
 
 				html += '<tr data-rec-id="' + recId + '">'
-					+ '<td>' + esc(rec.AwardName) + (window.orkMonarchyOnlyBadge ? orkMonarchyOnlyBadge(rec.MonarchyOnlyLevel) : '') + '</td>'
+					+ '<td>' + esc(rec.AwardName) + plannedIcon(rec) + (window.orkMonarchyOnlyBadge ? orkMonarchyOnlyBadge(rec.MonarchyOnlyLevel) : '') + '</td>'
 					+ '<td class="pn-col-numeric">' + rank + '</td>'
 					+ '<td class="pn-col-nowrap">' + esc(rec.DateRecommended) + '</td>'
 					+ '<td><a href="' + PnConfig.uir + 'Player/profile/' + parseInt(rec.RecommendedById) + '">' + esc(rec.RecommendedByName) + '</a></td>'

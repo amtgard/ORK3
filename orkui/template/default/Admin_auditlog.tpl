@@ -43,10 +43,17 @@ $_actionLabels = [
 	'Kingdom::VacateOfficer'           => 'Officer Vacated',
 	'Authorization::AddAuthorization'  => 'Permission Granted',
 	'Authorization::RemoveAuthorization'=> 'Permission Revoked',
+	'Unit::CreateUnit'                 => 'Unit Created',
 	'Unit::RetireUnit'                 => 'Unit Retired',
 	'Unit::RestoreUnit'                => 'Unit Restored',
 	'Unit::ClaimUnit'                  => 'Unit Claimed',
 	'Unit::TransferOwnership'          => 'Unit Ownership Transferred',
+	'Legend::convert'                  => 'Marked as Legend',
+	'Legend::undo'                     => 'Legend Status Removed',
+	'Legend::setYear'                  => 'Legend Year Changed',
+	'Legend::setWall'                  => 'Memory Wall Changed',
+	'Legend::removeMemory'             => 'Memory Removed',
+	'Legend::removeAuthorMemories'     => 'Memories Removed',
 	'BonusCredit::grant'               => 'Bonus Credit Granted',
 	'BonusCredit::revoke'              => 'Bonus Credit Removed',
 	'BonusCredit::update'              => 'Bonus Credit Changed',
@@ -410,6 +417,29 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : 'park';
 			$_verb = $method === 'Park::RetirePark' ? 'Retired' : 'Restored';
 			return $_verb . ' ' . htmlspecialchars($_park);
+		case 'Unit::CreateUnit':
+			$_type = ($a['type'] ?? $p['Type'] ?? '') !== '' ? htmlspecialchars($a['type'] ?? $p['Type']) : 'unit';
+			$_name = (string)($a['name'] ?? $p['Name'] ?? '');
+			return 'Created ' . strtolower($_type) . ($_name !== '' ? ' “' . htmlspecialchars($_name) . '”' : '');
+		case 'Legend::convert':
+			// A conversion also writes one row per officer seat it vacates (Legend::vacateSeats).
+			if (isset($b['Role'])) return 'Vacated ' . htmlspecialchars((string)$b['Role']) . ' (holder marked as a Legend)';
+			$_n = (int)($a['ClearedCount'] ?? 0);
+			return 'Marked as a Legend' . (!empty($a['LegendYear']) ? ', passed ' . (int)$a['LegendYear'] : '')
+				. (isset($a['MemoryWall']) ? ', Memory Wall ' . ($a['MemoryWall'] ? 'on' : 'off') : '')
+				. ($_n > 0 ? ', ' . $_n . ($_n === 1 ? ' item' : ' items') . ' cleared' : '');
+		case 'Legend::undo':
+			return 'Legend status removed' . (!empty($b['LegendYear']) ? ' (year was ' . (int)$b['LegendYear'] . ')' : '');
+		case 'Legend::setYear':
+			return 'Year of passing: ' . (int)($b['LegendYear'] ?? 0) . ' → ' . (int)($a['LegendYear'] ?? 0);
+		case 'Legend::setWall':
+			return 'Memory Wall turned ' . (!empty($a['MemoryWall']) ? 'on' : 'off');
+		case 'Legend::removeMemory':
+			return 'Removed a memory' . (($b['Reason'] ?? '') !== '' ? ': "' . htmlspecialchars(mb_strimwidth((string)$b['Reason'], 0, 60, '…')) . '"' : '');
+		case 'Legend::removeAuthorMemories':
+			$_n = (int)($a['RemovedCount'] ?? (is_array($b['MemoryIds'] ?? null) ? count($b['MemoryIds']) : 0));
+			return 'Removed ' . $_n . ($_n === 1 ? ' memory' : ' memories') . ' by one author'
+				. (($b['Reason'] ?? '') !== '' ? ': "' . htmlspecialchars(mb_strimwidth((string)$b['Reason'], 0, 60, '…')) . '"' : '');
 		case 'Unit::RetireUnit':
 		case 'Unit::RestoreUnit':
 			$_uid = (int)($p['UnitId'] ?? $a['unit_id'] ?? 0);
@@ -1390,6 +1420,68 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			if (!empty($_r['CategoryId'])) $html .= '<tr><td class="al-diff-field">Category ID</td><td colspan="2">' . (int)$_r['CategoryId'] . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
+		case 'Unit::CreateUnit':
+			$_row = function ($label, $val) { return '<tr><td class="al-diff-field">' . $label . '</td><td colspan="2">' . $val . '</td></tr>'; };
+			$_txt = function ($k1, $k2) use ($a, $p) { return trim((string)($a[$k1] ?? $p[$k2] ?? '')); };
+			$html = '<table class="al-diff-table"><tbody>';
+			if ($_txt('name', 'Name') !== '')        $html .= $_row('Name', htmlspecialchars($_txt('name', 'Name')));
+			if ($_txt('type', 'Type') !== '')        $html .= $_row('Type', htmlspecialchars($_txt('type', 'Type')));
+			if (trim((string)($p['Description'] ?? '')) !== '') $html .= $_row('Description', nl2br(htmlspecialchars((string)$p['Description'])));
+			if (trim((string)($p['History'] ?? '')) !== '')     $html .= $_row('History', nl2br(htmlspecialchars((string)$p['History'])));
+			if ($_txt('url', 'Url') !== '')          $html .= $_row('URL', htmlspecialchars($_txt('url', 'Url')));
+			$html .= $_row('Heraldry', ($p['HeraldryMimeType'] ?? '') !== '' ? 'Uploaded (' . htmlspecialchars((string)$p['HeraldryMimeType']) . ')' : 'None');
+			$_cb = (int)($a['created_by'] ?? $p['MundaneId'] ?? 0);
+			if ($_cb)                                $html .= $_row('Created By', _auditIdLink('player', $_cb, $mundaneMap));
+			if (!empty($a['unit_id']))               $html .= $_row('Unit ID', (int)$a['unit_id']);
+			$html .= '</tbody></table>';
+			return $html;
+		case 'Legend::convert':
+		case 'Legend::undo':
+		case 'Legend::setYear':
+		case 'Legend::setWall':
+			$_row = function ($label, $val, $changed = false) { return '<tr' . ($changed ? ' class="al-diff-changed"' : '') . '><td class="al-diff-field">' . $label . '</td><td colspan="2">' . $val . '</td></tr>'; };
+			$html = '<table class="al-diff-table"><tbody>';
+			if (isset($b['Role'])) {
+				// The seat a conversion vacated (Legend::vacateSeats): its own row, on the park or kingdom.
+				$html .= $_row('Action', 'Officer seat vacated: its holder was marked as a Legend', true);
+				$html .= $_row('Role', htmlspecialchars((string)$b['Role']));
+				if (!empty($b['MundaneId'])) $html .= $_row('Was Held By', _auditIdLink('player', $b['MundaneId'], $mundaneMap));
+				if (!empty($a['ParkId']))    $html .= $_row('Park', _auditIdLink('park', $a['ParkId'], $parkMap));
+				if (!empty($a['KingdomId'])) $html .= $_row('Kingdom', _auditIdLink('kingdom', $a['KingdomId'], $kingdomMap));
+				return $html . '</tbody></table>';
+			}
+			if (!empty($p['MundaneId'])) $html .= $_row('Player', _auditIdLink('player', $p['MundaneId'], $mundaneMap));
+			$_yn = function ($v) { return $v ? 'Yes' : 'No'; };
+			$_pair = function ($label, $key, $fmt) use ($a, $b, $_row) {
+				if (!isset($a[$key]) && !isset($b[$key])) return '';
+				$_o = isset($b[$key]) ? $fmt($b[$key]) : '—';
+				$_n = isset($a[$key]) ? $fmt($a[$key]) : '—';
+				return '<tr' . ($_o !== $_n ? ' class="al-diff-changed"' : '') . '><td class="al-diff-field">' . $label . '</td>'
+					. '<td class="' . ($_o !== $_n ? 'al-diff-old' : 'al-diff-val') . '">' . htmlspecialchars((string)$_o) . '</td>'
+					. '<td class="' . ($_o !== $_n ? 'al-diff-new' : 'al-diff-val') . '">' . htmlspecialchars((string)$_n) . '</td></tr>';
+			};
+			$_rows = $_pair('Legend', 'IsLegend', $_yn)
+				. $_pair('Active', 'Active', $_yn)
+				. $_pair('Year of Passing', 'LegendYear', function ($v) { return (int)$v > 0 ? (string)(int)$v : '—'; })
+				. $_pair('Memory Wall', 'MemoryWall', function ($v) { return $v ? 'On' : 'Off'; });
+			$html .= '</tbody></table>';
+			$html .= '<table class="al-diff-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>' . $_rows . '</tbody></table>';
+			if (isset($a['ClearedCount'])) {
+				$_n = (int)$a['ClearedCount'];
+				$html .= '<div style="margin-top:6px;color:#718096;font-size:12px">' . ($_n > 0 ? $_n . ($_n === 1 ? ' future role or seat was' : ' future roles or seats were') . ' cleared at conversion.' : 'Nothing needed to be cleared at conversion.') . '</div>';
+			}
+			return $html;
+		case 'Legend::removeMemory':
+		case 'Legend::removeAuthorMemories':
+			$_row = function ($label, $val) { return '<tr><td class="al-diff-field">' . $label . '</td><td colspan="2">' . $val . '</td></tr>'; };
+			$html = '<table class="al-diff-table"><tbody>';
+			if (!empty($b['LegendId'])) $html .= $_row('Legend', _auditIdLink('player', $b['LegendId'], $mundaneMap));
+			if (!empty($b['AuthorId'])) $html .= $_row('Memory By', _auditIdLink('player', $b['AuthorId'], $mundaneMap));
+			if (isset($a['RemovedCount'])) $html .= $_row('Memories Removed', (int)$a['RemovedCount']);
+			if (($b['Body'] ?? '') !== '')   $html .= $_row('Memory', nl2br(htmlspecialchars((string)$b['Body'])));
+			if (($b['Reason'] ?? '') !== '') $html .= $_row('Reason', htmlspecialchars((string)$b['Reason']));
+			$html .= '</tbody></table>';
+			return $html;
 		default:
 			$out = [];
 			if ($prior && $prior !== 'null') $out[] = '<strong>Prior state:</strong><pre class="al-raw-json">' . htmlspecialchars($prior) . '</pre>';
@@ -1500,10 +1592,10 @@ html[data-theme="dark"] .al-filter-card  { background:#2d3748; border-color:#4a5
 html[data-theme="dark"] .al-filter-card h3 { color:#a0aec0; background:transparent; border:none; text-shadow:none; }
 html[data-theme="dark"] .al-form-group label { color:#a0aec0; }
 html[data-theme="dark"] .al-form-input   { background:#1a202c; border-color:#4a5568; color:#e2e8f0; }
-html[data-theme="dark"] .al-table th     { background:#374151; }
-html[data-theme="dark"] .al-table tbody tr:hover { background:#374151; }
-html[data-theme="dark"] .al-detail-row td { background:#374151; }
-html[data-theme="dark"] .al-diff-table th { background:#374151; color:#e2e8f0; }
+html[data-theme="dark"] .al-table th     { background:var(--ork-bg-tertiary); }
+html[data-theme="dark"] .al-table tbody tr:hover { background:var(--ork-bg-tertiary); }
+html[data-theme="dark"] .al-detail-row td { background:var(--ork-bg-tertiary); }
+html[data-theme="dark"] .al-diff-table th { background:var(--ork-bg-tertiary); color:#e2e8f0; }
 html[data-theme="dark"] .al-diff-table td { border-color:#4a5568; color:#e2e8f0; }
 html[data-theme="dark"] .al-diff-field   { color:#a0aec0; }
 html[data-theme="dark"] .al-diff-val     { color:#e2e8f0; }
@@ -1511,7 +1603,7 @@ html[data-theme="dark"] .al-diff-old     { color:#fc8181; }
 html[data-theme="dark"] .al-diff-new     { color:#68d391; }
 html[data-theme="dark"] .al-diff-changed  { background:rgba(255,237,153,0.08); }
 html[data-theme="dark"] .al-page-link     { border-color:#4a5568; color:#90cdf4; }
-html[data-theme="dark"] .al-page-link:hover { background:#374151; }
+html[data-theme="dark"] .al-page-link:hover { background:var(--ork-bg-tertiary); }
 html[data-theme="dark"] .al-btn-clear     { border-color:#4a5568; color:#a0aec0; }
 html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 
@@ -1759,10 +1851,10 @@ var AL_SCOPES = {
 	Player: {
 		source: function(term, cb) {
 			$.getJSON('../orkservice/Search/SearchService.php', {
-				Action: 'Search/Player', type: 'all', search: term, limit: 8
+				Action: 'Search/Player', type: 'all', search: term, limit: 8, IncludeLegend: 1
 			}, function(data) {
 				cb($.map(data || [], function(v) {
-					return { label: v.Persona + ' (' + v.KAbbr + ':' + v.PAbbr + ')', value: v.MundaneId, display: v.Persona };
+					return { label: v.Persona + ' (' + v.KAbbr + ':' + v.PAbbr + ')' + (v.Legend ? ' - Legend' : ''), value: v.MundaneId, display: v.Persona };
 				}));
 			});
 		}
