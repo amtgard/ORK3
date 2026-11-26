@@ -167,6 +167,7 @@ class Controller
             'Controller_PlayerAjax',
             'Controller_AdminAjax',
             'Controller_WnAjax',
+            'Controller_TourAjax',
             'Controller_DuesAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
@@ -197,6 +198,7 @@ class Controller
         $this->data['ViewerDyslexiaFonts'] = 0;
         $this->data['ShowWhatsNew']        = false;
         $this->data['WhatsNewRelease']     = null;
+        $this->data['TourProgress']        = [];
         // Dues expiry notice (class.DuesNotice.php): null, or the classified
         // notice plus its Message and dismiss Key. default.theme renders it as
         // the site banner on every page; the player's own profile renders it
@@ -220,6 +222,8 @@ class Controller
             if ($this->data['WhatsNewRelease'] !== null) {
                 $this->data['ShowWhatsNew'] = !$this->Player->get_whats_new_seen($_uid, WHATS_NEW_VERSION);
             }
+            // OrkTour progress (tour id => {v, status, at}); default.theme hands it to ork-tour.js
+            $this->data['TourProgress'] = $this->Player->get_tour_progress($_uid);
 
             $_standing = $this->Player->get_dues_standing($_uid);
             $_notice   = DuesNotice::classify($_standing['DuesUntil'], (bool) $_standing['DuesForLife']);
