@@ -79,10 +79,11 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	// Page state for ork-tour.js. TourProgress is set on Controller::$data (logged-in only).
 	$__tourUid = isset($this->__session->user_id) ? (int)$this->__session->user_id : 0;
 	// Auth-flow and check-in pages never offer or auto-start a tour, even with a live session.
+	// Nor does the Guided Tours page itself: an offer on top of the list of tours is noise.
 	$__tourRoute = strtolower(strtok((string)($_REQUEST['Route'] ?? ''), '/'));
 	$__tourState = [
 		'loggedIn'   => $__tourUid > 0,
-		'quiet'      => in_array($__tourRoute, ['login', 'selfreg', 'signin'], true),
+		'quiet'      => in_array($__tourRoute, ['login', 'selfreg', 'signin', 'tour'], true),
 		'userId'     => $__tourUid,
 		'profileUrl' => $__tourUid > 0 ? UIR . 'Player/profile/' . $__tourUid : '',
 		'saveUrl'    => UIR . 'TourAjax/save',
@@ -617,6 +618,9 @@ document.addEventListener('keydown', function (e) {
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
 					<div class='nav-dropdown-divider'></div>
 					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!', '<?= UIR ?>ReleaseNotes', 'In the meantime, see the release notes');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
+					<?php if ($this->__session->token != null) : ?>
+					<a href='<?= UIR ?>Tour'><i class='fas fa-route'></i> Guided Tours</a>
+					<?php endif; ?>
 					<!-- Filled by OrkTour with the tours that match this page -->
 					<div id='nav-tour-links' hidden></div>
 				</div>

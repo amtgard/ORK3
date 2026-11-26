@@ -32,6 +32,25 @@
  * Every tour that is available on the page gets a link in the nav Resources menu.
  * A link carrying `ork_tour=<id>` in its query string starts that tour on load.
  *
+ * ADDING A TOUR
+ *   1. Write script/tours/<name>.js: an IIFE that calls OrkTour.register() as above.
+ *      Copy the closest existing file (park-profile.js for a page walk-through,
+ *      recommendations-manager.js for an officer tool). A step whose element is
+ *      not on the page is dropped silently, so the tour shortens instead of
+ *      breaking: after any change to the page's markup, run the tour and count.
+ *   2. Load it with a <script defer> AFTER this file. A tour for one page loads
+ *      from that page's template (Parknew_index.tpl loads park-profile.js); one
+ *      that can start from several pages loads from default.theme with the others.
+ *   3. Add its card to Controller_Tour::catalog() (orkui/controller/controller.Tour.php)
+ *      so it shows on the Guided Tours page (Route=Tour), with the URL that opens
+ *      its page. Officer tours get a link only for people who can open the tool.
+ *   4. Optional, at the bottom of the tour file: OrkTour.offer(id, {once: true, ...})
+ *      to offer it on first sight, or OrkTour.dot(selector, id) to put the pulsing
+ *      "new" dot on the control that opens the feature.
+ *   5. Changed a tour enough that people should see it again? Bump its version.
+ *   To try one: add &ork_tour=<id> to the page's URL. To be offered it again,
+ *   delete your row from ork_tour_progress.
+ *
  * "Seen" state: for a logged-in person it lives in the database. default.theme
  * emits window.OrkTourState (loggedIn, quiet, userId, profileUrl, saveUrl, progress)
  * before this file; finishing or closing a tour updates that map and POSTs to
