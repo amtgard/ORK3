@@ -60,14 +60,24 @@ class Model_KnightCircle extends Model
         return $this->_candidate()->board($uid, $kingdomId);
     }
 
+    public function suggestions(int $kingdomId, int $minRank = 0): array
+    {
+        return $this->_candidate()->suggestions($kingdomId, $minRank);
+    }
+
+    public function reconcile(int $kingdomId): array
+    {
+        return $this->_candidate()->reconcile($kingdomId);
+    }
+
     public function candidate(int $uid, int $candidateId): array
     {
         return $this->_candidate()->candidate($uid, $candidateId);
     }
 
-    public function add_candidate(int $uid, int $kingdomId, int $mundaneId, int $orderAwardId, string $comment = ''): array
+    public function add_candidate(int $uid, int $kingdomId, int $mundaneId, int $orderAwardId, string $comment = '', string $stage = 'watchlist', string $source = 'manual'): array
     {
-        return $this->_candidate()->addCandidate($uid, $kingdomId, $mundaneId, $orderAwardId, $comment);
+        return $this->_candidate()->addCandidate($uid, $kingdomId, $mundaneId, $orderAwardId, $comment, $stage, $source);
     }
 
     public function move_candidate(int $uid, int $candidateId, string $toStage, string $comment = '', ?array $votes = null): array

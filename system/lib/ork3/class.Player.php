@@ -3749,6 +3749,13 @@ class Player extends Ork3
             // ork_awards row deterministically instead of guessing by date.
             $new_award_id = (int)$awards->awards_id;
 
+            // Circle of Knights: move matching candidates to Knighted / Masterhood.
+            // Best effort; never allowed to disturb the grant.
+            try {
+                Ork3::$Lib->knightcandidate->onAwardGranted((int)$request['RecipientId'], (int)$request['AwardId'], $new_award_id);
+            } catch (\Throwable $e) {
+            }
+
             // Best-effort audit: the ork_awards row is ALREADY committed above. If
             // auditing throws, it must NOT propagate — Court::commitStagedAward
             // treats a thrown AddAward as failure and reverts the court line to
