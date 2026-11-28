@@ -719,8 +719,8 @@
         (j.history || []).forEach(function (h) {
             var from = pick(h, ['FromStage'], null), to = pick(h, ['ToStage'], '');
             var votes = '';
-            var vf = pick(h, ['VotesFor'], null);
-            if (vf !== null) { votes = '<div class="kc-votes-line">Votes: ' + esc(vf) + ' for, ' + esc(pick(h, ['VotesAgainst'], 0)) + ' against, ' + esc(pick(h, ['VotesAbstain'], 0)) + ' abstain</div>'; }
+            var vo = h.Votes && typeof h.Votes === 'object' ? h.Votes : null;
+            if (vo) { votes = '<div class="kc-votes-line">Votes: ' + esc(vo.For || 0) + ' for, ' + esc(vo.Against || 0) + ' against, ' + esc(vo.Abstain || 0) + ' abstain</div>'; }
             var actor = pick(h, ['ActorPersona', 'Actor'], '') || (+pick(h, ['ActorId'], 0) === 0 ? 'System' : '');
             tl.appendChild(el('li', 'kc-tl-item', '<div class="kc-tl-top"><strong>' + esc(from ? (STAGE_LABEL[from] || from) + ' to ' : 'Added to ') + esc(STAGE_LABEL[to] || to) + '</strong> <span class="kc-dim">' + esc(dateOnly(pick(h, ['CreatedAt'], ''))) + (actor ? ' by ' + esc(actor) : '') + '</span></div>'
                 + votes + (pick(h, ['Comment'], '') ? '<div class="kc-tl-c">' + esc(pick(h, ['Comment'], '')) + '</div>' : '')));
