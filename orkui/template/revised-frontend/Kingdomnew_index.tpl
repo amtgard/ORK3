@@ -868,6 +868,9 @@
 							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
 							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
+							<?php if (!empty($CanViewKnightCircle)): ?>
+							<li><a href="<?= UIR ?>KnightCircle/index/<?= $kingdom_id ?>"><i class="fas fa-shield-alt"></i> Circle of Knights</a></li>
+							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>">Class Masters/Paragons</a></li>
@@ -954,6 +957,12 @@
 					<h5><i class="fas fa-poll"></i> Surveys</h5>
 					<ul>
 						<li><a href="<?= UIR ?>Survey/index/Kingdom/<?= $kingdom_id ?>">Manage Surveys</a></li>
+					</ul>
+				</div>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-shield-alt"></i> Knights</h5>
+					<ul>
+						<li><a href="<?= UIR ?>KnightCircle/index/<?= $kingdom_id ?>&tab=settings">Circle of Knights: Guildmaster</a></li>
 					</ul>
 				</div>
 				<?php endif; ?>

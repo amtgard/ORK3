@@ -384,6 +384,18 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Circle of Knights link: shown only to people the module lets in. Never
+        // allowed to break the kingdom page.
+        $this->data['CanViewKnightCircle'] = false;
+        if ($uid > 0) {
+            try {
+                $this->load_model('KnightCircle');
+                $_kcAccess = $this->KnightCircle->access($uid, (int)$kingdom_id);
+                $this->data['CanViewKnightCircle'] = !empty($_kcAccess['CanView']);
+            } catch (\Throwable $e) {
+                $this->data['CanViewKnightCircle'] = false;
+            }
+        }
         // Bonus Credits button + modal: kingdom EDIT hands credits out, CREATE
         // also defines them, and a named manager does both with no kingdom row.
         $this->load_model('BonusCredit');
